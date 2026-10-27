@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema Odontológico - Consultório</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- FullCalendar CSS & JS -->
+    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/locales/pt-br.global.min.js"></script>
+    <!-- Firebase SDK (Compat v9) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <style>
+        @media (max-width: 768px) {
+            .fc .fc-toolbar { flex-direction: column; gap: 0.5rem; }
+            .fc .fc-toolbar-title { font-size: 1rem !important; }
+            .fc-button { padding: 0.25rem 0.4rem !important; font-size: 0.75rem !important; }
+            .fc-header-toolbar { margin-bottom: 1rem !important; }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col">
+
+  <!-- TELA DE LOGIN -->
+    <div id="login-screen" class="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-8 border border-slate-100">
+            <div class="text-center mb-6 sm:mb-8">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-blue-100 text-blue-600 rounded-full mb-4 text-2xl">
+                    <i class="fa-solid fa-tooth"></i>
+                </div>
+                <h1 class="text-xl sm:text-2xl font-bold text-slate-900">Consultório Odontológico</h1>
+                <p class="text-sm text-slate-500 mt-1">Entre com sua conta do Firebase</p>
+            </div>
+            <form onsubmit="fazerLoginFirebase(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">E-mail de Acesso</label>
+                    <input type="email" id="login-email" required placeholder="seu@email.com" class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Senha</label>
+                    <input type="password" id="login-senha" required placeholder="••••••••" class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm">
+                </div>
+                <button type="submit" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md transition duration-200 text-sm">
+                    Entrar no Sistema
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- CABEÇALHO DO SISTEMA -->
+    <header id="main-header" class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm hidden">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-0">
+            <div class="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-start">
+                <div class="flex items-center space-x-3">
+                    <div class="w-9 h-9 sm:w-10 sm:h-10 bg-blue-600 text-white rounded-lg flex items-center justify-center text-base sm:text-lg">
+                        <i class="fa-solid fa-tooth"></i>
+                    </div>
+                    <div>
+                        <h2 class="font-bold text-slate-900 leading-tight text-sm sm:text-base">Clínica Odontológica</h2>
+                        <span id="header-user-badge" class="inline-block px-2 py-0.5 text-[10px] sm:text-xs font-medium bg-blue-100 text-blue-700 rounded-full mt-0.5">Perfil: Carregando...</span>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2 sm:hidden">
+                    <button onclick="exportarBackup()" class="text-xs text-slate-600 hover:text-blue-600 font-medium px-2 py-1 border rounded bg-slate-50 flex items-center gap-1" title="Baixar Backup">
+                        <i class="fa-solid fa-download"></i>
+                    </button>
+                    <button onclick="document.getElementById('input-importar-backup').click()" class="text-xs text-slate-600 hover:text-blue-600 font-medium px-2 py-1 border rounded bg-slate-50 flex items-center gap-1" title="Restaurar Backup">
+                        <i class="fa-solid fa-upload"></i>
+                    </button>
+                    <button onclick="logout()" class="text-sm text-slate-600 hover:text-red-600 font-medium p-1 transition">
+                        <i class="fa-solid fa-right-from-bracket"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="hidden sm:flex items-center space-x-4">
+                <input type="file" id="input-importar-backup" accept=".json" class="hidden" onchange="importarBackup(event)">
+                <button onclick="exportarBackup()" class="text-xs text-slate-600 hover:text-blue-600 font-semibold flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 transition">
+                    <i class="fa-solid fa-download text-blue-600"></i>
+                    <span>Baixar Backup</span>
+                </button>
+                <button onclick="document.getElementById('input-importar-backup').click()" class="text-xs text-slate-600 hover:text-blue-600 font-semibold flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 transition">
+                    <i class="fa-solid fa-upload text-blue-600"></i>
+                    <span>Restaurar Backup</span>
+                </button>
+                <div class="h-5 w-px bg-slate-200"></div>
+                <button onclick="logout()" class="text-sm text-slate-600 hover:text-red-600 font-medium flex items-center space-x-1 transition">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                    <span>Sair</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- MENU DE NAVEGAÇÃO -->
+    <nav id="main-nav" class="bg-slate-900 text-white shadow-inner hidden">
+        <div class="max-w-7xl mx-auto px-2 sm:px-4 flex space-x-1 overflow-x-auto scrollbar-none" id="nav-tabs"></div>
+    </nav>
+
+    <!-- CONTEÚDO PRINCIPAL -->
+    <main id="main-content" class="flex-grow max-w-7xl w-full mx-auto p-3 sm:p-6 space-y-4 sm:space-y-6 hidden">
+
+        <!-- ABA 1: AGENDA -->
+        <section id="tab-agenda" class="tab-content space-y-4">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                <div>
+                    <h3 class="text-lg sm:text-xl font-bold text-slate-900">Agenda do Consultório</h3>
+                    <p class="text-xs sm:text-sm text-slate-500">Toque em qualquer horário na grade para agendar</p>
+                </div>
+                <button onclick="abrirModalAgendamento()" class="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow transition flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-plus"></i> Novo Agendamento
+                </button>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-2 sm:p-4">
+                <div id="calendar" class="min-h-[550px] sm:min-h-[700px]"></div>
+            </div>
+        </section>
+
+        <!-- ABA 2: PACIENTES -->
+        <section id="tab-pacientes" class="tab-content hidden space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between cursor-pointer hover:border-blue-400 transition" onclick="definirFiltroCategoria('todos')">
+                    <div>
+                        <p class="text-xs font-bold uppercase text-slate-400">Total Pacientes</p>
+                        <h4 id="kpi-total-pacientes" class="text-xl font-extrabold text-slate-800 mt-1">0</h4>
+                    </div>
+                    <div class="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center text-lg"><i class="fa-solid fa-users"></i></div>
+                </div>
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between cursor-pointer hover:border-indigo-400 transition" onclick="definirFiltroCategoria('clinico')">
+                    <div>
+                        <p class="text-xs font-bold uppercase text-slate-400">Clínico Geral</p>
+                        <h4 id="kpi-clinico-pacientes" class="text-xl font-extrabold text-blue-600 mt-1">0</h4>
+                    </div>
+                    <div class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center text-lg"><i class="fa-solid fa-stethoscope"></i></div>
+                </div>
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between cursor-pointer hover:border-purple-400 transition" onclick="definirFiltroCategoria('orto')">
+                    <div>
+                        <p class="text-xs font-bold uppercase text-slate-400">Ortodontia</p>
+                        <h4 id="kpi-orto-pacientes" class="text-xl font-extrabold text-purple-600 mt-1">0</h4>
+                    </div>
+                    <div class="w-12 h-12 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center text-lg"><i class="fa-solid fa-teeth-open"></i></div>
+                </div>
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between cursor-pointer hover:border-amber-400 transition" onclick="alternarFiltroInativos()">
+                    <div>
+                        <p class="text-xs font-bold uppercase text-slate-400">Inativos (> 30 dias)</p>
+                        <h4 id="kpi-inativos-pacientes" class="text-xl font-extrabold text-amber-600 mt-1">0</h4>
+                    </div>
+                    <div class="w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center text-lg"><i class="fa-solid fa-user-clock"></i></div>
+                </div>
+            </div>
+
+            <div class="flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-3 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-grow">
+                    <div class="relative flex-grow max-w-md">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                        <input type="text" id="busca-pacientes-tabela" oninput="renderizarPacientes()" placeholder="Pesquisar por nome ou CPF..." class="w-full pl-9 pr-4 py-2 border rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition">
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <select id="filtro-categoria-pacientes" onchange="renderizarPacientes()" class="px-3 py-2 border rounded-lg text-xs sm:text-sm bg-slate-50 font-semibold text-slate-700 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none">
+                            <option value="todos">Todos os Pacientes</option>
+                            <option value="clinico">Clínico Geral</option>
+                            <option value="orto">Ortodontia</option>
+                        </select>
+                    </div>
+                    <button id="btn-filtro-inativos" onclick="alternarFiltroInativos()" class="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs sm:text-sm font-semibold rounded-lg border border-amber-200 transition flex items-center justify-center gap-1.5 whitespace-nowrap">
+                        <i class="fa-solid fa-filter"></i> Mostrar Inativos (> 30 dias)
+                    </button>
+                </div>
+                <button onclick="abrirModalPaciente()" class="w-full lg:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow transition flex items-center justify-center gap-2 whitespace-nowrap">
+                    <i class="fa-solid fa-user-plus"></i> Novo Paciente
+                </button>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse min-w-[700px]">
+                        <thead>
+                            <tr class="bg-slate-100 text-slate-600 text-xs uppercase tracking-wider border-b border-slate-200">
+                                <th class="p-3 sm:p-4">Nome</th>
+                                <th class="p-3 sm:p-4">Telefone</th>
+                                <th class="p-3 sm:p-4">Categoria</th>
+                                <th class="p-3 sm:p-4">Última Consulta</th>
+                                <th class="p-3 sm:p-4">Vencimento Orto</th>
+                                <th class="p-3 sm:p-4 text-right">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-pacientes-body" class="divide-y divide-slate-100 text-sm"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ABA 3: FINANCEIRO -->
+        <section id="tab-financeiro" class="tab-content hidden space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-bold uppercase text-slate-400">Faturamento (Mês)</p>
+                        <h4 id="kpi-faturamento" class="text-xl font-extrabold text-emerald-600 mt-1">R$ 0,00</h4>
+                    </div>
+                    <div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center text-lg"><i class="fa-solid fa-arrow-trend-up"></i></div>
+                </div>
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-bold uppercase text-slate-400">Despesas (Mês)</p>
+                        <h4 id="kpi-despesas" class="text-xl font-extrabold text-rose-600 mt-1">R$ 0,00</h4>
+                    </div>
+                    <div class="w-12 h-12 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center text-lg"><i class="fa-solid fa-arrow-trend-down"></i></div>
+                </div>
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-bold uppercase text-slate-400">Saldo Líquido (Mês)</p>
+                        <h4 id="kpi-saldo-liquido" class="text-xl font-extrabold text-blue-600 mt-1">R$ 0,00</h4>
+                    </div>
+                    <div class="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center text-lg"><i class="fa-solid fa-wallet"></i></div>
+                </div>
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-bold uppercase text-slate-400">Contas a Receber</p>
+                        <h4 id="kpi-receber" class="text-xl font-extrabold text-amber-600 mt-1">R$ 0,00</h4>
+                    </div>
+                    <div class="w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center text-lg"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+                </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                <div class="flex items-center gap-2 w-full sm:w-auto">
+                    <label class="text-xs font-semibold text-slate-500 uppercase">Período:</label>
+                    <select id="filtro-periodo-financeiro" onchange="renderizarFinanceiro()" class="px-3 py-1.5 border rounded-lg text-sm bg-white font-medium">
+                        <option value="mes">Mês Atual</option>
+                        <option value="hoje">Hoje</option>
+                        <option value="todos">Todos os Períodos</option>
+                    </select>
+                </div>
+                <div class="flex flex-wrap gap-2 w-full sm:w-auto">
+                    <button onclick="lancarDespesa()" class="px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs sm:text-sm font-semibold rounded-lg shadow transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-minus"></i> Lançar Despesa
+                    </button>
+                    <button onclick="abrirModalPagamentoAvulso()" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-semibold rounded-lg shadow transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-cash-register"></i> Pagamento Avulso
+                    </button>
+                    <button onclick="fecharCaixaDiario()" class="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs sm:text-sm font-semibold rounded-lg shadow transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-calculator"></i> Fechar Caixa Diário
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3">
+                    <h4 class="font-bold text-slate-800 border-b pb-2 text-sm sm:text-base"><i class="fa-solid fa-scale-unbalanced text-blue-600 mr-2"></i> Pendências & Créditos de Pacientes</h4>
+                    <div id="lista-pendencias-financeiras" class="space-y-2 max-h-96 overflow-y-auto"></div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3">
+                    <div class="flex justify-between items-center border-b pb-2">
+                        <h4 class="font-bold text-slate-800 text-sm sm:text-base"><i class="fa-solid fa-right-left text-emerald-600 mr-2"></i> Histórico de Caixa (Entradas & Despesas)</h4>
+                    </div>
+                    <div id="lista-pagamentos-realizados" class="space-y-2 max-h-96 overflow-y-auto"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ABA 4: PRONTUÁRIO / DETALHES DO PACIENTE -->
+        <section id="tab-detalhes-paciente" class="tab-content hidden space-y-4">
+            <button onclick="voltarParaOrigem()" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 rounded-lg text-sm font-medium transition flex items-center gap-2 w-max">
+                <i class="fa-solid fa-arrow-left"></i> Voltar
+            </button>
+            <div id="detalhes-paciente-container" class="space-y-6"></div>
+        </section>
+
+    </main>
+
+    <!-- MODAIS -->
+    <div id="modal-detalhes-agendamento" class="fixed inset-0 bg-slate-900 bg-opacity-75 hidden items-center justify-center z-50 p-3 sm:p-4">
+        <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-5 space-y-4">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 class="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2"><i class="fa-solid fa-calendar-day text-blue-600"></i> Detalhes do Agendamento</h3>
+                <button onclick="fecharModal('modal-detalhes-agendamento')" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div class="space-y-3 text-sm">
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <p class="text-xs uppercase font-bold text-slate-400">Paciente</p>
+                    <h4 id="detalhe-ag-paciente" class="text-base font-bold text-slate-900 mt-0.5">---</h4>
+                    <span id="detalhe-ag-categoria" class="inline-block text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 mt-1">---</span>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                        <p class="text-xs uppercase font-bold text-slate-400">Data & Hora</p>
+                        <p id="detalhe-ag-datahora" class="font-semibold text-slate-800 mt-0.5">---</p>
+                    </div>
+                    <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                        <p class="text-xs uppercase font-bold text-slate-400">Tipo / Duração</p>
+                        <p id="detalhe-ag-tipo" class="font-semibold text-slate-800 mt-0.5">---</p>
+                    </div>
+                </div>
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <p class="text-xs uppercase font-bold text-slate-400">Observações</p>
+                    <p id="detalhe-ag-obs" class="text-slate-700 italic mt-0.5">Nenhuma observação registrada.</p>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-3 border-t">
+                <button id="btn-excluir-ag-modal" class="py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 font-semibold rounded-lg text-xs transition flex items-center justify-center gap-1"><i class="fa-solid fa-trash"></i> Excluir</button>
+                <button id="btn-editar-ag-modal" class="py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-700 font-semibold rounded-lg text-xs transition flex items-center justify-center gap-1"><i class="fa-solid fa-pen-to-square"></i> Editar</button>
+                <button id="btn-ver-ficha-ag-modal" class="py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg text-xs shadow transition flex items-center justify-center gap-1"><i class="fa-solid fa-user-gear"></i> Ver Ficha</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-agendamento" class="fixed inset-0 bg-slate-900 bg-opacity-75 hidden items-center justify-center z-50 p-3 sm:p-4">
+        <div class="bg-white rounded-2xl shadow-xl max-w-lg w-full p-4 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 id="titulo-modal-agendamento" class="text-base sm:text-lg font-bold text-slate-900">Novo Agendamento</h3>
+                <button onclick="fecharModal('modal-agendamento')" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <form onsubmit="salvarAgendamento(event)" class="space-y-4">
+                <input type="hidden" id="agendamento-edit-id" value="">
+                <div class="space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <div class="flex justify-between items-center">
+                        <label class="block text-xs font-semibold uppercase text-slate-600">Paciente</label>
+                        <button type="button" onclick="toggleFormCadastroRapido()" id="btn-toggle-cadastro-rapido" class="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1"><i class="fa-solid fa-user-plus"></i> Novo Rápido</button>
+                    </div>
+                    <div id="container-busca-paciente">
+                        <input type="text" id="filtro-paciente-busca" onkeydown="prevenirEnterBusca(event)" oninput="filtrarPacientesSelect()" placeholder="🔍 Pesquisar paciente..." class="w-full px-3 py-2 border rounded-lg text-sm bg-white mb-2">
+                        <select id="agendamento-paciente" required class="w-full px-3 py-2 border rounded-lg text-sm bg-white font-medium"></select>
+                    </div>
+                    <div id="container-cadastro-rapido" class="hidden space-y-2 pt-2 border-t border-slate-200">
+                        <p class="text-xs font-bold text-blue-700">Cadastro Rápido (Caixa Alta)</p>
+                        <input type="text" id="rapido-nome" placeholder="Nome Completo *" class="w-full px-3 py-2 border rounded-lg text-sm bg-white uppercase">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <input type="text" id="rapido-telefone" oninput="mascaraTelefone(this)" placeholder="(00) 00000-0000" class="w-full px-3 py-2 border rounded-lg text-sm bg-white">
+                            <select id="rapido-categoria" class="w-full px-3 py-2 border rounded-lg text-sm bg-white">
+                                <option value="Clínico">Clínico</option>
+                                <option value="Ortodontia">Ortodontia</option>
+                            </select>
+                        </div>
+                        <button type="button" onclick="cadastrarPacienteRapido()" class="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow">Cadastrar e Selecionar</button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Data</label>
+                        <input type="date" id="agendamento-data" required class="w-full px-3 py-2 border rounded-lg text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Horário Inicial</label>
+                        <input type="time" id="agendamento-horario" required class="w-full px-3 py-2 border rounded-lg text-sm">
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Tipo de Atendimento</label>
+                        <select id="agendamento-tipo" required class="w-full px-3 py-2 border rounded-lg text-sm bg-white">
+                            <option value="Manutenção ortodôntica">Manutenção ortodôntica</option>
+                            <option value="Retorno">Retorno</option>
+                            <option value="Procedimento">Procedimento</option>
+                            <option value="Avaliação">Avaliação</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Duração</label>
+                        <select id="agendamento-duracao" required class="w-full px-3 py-2 border rounded-lg text-sm bg-white">
+                            <option value="15">15 minutos</option>
+                            <option value="30" selected>30 minutos</option>
+                            <option value="60">60 minutos (1 hora)</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Observações</label>
+                    <textarea id="agendamento-obs" rows="2" class="w-full px-3 py-2 border rounded-lg text-sm"></textarea>
+                </div>
+                <div class="flex justify-end space-x-3 pt-4 border-t">
+                    <button type="button" onclick="fecharModal('modal-agendamento')" class="px-4 py-2 border rounded-lg text-sm text-slate-600 hover:bg-slate-100">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow">Salvar Agendamento</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-paciente" class="fixed inset-0 bg-slate-900 bg-opacity-75 hidden items-center justify-center z-50 p-3 sm:p-4">
+        <div class="bg-white rounded-2xl shadow-xl max-w-lg w-full p-4 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 id="titulo-modal-paciente" class="text-base sm:text-lg font-bold text-slate-900">Cadastrar Novo Paciente</h3>
+                <button onclick="fecharModal('modal-paciente')" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <form id="form-paciente" onsubmit="salvarPaciente(event)" class="space-y-4">
+                <input type="hidden" id="paciente-edit-id" value="">
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Nome Completo * (Caixa Alta)</label>
+                    <input type="text" id="paciente-nome" required class="w-full px-3 py-2 border rounded-lg text-sm uppercase">
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Telefone</label>
+                        <input type="text" id="paciente-telefone" oninput="mascaraTelefone(this)" placeholder="(00) 00000-0000" class="w-full px-3 py-2 border rounded-lg text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Data Nascimento</label>
+                        <input type="date" id="paciente-nascimento" class="w-full px-3 py-2 border rounded-lg text-sm">
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">CPF</label>
+                        <input type="text" id="paciente-cpf" oninput="mascaraCPF(this)" placeholder="000.000.000-00" class="w-full px-3 py-2 border rounded-lg text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Categoria</label>
+                        <select id="paciente-categoria" onchange="toggleVencimentoOrto()" class="w-full px-3 py-2 border rounded-lg text-sm bg-white">
+                            <option value="Clínico">Clínico</option>
+                            <option value="Ortodontia">Ortodontia</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="grupo-vencimento-orto" class="hidden">
+                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Data de Vencimento Mensal (Orto)</label>
+                    <input type="date" id="paciente-vencimento" class="w-full px-3 py-2 border rounded-lg text-sm">
+                </div>
+                <div class="flex justify-end space-x-3 pt-4 border-t">
+                    <button type="button" onclick="fecharModal('modal-paciente')" class="px-4 py-2 border rounded-lg text-sm text-slate-600 hover:bg-slate-100">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow">Salvar Paciente</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Scripts separados -->
+    <script type="module" src="firebase-config.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
