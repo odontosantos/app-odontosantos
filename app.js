@@ -131,9 +131,11 @@ async function fazerLoginFirebase(event) {
 
 function iniciarSessaoSistema() {
     const telaLogin = document.getElementById('login-screen');
-    telaLogin.style.display = 'none';
-    telaLogin.classList.remove('flex');
-    telaLogin.classList.add('hidden');
+    if (telaLogin) {
+        telaLogin.style.display = 'none';
+        telaLogin.classList.remove('flex');
+        telaLogin.classList.add('hidden');
+    }
 
     document.getElementById('main-header').classList.remove('hidden');
     document.getElementById('main-nav').classList.remove('hidden');
@@ -149,8 +151,11 @@ function logout() {
         window.signOut(window.firebaseAuth);
     }
     usuarioAtual = null;
-    document.getElementById('login-screen').style.display = 'flex';
-    document.getElementById('login-screen').classList.remove('hidden');
+    const telaLogin = document.getElementById('login-screen');
+    if (telaLogin) {
+        telaLogin.style.display = 'flex';
+        telaLogin.classList.remove('hidden');
+    }
     document.getElementById('main-header').classList.add('hidden');
     document.getElementById('main-nav').classList.add('hidden');
     document.getElementById('main-content').classList.add('hidden');
@@ -159,9 +164,9 @@ function logout() {
 function configurarNavbar() {
     const navTabs = document.getElementById('nav-tabs');
     const badge = document.getElementById('header-user-badge');
-    navTabs.innerHTML = '';
+    if (!navTabs || !badge) return;
 
-    if (usuarioAtual.perfil === 'secretaria') {
+    if (usuarioAtual && usuarioAtual.perfil === 'secretaria') {
         badge.innerText = 'Perfil: Secretaria / Recepção';
         badge.className = 'inline-block px-2 py-0.5 text-[10px] sm:text-xs font-medium bg-emerald-100 text-emerald-800 rounded-full mt-0.5';
     } else {
@@ -181,7 +186,9 @@ function mudarAba(nomeAba) {
         btn.classList.add('border-transparent', 'text-slate-400');
     });
 
-    document.getElementById('tab-' + nomeAba).classList.remove('hidden');
+    const abaAlvo = document.getElementById('tab-' + nomeAba);
+    if (abaAlvo) abaAlvo.classList.remove('hidden');
+
     const ativoBtn = document.getElementById('btn-tab-' + nomeAba);
     if (ativoBtn) {
         ativoBtn.classList.remove('border-transparent', 'text-slate-400');
@@ -210,19 +217,25 @@ function inicializarSistema() {
 // ==========================================
 
 function atualizarHoraFimPadrao() {
-    const horaInicio = document.getElementById('agendamento-horario').value;
+    const inputInicio = document.getElementById('agendamento-horario');
+    const inputFim = document.getElementById('agendamento-hora-fim');
+    if (!inputInicio || !inputFim) return;
+
+    const horaInicio = inputInicio.value;
     if (horaInicio) {
         const partes = horaInicio.split(':');
         let h = parseInt(partes[0], 10);
         let m = parseInt(partes[1], 10) + 30; // Soma 30 minutos padrão
         h += Math.floor(m / 60);
         m = m % 60;
-        document.getElementById('agendamento-hora-fim').value = String(h % 24).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+        inputFim.value = String(h % 24).padStart(2, '0') + ':' + String(m).padStart(2, '0');
     }
 }
 
 function selecionarCorAgenda(corHex, elementoBtn) {
-    document.getElementById('agendamento-cor').value = corHex;
+    const inputCor = document.getElementById('agendamento-cor');
+    if (inputCor) inputCor.value = corHex;
+
     document.querySelectorAll('.cor-agenda-btn').forEach(btn => {
         btn.innerHTML = '';
         btn.classList.remove('ring-2', 'ring-offset-2', 'ring-slate-400');
@@ -269,6 +282,8 @@ function formatarEventoCalendario(ag) {
 
 function inicializarCalendario() {
     const calendarEl = document.getElementById('calendar');
+    if (!calendarEl) return;
+
     const eventosFormatados = db.agendamentos.map(formatarEventoCalendario).filter(e => e !== null);
     const isMobile = window.innerWidth < 768;
 
@@ -380,6 +395,7 @@ function atualizarBotaoInativos() {
 
 function renderizarPacientes() {
     const tbody = document.getElementById('tabela-pacientes-body');
+    if (!tbody) return;
     const termoBusca = (document.getElementById('busca-pacientes-tabela')?.value || '').toLowerCase().trim();
     const opcaoCategoria = document.getElementById('filtro-categoria-pacientes')?.value || 'todos';
 
@@ -401,10 +417,15 @@ function renderizarPacientes() {
         }
     });
 
-    document.getElementById('kpi-total-pacientes').innerText = total;
-    document.getElementById('kpi-clinico-pacientes').innerText = clinicos;
-    document.getElementById('kpi-orto-pacientes').innerText = orto;
-    document.getElementById('kpi-inativos-pacientes').innerText = inativosCount;
+    const kpiTotal = document.getElementById('kpi-total-pacientes');
+    const kpiClinico = document.getElementById('kpi-clinico-pacientes');
+    const kpiOrto = document.getElementById('kpi-orto-pacientes');
+    const kpiInativos = document.getElementById('kpi-inativos-pacientes');
+
+    if (kpiTotal) kpiTotal.innerText = total;
+    if (kpiClinico) kpiClinico.innerText = clinicos;
+    if (kpiOrto) kpiOrto.innerText = orto;
+    if (kpiInativos) kpiInativos.innerText = inativosCount;
 
     const listaExibicao = db.pacientes.filter(p => {
         const bateuBusca = (p.nome || '').toLowerCase().includes(termoBusca) || (p.cpf || '').includes(termoBusca);
@@ -471,12 +492,10 @@ function excluirPaciente(pacienteId) {
 
     if (!verificarSenhaExclusao()) return;
     if (confirm(`⚠️ Tem certeza que deseja EXCLUIR permanentemente o paciente "${paciente.nome}"?`)) {
-        
         db.pacientes = db.pacientes.filter(p => p.id !== pacienteId);
         db.agendamentos = db.agendamentos.filter(a => a.pacienteId !== pacienteId);
         db.prontuarios = db.prontuarios.filter(pr => pr.pacienteId !== pacienteId);
 
-        // Mantém pagamentos no caixa desvinculando o ID
         db.pagamentos.forEach(pg => {
             if (pg.pacienteId === pacienteId) {
                 pg.pacienteId = null; 
@@ -501,7 +520,7 @@ function excluirProntuario(prontuarioId, pacienteId) {
 }
 
 // ==========================================
-// FINANCEIRO & CAIXA (MANUAL)
+// FINANCEIRO & CAIXA
 // ==========================================
 
 function estornarPagamento(pagamentoId, pacienteId) {
@@ -665,8 +684,10 @@ function abrirModalPagamentoAvulso() {
 function renderizarFinanceiro() {
     const listaPendencias = document.getElementById('lista-pendencias-financeiras');
     const listaFluxo = document.getElementById('lista-pagamentos-realizados');
-    const filtroPeriodo = document.getElementById('filtro-periodo-financeiro').value;
+    const filtroPeriodo = document.getElementById('filtro-periodo-financeiro')?.value || 'mes';
     
+    if (!listaPendencias || !listaFluxo) return;
+
     listaPendencias.innerHTML = '';
     listaFluxo.innerHTML = '';
 
@@ -685,10 +706,15 @@ function renderizarFinanceiro() {
     let saldoLiquidoMes = faturamentoMes - despesasMes;
     let qtdPacientesComPendencia = db.pacientes.filter(p => p.possuiPendenciaManual).length;
 
-    document.getElementById('kpi-faturamento').innerText = 'R$ ' + faturamentoMes.toFixed(2);
-    document.getElementById('kpi-despesas').innerText = 'R$ ' + despesasMes.toFixed(2);
-    document.getElementById('kpi-saldo-liquido').innerText = 'R$ ' + saldoLiquidoMes.toFixed(2);
-    document.getElementById('kpi-receber').innerText = qtdPacientesComPendencia + ' Pacientes';
+    const elFat = document.getElementById('kpi-faturamento');
+    const elDesp = document.getElementById('kpi-despesas');
+    const elSaldo = document.getElementById('kpi-saldo-liquido');
+    const elRec = document.getElementById('kpi-receber');
+
+    if (elFat) elFat.innerText = 'R$ ' + faturamentoMes.toFixed(2);
+    if (elDesp) elDesp.innerText = 'R$ ' + despesasMes.toFixed(2);
+    if (elSaldo) elSaldo.innerText = 'R$ ' + saldoLiquidoMes.toFixed(2);
+    if (elRec) elRec.innerText = qtdPacientesComPendencia + ' Pacientes';
 
     let encontrouPendencia = false;
     db.pacientes.forEach(paciente => {
@@ -743,7 +769,7 @@ function renderizarFinanceiro() {
 }
 
 // ==========================================
-// MODAIS DE AGENDAMENTO (HORA FINAL & CORES)
+// MODAIS DE AGENDAMENTO
 // ==========================================
 
 function abrirModalDetalhesAgendamento(agendamentoId) {
@@ -784,23 +810,29 @@ function abrirModalAgendamento(dataPreenchida, horaPreenchida) {
     popularSelectPacientes();
     document.getElementById('titulo-modal-agendamento').innerText = 'Novo Agendamento';
     document.getElementById('agendamento-edit-id').value = '';
-    document.getElementById('filtro-paciente-busca').value = '';
+    const filtroBusca = document.getElementById('filtro-paciente-busca');
+    if (filtroBusca) filtroBusca.value = '';
     document.getElementById('agendamento-obs').value = '';
 
     const btnPadrao = document.querySelector('.cor-agenda-btn[style*="#039be5"]');
     selecionarCorAgenda('#039be5', btnPadrao);
 
-    document.getElementById('container-cadastro-rapido').classList.add('hidden');
-    document.getElementById('container-busca-paciente').classList.remove('hidden');
-    document.getElementById('btn-toggle-cadastro-rapido').innerHTML = '<i class="fa-solid fa-user-plus"></i> Novo Rápido';
+    const containerCadRapido = document.getElementById('container-cadastro-rapido');
+    const containerBuscaPac = document.getElementById('container-busca-paciente');
+    const btnToggleCad = document.getElementById('btn-toggle-cadastro-rapido');
+
+    if (containerCadRapido) containerCadRapido.classList.add('hidden');
+    if (containerBuscaPac) containerBuscaPac.classList.remove('hidden');
+    if (btnToggleCad) btnToggleCad.innerHTML = '<i class="fa-solid fa-user-plus"></i> Novo Rápido';
     
     document.getElementById('agendamento-data').value = dataPreenchida || obterDataLocalISO();
     document.getElementById('agendamento-horario').value = horaPreenchida || '09:00';
     
     atualizarHoraFimPadrao();
 
-    document.getElementById('modal-agendamento').classList.remove('hidden');
-    document.getElementById('modal-agendamento').classList.add('flex');
+    const modalAg = document.getElementById('modal-agendamento');
+    modalAg.classList.remove('hidden');
+    modalAg.classList.add('flex');
 }
 
 function abrirModalEditarAgendamento(agendamentoId) {
@@ -828,10 +860,14 @@ function abrirModalEditarAgendamento(agendamentoId) {
     const btnCorSalva = document.querySelector(`.cor-agenda-btn[style*="${corSalva}"]`) || document.querySelector('.cor-agenda-btn[style*="#039be5"]');
     selecionarCorAgenda(corSalva, btnCorSalva);
 
-    document.getElementById('container-cadastro-rapido').classList.add('hidden');
-    document.getElementById('container-busca-paciente').classList.remove('hidden');
-    document.getElementById('modal-agendamento').classList.remove('hidden');
-    document.getElementById('modal-agendamento').classList.add('flex');
+    const containerCadRapido = document.getElementById('container-cadastro-rapido');
+    const containerBuscaPac = document.getElementById('container-busca-paciente');
+    if (containerCadRapido) containerCadRapido.classList.add('hidden');
+    if (containerBuscaPac) containerBuscaPac.classList.remove('hidden');
+
+    const modalAg = document.getElementById('modal-agendamento');
+    modalAg.classList.remove('hidden');
+    modalAg.classList.add('flex');
 }
 
 function salvarAgendamento(event) {
@@ -856,6 +892,7 @@ function salvarAgendamento(event) {
         if (!confirm(`⚠️ Já existe agendamento para "${pacConflito.nome}" nesse horário. Agendar mesmo assim?`)) return;
     }
 
+    const inputCor = document.getElementById('agendamento-cor');
     const dadosAgendamento = {
         pacienteId: pacienteId,
         data: dataAg,
@@ -863,7 +900,7 @@ function salvarAgendamento(event) {
         horaFim: horaFimAg,
         tipo: document.getElementById('agendamento-tipo').value,
         obs: document.getElementById('agendamento-obs').value.trim(),
-        cor: document.getElementById('agendamento-cor').value 
+        cor: inputCor ? inputCor.value : '#039be5' 
     };
 
     if (editId) {
@@ -879,7 +916,9 @@ function salvarAgendamento(event) {
     persistirDB();
     fecharModal('modal-agendamento');
     atualizarCalendario();
-    if (!document.getElementById('tab-detalhes-paciente').classList.contains('hidden')) { abrirDetalhesPaciente(pacienteId, abaOrigem); }
+    if (!document.getElementById('tab-detalhes-paciente').classList.contains('hidden')) { 
+        abrirDetalhesPaciente(pacienteId, abaOrigem); 
+    }
 }
 
 // ==========================================
@@ -918,7 +957,9 @@ function abrirSubAbaPaciente(subAba) {
 }
 
 function filtrarProntuarioLinhaTempo(pacienteId) {
-    const termo = document.getElementById('busca-prontuario-input').value.toLowerCase();
+    const inputBusca = document.getElementById('busca-prontuario-input');
+    if (!inputBusca) return;
+    const termo = inputBusca.value.toLowerCase();
     const container = document.getElementById('container-prontuario-timeline');
     const prontuarios = db.prontuarios.filter(pr => pr.pacienteId === pacienteId);
     if (prontuarios.length === 0) return;
@@ -927,6 +968,7 @@ function filtrarProntuarioLinhaTempo(pacienteId) {
 }
 
 function renderizarLinhaTempoProntuario(container, prontuarios, pacienteId) {
+    if (!container) return;
     container.innerHTML = '';
     if (prontuarios.length === 0) {
         container.innerHTML = '<p class="text-sm text-slate-400 p-2">Nenhum registro encontrado.</p>';
@@ -1072,7 +1114,9 @@ function importarBackup(event) {
 }
 
 function abrirModalPaciente(pacienteId) {
-    document.getElementById('form-paciente').reset();
+    const formPaciente = document.getElementById('form-paciente');
+    if (formPaciente) formPaciente.reset();
+
     const titulo = document.getElementById('titulo-modal-paciente');
     const editId = document.getElementById('paciente-edit-id');
 
@@ -1080,8 +1124,8 @@ function abrirModalPaciente(pacienteId) {
         const paciente = db.pacientes.find(p => p.id === pacienteId);
         if (!paciente) return;
 
-        titulo.innerText = 'Editar Cadastro do Paciente';
-        editId.value = paciente.id;
+        if (titulo) titulo.innerText = 'Editar Cadastro do Paciente';
+        if (editId) editId.value = paciente.id;
         document.getElementById('paciente-nome').value = paciente.nome;
         document.getElementById('paciente-telefone').value = paciente.telefone || '';
         document.getElementById('paciente-nascimento').value = paciente.nascimento || '';
@@ -1091,23 +1135,31 @@ function abrirModalPaciente(pacienteId) {
         
         toggleVencimentoOrto();
     } else {
-        titulo.innerText = 'Cadastrar Novo Paciente';
-        editId.value = '';
-        document.getElementById('grupo-vencimento-orto').classList.add('hidden');
+        if (titulo) titulo.innerText = 'Cadastrar Novo Paciente';
+        if (editId) editId.value = '';
+        const grupoVencimento = document.getElementById('grupo-vencimento-orto');
+        if (grupoVencimento) grupoVencimento.classList.add('hidden');
     }
 
-    document.getElementById('modal-paciente').classList.remove('hidden');
-    document.getElementById('modal-paciente').classList.add('flex');
+    const modalPaciente = document.getElementById('modal-paciente');
+    if (modalPaciente) {
+        modalPaciente.classList.remove('hidden');
+        modalPaciente.classList.add('flex');
+    }
 }
 
 function fecharModal(id) {
-    document.getElementById(id).classList.add('hidden');
-    document.getElementById(id).classList.remove('flex');
+    const modal = document.getElementById(id);
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
 }
 
 function toggleVencimentoOrto() {
-    const categoria = document.getElementById('paciente-categoria').value;
+    const categoria = document.getElementById('paciente-categoria')?.value;
     const grupoOrto = document.getElementById('grupo-vencimento-orto');
+    if (!grupoOrto) return;
     if (categoria === 'Ortodontia') grupoOrto.classList.remove('hidden');
     else grupoOrto.classList.add('hidden');
 }
@@ -1125,6 +1177,7 @@ function toggleFormCadastroRapido() {
     const bloco = document.getElementById('container-cadastro-rapido');
     const busca = document.getElementById('container-busca-paciente');
     const btn = document.getElementById('btn-toggle-cadastro-rapido');
+    if (!bloco || !busca || !btn) return;
 
     if (bloco.classList.contains('hidden')) {
         bloco.classList.remove('hidden');
@@ -1152,14 +1205,18 @@ function cadastrarPacienteRapido() {
 
     popularSelectPacientes();
     renderizarPacientes();
-    document.getElementById('agendamento-paciente').value = novoId;
+    const selectAg = document.getElementById('agendamento-paciente');
+    if (selectAg) selectAg.value = novoId;
     toggleFormCadastroRapido();
     alert('Paciente cadastrado!');
 }
 
 function filtrarPacientesSelect() {
-    const termo = document.getElementById('filtro-paciente-busca').value.toLowerCase();
+    const inputFiltro = document.getElementById('filtro-paciente-busca');
     const select = document.getElementById('agendamento-paciente');
+    if (!inputFiltro || !select) return;
+
+    const termo = inputFiltro.value.toLowerCase();
     select.innerHTML = '';
     
     const filtrados = db.pacientes.filter(p => p.nome.toLowerCase().includes(termo));
@@ -1221,6 +1278,8 @@ function abrirDetalhesPaciente(pacienteId, origem) {
     const pagamentosPaciente = db.pagamentos.filter(pg => pg.pacienteId === pacienteId);
     
     const container = document.getElementById('detalhes-paciente-container');
+    if (!container) return;
+
     const telefoneLimpo = paciente.telefone ? paciente.telefone.replace(/\D/g, '') : '';
     const btnWhatsapp = telefoneLimpo ? '<a href="https://wa.me/55' + telefoneLimpo + '" target="_blank" class="text-emerald-600 hover:text-emerald-700 font-bold ml-2 inline-flex items-center gap-1"><i class="fa-brands fa-whatsapp text-base"></i> Conversar</a>' : '';
 
@@ -1251,8 +1310,8 @@ function abrirDetalhesPaciente(pacienteId, origem) {
             const estiloTexto = et.concluido ? 'line-through text-slate-400' : 'text-slate-800 font-medium';
             const valorFmt = et.valor ? 'R$ ' + Number(et.valor).toFixed(2) : 'R$ 0,00';
 
-            const btnCheck = usuarioAtual.perfil === 'dentista' ? '<button type="button" onclick="alternarStatusEtapa(\'' + paciente.id + '\', \'' + et.id + '\')" class="px-2 py-1 ' + (et.concluido ? 'bg-slate-200 text-slate-700' : 'bg-emerald-600 text-white') + ' text-xs font-semibold rounded hover:opacity-90 transition"><i class="fa-solid ' + (et.concluido ? 'fa-rotate-left' : 'fa-check') + '"></i> ' + (et.concluido ? 'Reabrir' : 'Concluir') + '</button>' : '';
-            const btnLixo = usuarioAtual.perfil === 'dentista' ? '<button type="button" onclick="excluirEtapaPlanejamento(\'' + paciente.id + '\', \'' + et.id + '\')" class="text-slate-400 hover:text-red-600 text-xs p-1" title="Excluir Etapa"><i class="fa-solid fa-trash"></i></button>' : '';
+            const btnCheck = usuarioAtual && usuarioAtual.perfil === 'dentista' ? '<button type="button" onclick="alternarStatusEtapa(\'' + paciente.id + '\', \'' + et.id + '\')" class="px-2 py-1 ' + (et.concluido ? 'bg-slate-200 text-slate-700' : 'bg-emerald-600 text-white') + ' text-xs font-semibold rounded hover:opacity-90 transition"><i class="fa-solid ' + (et.concluido ? 'fa-rotate-left' : 'fa-check') + '"></i> ' + (et.concluido ? 'Reabrir' : 'Concluir') + '</button>' : '';
+            const btnLixo = usuarioAtual && usuarioAtual.perfil === 'dentista' ? '<button type="button" onclick="excluirEtapaPlanejamento(\'' + paciente.id + '\', \'' + et.id + '\')" class="text-slate-400 hover:text-red-600 text-xs p-1" title="Excluir Etapa"><i class="fa-solid fa-trash"></i></button>' : '';
 
             return '<div class="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-white rounded-lg border border-indigo-100 text-xs gap-2 shadow-sm">' +
                 '<div class="flex items-center space-x-2 flex-grow min-w-0">' +
@@ -1267,7 +1326,7 @@ function abrirDetalhesPaciente(pacienteId, origem) {
         }).join('');
 
     let htmlFormAdicionarEtapa = '';
-    if (usuarioAtual.perfil === 'dentista') {
+    if (usuarioAtual && usuarioAtual.perfil === 'dentista') {
         htmlFormAdicionarEtapa = '<form onsubmit="adicionarEtapaPlanejamento(event, \'' + paciente.id + '\')" class="grid grid-cols-1 sm:grid-cols-12 gap-2 pt-2 border-t border-indigo-100">' +
             '<div class="sm:col-span-2"><input type="text" id="plan-dente" placeholder="Dente (16)" class="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white outline-none"></div>' +
             '<div class="sm:col-span-5"><input type="text" id="plan-desc" required placeholder="Procedimento (ex: Restauração)" class="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white outline-none"></div>' +
@@ -1285,7 +1344,7 @@ function abrirDetalhesPaciente(pacienteId, origem) {
         '<div class="p-4 space-y-3 bg-indigo-50/20"><div class="space-y-2 max-h-60 overflow-y-auto pr-1">' + htmlItensEtapas + '</div>' + htmlFormAdicionarEtapa + '</div></div>';
 
     let htmlFormDentista = '';
-    if (usuarioAtual.perfil === 'dentista') {
+    if (usuarioAtual && usuarioAtual.perfil === 'dentista') {
         htmlFormDentista = '<div id="sec-evolucao-prontuario" class="secao-clinica-mobile hidden md:block bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3 shadow-sm">' +
             '<h4 class="font-bold text-blue-900 text-sm flex items-center gap-2"><i class="fa-solid fa-stethoscope text-blue-600"></i> Registrar Evolução do Prontuário</h4>' +
             '<form onsubmit="salvarProcedimentoDentista(event, \'' + paciente.id + '\')" class="space-y-3">' +
@@ -1361,7 +1420,7 @@ function abrirDetalhesPaciente(pacienteId, origem) {
 
     const hubMobile = '<div class="grid grid-cols-2 gap-2.5 md:hidden mb-4">' +
         '<button onclick="alternarSecaoMobile(\'sec-plano-tratamento\')" class="p-3 bg-indigo-600 text-white rounded-xl shadow font-semibold text-xs flex flex-col items-center justify-center text-center gap-1.5 active:scale-95 transition"><i class="fa-solid fa-clipboard-list text-lg"></i> Plano Tratamento</button>' +
-        (usuarioAtual.perfil === 'dentista' ? '<button onclick="alternarSecaoMobile(\'sec-evolucao-prontuario\')" class="p-3 bg-blue-600 text-white rounded-xl shadow font-semibold text-xs flex flex-col items-center justify-center text-center gap-1.5 active:scale-95 transition"><i class="fa-solid fa-stethoscope text-lg"></i> Evoluir Prontuário</button>' : '') +
+        (usuarioAtual && usuarioAtual.perfil === 'dentista' ? '<button onclick="alternarSecaoMobile(\'sec-evolucao-prontuario\')" class="p-3 bg-blue-600 text-white rounded-xl shadow font-semibold text-xs flex flex-col items-center justify-center text-center gap-1.5 active:scale-95 transition"><i class="fa-solid fa-stethoscope text-lg"></i> Evoluir Prontuário</button>' : '') +
         '<button onclick="alternarSecaoMobile(\'sec-lancar-caixa\')" class="p-3 bg-emerald-600 text-white rounded-xl shadow font-semibold text-xs flex flex-col items-center justify-center text-center gap-1.5 active:scale-95 transition"><i class="fa-solid fa-cash-register text-lg"></i> Lançar Caixa</button>' +
         '<button onclick="alternarSecaoMobile(\'sec-historico-abas\')" class="p-3 bg-slate-800 text-white rounded-xl shadow font-semibold text-xs flex flex-col items-center justify-center text-center gap-1.5 active:scale-95 transition"><i class="fa-solid fa-clock-rotate-left text-lg"></i> Históricos</button></div>';
 
