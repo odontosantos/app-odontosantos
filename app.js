@@ -993,16 +993,19 @@ function abrirDetalhesPaciente(pacienteId, origem) {
         '</div>';
     }
 
-    let htmlFormCaixa = '<div id="sec-lancar-caixa" class="secao-clinica-mobile hidden md:block bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-3 shadow-sm">' +
-        '<h4 class="font-bold text-emerald-900 text-sm flex items-center gap-2"><i class="fa-solid fa-cash-register text-emerald-600"></i> Lançar Cobrança & Recebimento</h4>' +
-        '<form onsubmit="salvarLancamentoCaixaCompleto(event, \'' + paciente.id + '\')" class="space-y-3">' +
-            '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Descrição do Atendimento *</label><input type="text" id="caixa-proc-desc" required placeholder="Ex: Manutenção Orto / Restauração" class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"></div>' +
-            '<div class="grid grid-cols-1 sm:grid-cols-3 gap-3">' +
-                '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Valor Cobrado (R$) *</label><input type="number" step="0.01" id="caixa-valor-cobrado" oninput="sincronizarValorPago()" required placeholder="0.00" class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"></div>' +
-                '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Valor Pago Hoje (R$)</label><input type="number" step="0.01" id="caixa-valor-pago" placeholder="0.00" class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"></div>' +
+   let htmlFormCaixa = '<div id="sec-lancar-caixa" class="secao-clinica-mobile hidden md:block bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-3 shadow-sm">' +
+        '<h4 class="font-bold text-emerald-900 text-sm flex items-center gap-2"><i class="fa-solid fa-cash-register text-emerald-600"></i> Lançamento & Observação Financeira</h4>' +
+        '<form onsubmit="salvarLancamentoCaixaManual(event, \'' + paciente.id + '\')" class="space-y-3">' +
+            '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Descrição / Observação Financeira</label><input type="text" id="caixa-obs-manual" placeholder="Ex: Acerto combinado, valor pendente, crédito..." class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"></div>' +
+            '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">' +
+                '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Valor do Pagamento (R$)</label><input type="number" step="0.01" id="caixa-valor-pago" placeholder="0.00" class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"></div>' +
                 '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Forma Pagamento</label><select id="caixa-forma" class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"><option value="Pix">Pix</option><option value="Cartão de Crédito">Cartão de Crédito</option><option value="Cartão de Débito">Cartão de Débito</option><option value="Dinheiro">Dinheiro</option></select></div>' +
             '</div>' +
-            '<button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg text-xs shadow transition">Lançar no Caixa</button>' +
+            '<div class="flex items-center gap-2 pt-1">' +
+                '<input type="checkbox" id="caixa-marca-pendencia" class="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500">' +
+                '<label for="caixa-marca-pendencia" class="text-xs font-semibold text-slate-700 cursor-pointer">Marcar paciente com pendência/débito financeiro (Exibir na aba Financeiro)</label>' +
+            '</div>' +
+            '<button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg text-xs shadow transition">Salvar Lançamento</button>' +
         '</form>' +
     '</div>';
 
@@ -1566,4 +1569,34 @@ function salvarPaciente(event) {
     }
 
     alert('Dados do paciente salvos!');
+}
+
+function salvarLancamentoCaixaManual(event, pacienteId) {
+    event.preventDefault();
+    const observacao = document.getElementById('caixa-obs-manual').value.trim();
+    const valorPago = parseFloat(document.getElementById('caixa-valor-pago').value) || 0;
+    const forma = document.getElementById('caixa-forma').value;
+    const temPendencia = document.getElementById('caixa-marca-pendencia').checked;
+    const hoje = obterDataLocalISO();
+
+    const paciente = db.pacientes.find(p => p.id === pacienteId);
+    if (!paciente) return;
+
+    paciente.possuiPendenciaManual = temPendencia;
+    paciente.obsFinanceiraManual = observacao;
+
+    if (valorPago > 0) {
+        db.pagamentos.push({ 
+            id: gerarIdUnico(), 
+            pacienteId: pacienteId, 
+            data: hoje, 
+            valor: valorPago, 
+            forma: forma, 
+            descricao: observacao ? 'Pagamento: ' + observacao : 'Pagamento avulso' 
+        });
+    }
+
+    persistirDB();
+    alert('Lançamento financeiro atualizado com sucesso!');
+    abrirDetalhesPaciente(pacienteId, abaOrigem);
 }
