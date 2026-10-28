@@ -1600,3 +1600,54 @@ function salvarLancamentoCaixaManual(event, pacienteId) {
     alert('Lançamento financeiro atualizado com sucesso!');
     abrirDetalhesPaciente(pacienteId, abaOrigem);
 }
+
+function salvarLancamentoCaixaManual(event, pacienteId) {
+    event.preventDefault();
+    const descricaoProc = document.getElementById('caixa-proc-desc').value.trim();
+    const valorPago = parseFloat(document.getElementById('caixa-valor-pago').value) || 0;
+    const forma = document.getElementById('caixa-forma').value;
+    const observacao = document.getElementById('caixa-obs-manual').value.trim();
+    const temPendencia = document.getElementById('caixa-marca-pendencia').checked;
+    
+    const paciente = db.pacientes.find(p => p.id === pacienteId);
+    if (!paciente) return;
+
+    // Salva a anotação manual e se tem pendência ou não
+    paciente.possuiPendenciaManual = temPendencia;
+    paciente.obsFinanceiraManual = observacao;
+
+    // Registra o pagamento no caixa (se o valor for maior que zero)
+    if (valorPago > 0) {
+        let descFinal = descricaoProc;
+        if (observacao) descFinal += ' (Obs: ' + observacao + ')';
+        
+        db.pagamentos.push({ 
+            id: gerarIdUnico(), 
+            pacienteId: pacienteId, 
+            data: obterDataLocalISO(), 
+            valor: valorPago, 
+            forma: forma, 
+            descricao: descFinal
+        });
+    }
+
+    persistirDB();
+    alert('Lançamento salvo e status atualizado com sucesso!');
+    abrirDetalhesPaciente(pacienteId, abaOrigem);
+}
+
+function removerPendenciaManual(pacienteId) {
+    const paciente = db.pacientes.find(p => p.id === pacienteId);
+    if (!paciente) return;
+    
+    paciente.possuiPendenciaManual = false;
+    paciente.obsFinanceiraManual = '';
+    persistirDB();
+    
+    // Atualiza a tela correspondente
+    if (!document.getElementById('tab-detalhes-paciente').classList.contains('hidden')) {
+        abrirDetalhesPaciente(pacienteId, abaOrigem);
+    } else {
+        renderizarFinanceiro();
+    }
+}
