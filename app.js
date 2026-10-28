@@ -146,15 +146,24 @@ function excluirPaciente(pacienteId) {
 
     if (!verificarSenhaExclusao()) return;
     if (confirm(`⚠️ Tem certeza que deseja EXCLUIR permanentemente o paciente "${paciente.nome}"?`)) {
+        
+        // 1. Exclui os dados clínicos (ficha, agenda e prontuário)
         db.pacientes = db.pacientes.filter(p => p.id !== pacienteId);
         db.agendamentos = db.agendamentos.filter(a => a.pacienteId !== pacienteId);
         db.prontuarios = db.prontuarios.filter(pr => pr.pacienteId !== pacienteId);
-        db.pagamentos = db.pagamentos.filter(pg => pg.pacienteId !== pacienteId);
+
+        // 2. MANTÉM OS PAGAMENTOS NO CAIXA (Apenas desvincula para não furar o fluxo)
+        db.pagamentos.forEach(pg => {
+            if (pg.pacienteId === pacienteId) {
+                pg.pacienteId = null; // Desvincula
+                pg.descricao = `[Paciente Excluído: ${paciente.nome}] ` + pg.descricao;
+            }
+        });
 
         persistirDB();
         atualizarCalendario();
         renderizarPacientes();
-        alert('Paciente e registros excluídos com sucesso!');
+        alert('Paciente excluído com sucesso! (O histórico financeiro foi mantido no caixa).');
         voltarParaOrigem();
     }
 }
@@ -1032,13 +1041,17 @@ function abrirDetalhesPaciente(pacienteId, origem) {
             
             let htmlItensPg = '';
             gruposPg[mesAno].forEach(pg => {
-                const corBg = 'bg-emerald-50 border-emerald-100';
-                const corTexto = 'text-emerald-900';
-                const corValor = 'text-emerald-700 font-bold';
+                const isEstorno = pg.valor < 0;
+                const corBg = isEstorno ? 'bg-rose-50 border-rose-100' : 'bg-emerald-50 border-emerald-100';
+                const corTexto = isEstorno ? 'text-rose-900' : 'text-emerald-900';
+                const corValor = isEstorno ? 'text-rose-600 font-bold' : 'text-emerald-700 font-bold';
+
+                // Botão de estorno (só aparece se o lançamento for positivo)
+                const btnEstornar = !isEstorno ? '<button onclick="estornarPagamento(\'' + pg.id + '\', \'' + pacienteId + '\')" class="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded text-xs font-semibold transition flex items-center gap-1" title="Estornar Lançamento"><i class="fa-solid fa-rotate-left"></i> Estornar</button>' : '';
 
                 htmlItensPg += '<div class="p-3 ' + corBg + ' border rounded-lg text-sm flex justify-between items-center">' +
                     '<div><p class="font-semibold ' + corTexto + '">' + pg.descricao + '</p><span class="text-xs text-slate-500">' + (pg.data ? pg.data.split('-').reverse().join('/') : '-') + ' • ' + pg.forma + '</span></div>' +
-                    '<div class="flex items-center gap-2"><span class="' + corValor + '">R$ ' + Number(pg.valor).toFixed(2) + '</span></div>' +
+                    '<div class="flex items-center gap-2"><span class="' + corValor + '">R$ ' + Number(pg.valor).toFixed(2) + '</span>' + btnEstornar + '</div>' +
                 '</div>';
             });
 
