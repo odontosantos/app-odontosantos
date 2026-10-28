@@ -272,14 +272,20 @@ function formatarMesAno(dataStr) {
     return (meses[idxMes] || 'Mês') + ' de ' + partes[0];
 }
 
-// Substitua a função fazerLogin antiga por esta:
 async function fazerLoginFirebase(event) {
     event.preventDefault();
     const email = document.getElementById('login-email').value.trim();
     const senha = document.getElementById('login-senha').value;
 
-    if (!usaFirebase) {
-        alert("Firebase desativado.");
+    // Aguarda até meio segundo caso o módulo do Firebase esteja terminando de carregar na 1ª tentativa
+    let tentativas = 0;
+    while (!window.firebaseAuth && tentativas < 10) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        tentativas++;
+    }
+
+    if (!window.firebaseAuth || !window.signInWithEmailAndPassword) {
+        alert("⚠️ O Firebase não respondeu a tempo. Verifique sua conexão ou recarregue a página (F5).");
         return;
     }
 
@@ -292,16 +298,25 @@ async function fazerLoginFirebase(event) {
         const docRef = window.doc(window.firebaseDb, "usuarios", user.email);
         const userDoc = await window.getDoc(docRef);
 
-        let perfilEncontrado = 'secretaria';
+        let perfilEncontrado = 'secretaria'; // Padrão caso não ache o documento
         if (userDoc.exists()) {
             perfilEncontrado = userDoc.data().perfil || 'secretaria';
+        } else {
+            console.warn("⚠️ E-mail autenticado, mas o documento não existe na coleção 'usuarios'. Definindo como secretaria.");
         }
 
         usuarioAtual = { perfil: perfilEncontrado, email: user.email };
         iniciarSessaoSistema();
 
     } catch (error) {
-        alert("❌ Erro no login: " + error.message);
+        console.error("Erro no login:", error);
+        
+        let mensagemErro = error.message;
+        if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-email') {
+            mensagemErro = "E-mail ou senha incorretos.";
+        }
+        
+        alert("❌ Erro no login: " + mensagemErro);
     }
 }
 
