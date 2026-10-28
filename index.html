@@ -370,6 +370,25 @@
                         </select>
                     </div>
                 </div>
+                <!-- PALETA DE CORES ESTILO GOOGLE AGENDA -->
+                <div class="pt-2">
+                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-2">Cor do Agendamento</label>
+                    <input type="hidden" id="agendamento-cor" value="#039be5">
+                    <div class="flex flex-wrap gap-2" id="container-cores-agenda">
+                        <button type="button" onclick="selecionarCorAgenda('#d50000', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #d50000;" title="Tomate"></button>
+                        <button type="button" onclick="selecionarCorAgenda('#e67c73', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #e67c73;" title="Flamingo"></button>
+                        <button type="button" onclick="selecionarCorAgenda('#f4511e', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #f4511e;" title="Tangerina"></button>
+                        <button type="button" onclick="selecionarCorAgenda('#f6bf26', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #f6bf26;" title="Banana"></button>
+                        <button type="button" onclick="selecionarCorAgenda('#33b679', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #33b679;" title="Sálvia"></button>
+                        <button type="button" onclick="selecionarCorAgenda('#0b8043', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #0b8043;" title="Manjericão"></button>
+                        <button type="button" onclick="selecionarCorAgenda('#039be5', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #039be5;" title="Pavão"></button>
+                        <button type="button" onclick="selecionarCorAgenda('#3f51b5', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #3f51b5;" title="Mirtilo"></button>
+                        <button type="button" onclick="selecionarCorAgenda('#7986cb', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #7986cb;" title="Lavanda"></button>
+                        <button type="button" onclick="selecionarCorAgenda('#8e24aa', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #8e24aa;" title="Uva"></button>
+                        <button type="button" onclick="selecionarCorAgenda('#616161', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #616161;" title="Grafite"></button>
+                    </div>
+                </div>
+
                 <div>
                     <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Observações</label>
                     <textarea id="agendamento-obs" rows="2" class="w-full px-3 py-2 border rounded-lg text-sm"></textarea>
