@@ -213,7 +213,7 @@ function inicializarSistema() {
 }
 
 // ==========================================
-// AGENDA E HORA FINAL AUTOMÁTICA
+// AGENDA, HORA FINAL E LEMBRETES/BLOQUEIOS
 // ==========================================
 
 function atualizarHoraFimPadrao() {
@@ -226,6 +226,22 @@ function atualizarHoraFimPadrao() {
         const partes = horaInicio.split(':');
         let h = parseInt(partes[0], 10);
         let m = parseInt(partes[1], 10) + 30; // Soma 30 minutos padrão
+        h += Math.floor(m / 60);
+        m = m % 60;
+        inputFim.value = String(h % 24).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+    }
+}
+
+function atualizarHoraFimLembretePadrao() {
+    const inputInicio = document.getElementById('lembrete-horario');
+    const inputFim = document.getElementById('lembrete-hora-fim');
+    if (!inputInicio || !inputFim) return;
+
+    const horaInicio = inputInicio.value;
+    if (horaInicio) {
+        const partes = horaInicio.split(':');
+        let h = parseInt(partes[0], 10);
+        let m = parseInt(partes[1], 10) + 30;
         h += Math.floor(m / 60);
         m = m % 60;
         inputFim.value = String(h % 24).padStart(2, '0') + ':' + String(m).padStart(2, '0');
@@ -246,9 +262,23 @@ function selecionarCorAgenda(corHex, elementoBtn) {
     }
 }
 
+function selecionarCorLembrete(corHex, elementoBtn) {
+    const inputCor = document.getElementById('lembrete-cor');
+    if (inputCor) inputCor.value = corHex;
+
+    document.querySelectorAll('.cor-lembrete-btn').forEach(btn => {
+        btn.innerHTML = '';
+        btn.classList.remove('ring-2', 'ring-offset-2', 'ring-slate-400');
+    });
+    if (elementoBtn) {
+        elementoBtn.innerHTML = '<i class="fa-solid fa-check text-white text-[10px]"></i>';
+        elementoBtn.classList.add('ring-2', 'ring-offset-2', 'ring-slate-400');
+    }
+}
+
 function alterarStatusAgendamento(id, status) {
     const ag = db.agendamentos.find(a => a.id === id);
-    if (ag) {
+    if (ag && !ag.isLembrete) {
         if (ag.status === status) ag.status = 'agendado';
         else ag.status = status;
         
@@ -259,6 +289,19 @@ function alterarStatusAgendamento(id, status) {
 }
 
 function formatarEventoCalendario(ag) {
+    if (ag.isLembrete) {
+        let corFundo = ag.cor || '#616161';
+        return {
+            id: ag.id,
+            title: '📌 ' + ag.titulo,
+            start: ag.data + 'T' + ag.horario,
+            end: ag.data + 'T' + (ag.horaFim || ag.horario),
+            backgroundColor: corFundo,
+            borderColor: corFundo,
+            extendedProps: { isLembrete: true, titulo: ag.titulo, obs: ag.obs }
+        };
+    }
+
     const paciente = db.pacientes.find(p => p.id === ag.pacienteId);
     if (!paciente || !ag.data || !ag.horario) return null;
 
@@ -276,7 +319,7 @@ function formatarEventoCalendario(ag) {
         end: ag.data + 'T' + (ag.horaFim || ag.horario),
         backgroundColor: corFundo,
         borderColor: corFundo,
-        extendedProps: { pacienteId: ag.pacienteId, tipo: ag.tipo, obs: ag.obs, status: ag.status || 'agendado' }
+        extendedProps: { pacienteId: ag.pacienteId, tipo: ag.tipo, obs: ag.obs, status: ag.status || 'agendado', isLembrete: false }
     };
 }
 
@@ -335,14 +378,14 @@ function atualizarCalendario() {
 
 function excluirAgendamento(id, pacienteId) {
     if (!verificarSenhaExclusao()) return;
-    if (!confirm('Deseja realmente cancelar/excluir este agendamento?')) return;
+    if (!confirm('Deseja realmente excluir este item da agenda?')) return;
     db.agendamentos = db.agendamentos.filter(ag => ag.id !== id);
     persistirDB();
     atualizarCalendario();
     if (pacienteId && !document.getElementById('tab-detalhes-paciente').classList.contains('hidden')) {
         abrirDetalhesPaciente(pacienteId, abaOrigem);
     }
-    alert('Agendamento excluído com sucesso!');
+    alert('Item excluído com sucesso!');
 }
 
 // ==========================================
@@ -769,12 +812,34 @@ function renderizarFinanceiro() {
 }
 
 // ==========================================
-// MODAIS DE AGENDAMENTO
+// MODAIS DE AGENDAMENTO E LEMBRETES/BLOQUEIOS
 // ==========================================
 
 function abrirModalDetalhesAgendamento(agendamentoId) {
     const ag = db.agendamentos.find(item => item.id === agendamentoId);
     if (!ag) return;
+
+    if (ag.isLembrete) {
+        document.getElementById('detalhe-ag-paciente').innerText = '📌 ' + ag.titulo;
+        document.getElementById('detalhe-ag-categoria').innerText = 'Lembrete / Bloqueio';
+        document.getElementById('detalhe-ag-datahora').innerText = (ag.data ? ag.data.split('-').reverse().join('/') : '') + ' • ' + ag.horario + ' às ' + (ag.horaFim || '?');
+        document.getElementById('detalhe-ag-tipo').innerText = 'Bloqueio de Agenda';
+        document.getElementById('detalhe-ag-obs').innerText = ag.obs || 'Nenhuma observação registrada.';
+
+        let divStatus = document.getElementById('container-status-agendamento');
+        if (divStatus) divStatus.innerHTML = ''; // Lembretes não têm status de paciente
+
+        document.getElementById('btn-excluir-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); excluirAgendamento(ag.id, null); };
+        document.getElementById('btn-editar-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); abrirModalEditarLembrete(ag.id); };
+        document.getElementById('btn-ver-ficha-ag-modal').parentElement.style.display = 'none'; // Esconde botão ver ficha
+
+        document.getElementById('modal-detalhes-agendamento').classList.remove('hidden');
+        document.getElementById('modal-detalhes-agendamento').classList.add('flex');
+        return;
+    }
+
+    // Caso seja paciente normal
+    document.getElementById('btn-ver-ficha-ag-modal').parentElement.style.display = 'flex';
     const paciente = db.pacientes.find(p => p.id === ag.pacienteId) || { nome: 'PACIENTE NÃO ENCONTRADO', categoria: 'Geral' };
     
     document.getElementById('detalhe-ag-paciente').innerText = paciente.nome;
@@ -837,7 +902,7 @@ function abrirModalAgendamento(dataPreenchida, horaPreenchida) {
 
 function abrirModalEditarAgendamento(agendamentoId) {
     const ag = db.agendamentos.find(a => a.id === agendamentoId);
-    if (!ag) return;
+    if (!ag || ag.isLembrete) return;
 
     popularSelectPacientes();
     document.getElementById('titulo-modal-agendamento').innerText = 'Editar Agendamento';
@@ -888,12 +953,13 @@ function salvarAgendamento(event) {
 
     const conflito = db.agendamentos.find(a => a.data === dataAg && a.horario === horaAg && a.id !== editId);
     if (conflito) {
-        const pacConflito = db.pacientes.find(p => p.id === conflito.pacienteId) || { nome: 'Outro paciente' };
-        if (!confirm(`⚠️ Já existe agendamento para "${pacConflito.nome}" nesse horário. Agendar mesmo assim?`)) return;
+        const nomeConflito = conflito.isLembrete ? conflito.titulo : (db.pacientes.find(p => p.id === conflito.pacienteId)?.nome || 'Outro evento');
+        if (!confirm(`⚠️ Já existe agendamento/bloqueio para "${nomeConflito}" nesse horário. Agendar mesmo assim?`)) return;
     }
 
     const inputCor = document.getElementById('agendamento-cor');
     const dadosAgendamento = {
+        isLembrete: false,
         pacienteId: pacienteId,
         data: dataAg,
         horario: horaAg,
@@ -919,6 +985,83 @@ function salvarAgendamento(event) {
     if (!document.getElementById('tab-detalhes-paciente').classList.contains('hidden')) { 
         abrirDetalhesPaciente(pacienteId, abaOrigem); 
     }
+}
+
+// Funções para Lembretes / Bloqueios de Agenda
+function abrirModalLembrete(dataPreenchida, horaPreenchida) {
+    document.getElementById('titulo-modal-lembrete').innerText = 'Novo Lembrete / Bloqueio';
+    document.getElementById('lembrete-edit-id').value = '';
+    document.getElementById('lembrete-titulo').value = '';
+    document.getElementById('lembrete-obs').value = '';
+
+    const btnPadrao = document.querySelector('.cor-lembrete-btn[style*="#616161"]');
+    selecionarCorLembrete('#616161', btnPadrao);
+
+    document.getElementById('lembrete-data').value = dataPreenchida || obterDataLocalISO();
+    document.getElementById('lembrete-horario').value = horaPreenchida || '12:00';
+    atualizarHoraFimLembretePadrao();
+
+    const modal = document.getElementById('modal-lembrete');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function abrirModalEditarLembrete(lembreteId) {
+    const ag = db.agendamentos.find(a => a.id === lembreteId);
+    if (!ag || !ag.isLembrete) return;
+
+    document.getElementById('titulo-modal-lembrete').innerText = 'Editar Lembrete / Bloqueio';
+    document.getElementById('lembrete-edit-id').value = ag.id;
+    document.getElementById('lembrete-titulo').value = ag.titulo;
+    document.getElementById('lembrete-data').value = ag.data;
+    document.getElementById('lembrete-horario').value = ag.horario;
+    document.getElementById('lembrete-hora-fim').value = ag.horaFim || '';
+    document.getElementById('lembrete-obs').value = ag.obs || '';
+
+    const corSalva = ag.cor || '#616161';
+    const btnCorSalva = document.querySelector(`.cor-lembrete-btn[style*="${corSalva}"]`) || document.querySelector('.cor-lembrete-btn[style*="#616161"]');
+    selecionarCorLembrete(corSalva, btnCorSalva);
+
+    const modal = document.getElementById('modal-lembrete');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function salvarLembrete(event) {
+    event.preventDefault();
+    const editId = document.getElementById('lembrete-edit-id').value;
+    const titulo = document.getElementById('lembrete-titulo').value.trim();
+    const dataLembrete = document.getElementById('lembrete-data').value;
+    const horaInicio = document.getElementById('lembrete-horario').value;
+    const horaFim = document.getElementById('lembrete-hora-fim').value;
+
+    if (!titulo) { alert('Informe o título do lembrete.'); return; }
+    if (horaFim <= horaInicio) { alert('A Hora Final deve ser posterior à Hora Inicial.'); return; }
+
+    const inputCor = document.getElementById('lembrete-cor');
+    const dadosLembrete = {
+        isLembrete: true,
+        titulo: titulo,
+        data: dataLembrete,
+        horario: horaInicio,
+        horaFim: horaFim,
+        obs: document.getElementById('lembrete-obs').value.trim(),
+        cor: inputCor ? inputCor.value : '#616161'
+    };
+
+    if (editId) {
+        const index = db.agendamentos.findIndex(a => a.id === editId);
+        if (index !== -1) {
+            db.agendamentos[index] = { ...db.agendamentos[index], ...dadosLembrete };
+        }
+    } else {
+        db.agendamentos.push({ id: gerarIdUnico(), ...dadosLembrete });
+    }
+
+    persistirDB();
+    fecharModal('modal-lembrete');
+    atualizarCalendario();
+    alert('Lembrete/Bloqueio salvo com sucesso!');
 }
 
 // ==========================================
@@ -1273,7 +1416,7 @@ function abrirDetalhesPaciente(pacienteId, origem) {
     const paciente = db.pacientes.find(p => p.id === pacienteId);
     if (!paciente) return;
 
-    const agendamentosPaciente = db.agendamentos.filter(ag => ag.pacienteId === pacienteId);
+    const agendamentosPaciente = db.agendamentos.filter(ag => !ag.isLembrete && ag.pacienteId === pacienteId);
     const prontuariosPaciente = db.prontuarios.filter(pr => pr.pacienteId === pacienteId);
     const pagamentosPaciente = db.pagamentos.filter(pg => pg.pacienteId === pacienteId);
     
