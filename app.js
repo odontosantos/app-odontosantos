@@ -76,57 +76,9 @@ function prevenirEnterBusca(e) {
     if (e.key === 'Enter') e.preventDefault();
 }
 
-function abrirModalDetalhesAgendamento(agendamentoId) {
-    const ag = db.agendamentos.find(item => item.id === agendamentoId);
-    if (!ag) return;
 
-    const paciente = db.pacientes.find(p => p.id === ag.pacienteId) || { nome: 'PACIENTE NÃO ENCONTRADO', categoria: 'Geral' };
-    
-    document.getElementById('detalhe-ag-paciente').innerText = paciente.nome;
-    document.getElementById('detalhe-ag-categoria').innerText = paciente.categoria;
-    document.getElementById('detalhe-ag-datahora').innerText = (ag.data ? ag.data.split('-').reverse().join('/') : '') + ' às ' + ag.horario;
-    document.getElementById('detalhe-ag-tipo').innerText = ag.tipo + ' (' + (ag.duracao || '30') + ' min)';
-    document.getElementById('detalhe-ag-obs').innerText = ag.obs || 'Nenhuma observação registrada.';
 
-    document.getElementById('btn-excluir-ag-modal').onclick = function() {
-        fecharModal('modal-detalhes-agendamento');
-        excluirAgendamento(ag.id, ag.pacienteId);
-    };
 
-    document.getElementById('btn-editar-ag-modal').onclick = function() {
-        fecharModal('modal-detalhes-agendamento');
-        abrirModalEditarAgendamento(ag.id);
-    };
-
-    document.getElementById('btn-ver-ficha-ag-modal').onclick = function() {
-        fecharModal('modal-detalhes-agendamento');
-        abrirDetalhesPaciente(ag.pacienteId, 'agenda');
-    };
-
-    document.getElementById('modal-detalhes-agendamento').classList.remove('hidden');
-    document.getElementById('modal-detalhes-agendamento').classList.add('flex');
-}
-
-function abrirModalEditarAgendamento(agendamentoId) {
-    const ag = db.agendamentos.find(a => a.id === agendamentoId);
-    if (!ag) return;
-
-    popularSelectPacientes();
-    document.getElementById('titulo-modal-agendamento').innerText = 'Editar Agendamento';
-    document.getElementById('agendamento-edit-id').value = ag.id;
-    document.getElementById('agendamento-paciente').value = ag.pacienteId;
-    document.getElementById('agendamento-data').value = ag.data;
-    document.getElementById('agendamento-horario').value = ag.horario;
-    document.getElementById('agendamento-duracao').value = ag.duracao || '30';
-    document.getElementById('agendamento-tipo').value = ag.tipo;
-    document.getElementById('agendamento-obs').value = ag.obs || '';
-
-    document.getElementById('container-cadastro-rapido').classList.add('hidden');
-    document.getElementById('container-busca-paciente').classList.remove('hidden');
-
-    document.getElementById('modal-agendamento').classList.remove('hidden');
-    document.getElementById('modal-agendamento').classList.add('flex');
-}
 
 function excluirAgendamento(id, pacienteId) {
     if (!verificarSenhaExclusao()) return;
@@ -424,24 +376,36 @@ function calcularHoraFim(horaInicio, duracaoMinutos) {
     return String(hFim).padStart(2, '0') + ':' + String(mFim).padStart(2, '0');
 }
 
+function formatarEventoCalendario(ag) {
+    const paciente = db.pacientes.find(p => p.id === ag.pacienteId);
+    if (!paciente || !ag.data || !ag.horario) return null;
+
+    const duracao = ag.duracao || '30';
+    const horaFim = calcularHoraFim(ag.horario, duracao);
+    
+    // Cor padrão ou cor escolhida na paleta
+    let corFundo = ag.cor || '#039be5'; 
+    let prefixo = '';
+
+    // Sobrescreve a cor se houver um status especial
+    if (ag.status === 'atendido') { prefixo = '✅ '; }
+    if (ag.status === 'faltou') { prefixo = '❌ [FALTOU] '; corFundo = '#ef4444'; } // Vermelho
+    if (ag.status === 'remarcou') { prefixo = '🔄 [REMARCOU] '; corFundo = '#94a3b8'; } // Cinza
+
+    return {
+        id: ag.id,
+        title: prefixo + paciente.nome + ' (' + ag.tipo + ')',
+        start: ag.data + 'T' + ag.horario,
+        end: ag.data + 'T' + horaFim,
+        backgroundColor: corFundo,
+        borderColor: corFundo,
+        extendedProps: { pacienteId: ag.pacienteId, tipo: ag.tipo, obs: ag.obs, status: ag.status || 'agendado' }
+    };
+}
+
 function inicializarCalendario() {
     const calendarEl = document.getElementById('calendar');
-    const eventosFormatados = db.agendamentos.map(ag => {
-        const paciente = db.pacientes.find(p => p.id === ag.pacienteId);
-        if (!paciente || !ag.data || !ag.horario) return null;
-
-        const duracao = ag.duracao || '30';
-        const horaFim = calcularHoraFim(ag.horario, duracao);
-
-        return {
-            id: ag.id,
-            title: paciente.nome + ' (' + ag.tipo + ')',
-            start: ag.data + 'T' + ag.horario,
-            end: ag.data + 'T' + horaFim,
-            extendedProps: { pacienteId: ag.pacienteId, tipo: ag.tipo, obs: ag.obs }
-        };
-    }).filter(event => event !== null);
-
+    const eventosFormatados = db.agendamentos.map(formatarEventoCalendario).filter(e => e !== null);
     const isMobile = window.innerWidth < 768;
 
     calendar = new FullCalendar.Calendar(calendarEl, {
@@ -469,10 +433,7 @@ function inicializarCalendario() {
                 let h = partesHora[0];
                 let m = parseInt(partesHora[1], 10);
                 m = Math.round(m / 15) * 15;
-                if (m === 60) {
-                    h = String(parseInt(h, 10) + 1).padStart(2, '0');
-                    m = 0;
-                }
+                if (m === 60) { h = String(parseInt(h, 10) + 1).padStart(2, '0'); m = 0; }
                 horaStr = h + ':' + String(m).padStart(2, '0');
             }
             abrirModalAgendamento(dataStr, horaStr);
@@ -489,24 +450,11 @@ function inicializarCalendario() {
 function atualizarCalendario() {
     if (!calendar) return;
     calendar.removeAllEvents();
-    db.agendamentos.forEach(ag => {
-        if (!ag.data || !ag.horario) return;
-
-        const paciente = db.pacientes.find(p => p.id === ag.pacienteId);
-        if (!paciente) return;
-
-        const duracao = ag.duracao || '30';
-        const horaFim = calcularHoraFim(ag.horario, duracao);
-
-        calendar.addEvent({
-            id: ag.id,
-            title: paciente.nome + ' (' + ag.tipo + ')',
-            start: ag.data + 'T' + ag.horario,
-            end: ag.data + 'T' + horaFim,
-            extendedProps: { pacienteId: ag.pacienteId, tipo: ag.tipo, obs: ag.obs }
-        });
-    });
+    const eventosFormatados = db.agendamentos.map(formatarEventoCalendario).filter(e => e !== null);
+    eventosFormatados.forEach(ev => calendar.addEvent(ev));
 }
+
+
 
 function obterUltimaConsultaPaciente(pacienteId) {
     const datas = [];
@@ -1331,22 +1279,7 @@ function abrirModalPagamentoAvulso() {
     renderizarFinanceiro();
 }
 
-function abrirModalAgendamento(dataPreenchida, horaPreenchida) {
-    popularSelectPacientes();
-    document.getElementById('titulo-modal-agendamento').innerText = 'Novo Agendamento';
-    document.getElementById('agendamento-edit-id').value = '';
-    document.getElementById('filtro-paciente-busca').value = '';
-    document.getElementById('agendamento-obs').value = '';
-    document.getElementById('agendamento-duracao').value = '30';
-    document.getElementById('container-cadastro-rapido').classList.add('hidden');
-    document.getElementById('container-busca-paciente').classList.remove('hidden');
-    document.getElementById('btn-toggle-cadastro-rapido').innerHTML = '<i class="fa-solid fa-user-plus"></i> Novo Rápido';
 
-    document.getElementById('agendamento-data').value = dataPreenchida || obterDataLocalISO();
-    document.getElementById('agendamento-horario').value = horaPreenchida || '09:00';
-    document.getElementById('modal-agendamento').classList.remove('hidden');
-    document.getElementById('modal-agendamento').classList.add('flex');
-}
 
 function filtrarPacientesSelect() {
     const termo = document.getElementById('filtro-paciente-busca').value.toLowerCase();
@@ -1453,23 +1386,101 @@ function popularSelectPacientes() {
     });
 }
 
+function abrirModalDetalhesAgendamento(agendamentoId) {
+    const ag = db.agendamentos.find(item => item.id === agendamentoId);
+    if (!ag) return;
+    const paciente = db.pacientes.find(p => p.id === ag.pacienteId) || { nome: 'PACIENTE NÃO ENCONTRADO', categoria: 'Geral' };
+    
+    document.getElementById('detalhe-ag-paciente').innerText = paciente.nome;
+    document.getElementById('detalhe-ag-categoria').innerText = paciente.categoria;
+    document.getElementById('detalhe-ag-datahora').innerText = (ag.data ? ag.data.split('-').reverse().join('/') : '') + ' às ' + ag.horario;
+    document.getElementById('detalhe-ag-tipo').innerText = ag.tipo + ' (' + (ag.duracao || '30') + ' min)';
+    document.getElementById('detalhe-ag-obs').innerText = ag.obs || 'Nenhuma observação registrada.';
+
+    // BOTOES DE STATUS (Atendido, Faltou, Remarcou)
+    let divStatus = document.getElementById('container-status-agendamento');
+    if (!divStatus) {
+        divStatus = document.createElement('div');
+        divStatus.id = 'container-status-agendamento';
+        divStatus.className = 'grid grid-cols-3 gap-2 pt-4 mt-2 border-t border-slate-100';
+        const gridAcoes = document.getElementById('btn-excluir-ag-modal').parentElement;
+        gridAcoes.parentNode.insertBefore(divStatus, gridAcoes);
+    }
+    const statusAtual = ag.status || 'agendado';
+    divStatus.innerHTML = `
+        <button onclick="alterarStatusAgendamento('${ag.id}', 'atendido')" class="py-2 ${statusAtual === 'atendido' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'} font-semibold rounded-lg text-xs transition"><i class="fa-solid fa-check"></i> Atendido</button>
+        <button onclick="alterarStatusAgendamento('${ag.id}', 'faltou')" class="py-2 ${statusAtual === 'faltou' ? 'bg-rose-600 text-white' : 'bg-rose-50 hover:bg-rose-100 text-rose-700'} font-semibold rounded-lg text-xs transition"><i class="fa-solid fa-user-xmark"></i> Faltou</button>
+        <button onclick="alterarStatusAgendamento('${ag.id}', 'remarcou')" class="py-2 ${statusAtual === 'remarcou' ? 'bg-slate-600 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'} font-semibold rounded-lg text-xs transition"><i class="fa-solid fa-rotate"></i> Remarcou</button>
+    `;
+
+    document.getElementById('btn-excluir-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); excluirAgendamento(ag.id, ag.pacienteId); };
+    document.getElementById('btn-editar-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); abrirModalEditarAgendamento(ag.id); };
+    document.getElementById('btn-ver-ficha-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); abrirDetalhesPaciente(ag.pacienteId, 'agenda'); };
+
+    document.getElementById('modal-detalhes-agendamento').classList.remove('hidden');
+    document.getElementById('modal-detalhes-agendamento').classList.add('flex');
+}
+
+function abrirModalAgendamento(dataPreenchida, horaPreenchida) {
+    popularSelectPacientes();
+    document.getElementById('titulo-modal-agendamento').innerText = 'Novo Agendamento';
+    document.getElementById('agendamento-edit-id').value = '';
+    document.getElementById('filtro-paciente-busca').value = '';
+    document.getElementById('agendamento-obs').value = '';
+    document.getElementById('agendamento-duracao').value = '30';
+
+    // Seleciona o Azul como padrão
+    const btnPadrao = document.querySelector('.cor-agenda-btn[style*="#039be5"]');
+    selecionarCorAgenda('#039be5', btnPadrao);
+
+    document.getElementById('container-cadastro-rapido').classList.add('hidden');
+    document.getElementById('container-busca-paciente').classList.remove('hidden');
+    document.getElementById('btn-toggle-cadastro-rapido').innerHTML = '<i class="fa-solid fa-user-plus"></i> Novo Rápido';
+    document.getElementById('agendamento-data').value = dataPreenchida || obterDataLocalISO();
+    document.getElementById('agendamento-horario').value = horaPreenchida || '09:00';
+    document.getElementById('modal-agendamento').classList.remove('hidden');
+    document.getElementById('modal-agendamento').classList.add('flex');
+}
+
+function abrirModalEditarAgendamento(agendamentoId) {
+    const ag = db.agendamentos.find(a => a.id === agendamentoId);
+    if (!ag) return;
+
+    popularSelectPacientes();
+    document.getElementById('titulo-modal-agendamento').innerText = 'Editar Agendamento';
+    document.getElementById('agendamento-edit-id').value = ag.id;
+    document.getElementById('agendamento-paciente').value = ag.pacienteId;
+    document.getElementById('agendamento-data').value = ag.data;
+    document.getElementById('agendamento-horario').value = ag.horario;
+    document.getElementById('agendamento-duracao').value = ag.duracao || '30';
+    document.getElementById('agendamento-tipo').value = ag.tipo;
+    document.getElementById('agendamento-obs').value = ag.obs || '';
+
+    // Recupera a cor salva e seleciona a bolinha correspondente
+    const corSalva = ag.cor || '#039be5';
+    const btnCorSalva = document.querySelector(`.cor-agenda-btn[style*="${corSalva}"]`) || document.querySelector('.cor-agenda-btn[style*="#039be5"]');
+    selecionarCorAgenda(corSalva, btnCorSalva);
+
+    document.getElementById('container-cadastro-rapido').classList.add('hidden');
+    document.getElementById('container-busca-paciente').classList.remove('hidden');
+    document.getElementById('modal-agendamento').classList.remove('hidden');
+    document.getElementById('modal-agendamento').classList.add('flex');
+}
+
 function salvarAgendamento(event) {
     event.preventDefault();
     const pacienteId = document.getElementById('agendamento-paciente').value;
     const editId = document.getElementById('agendamento-edit-id').value;
 
-    if (!pacienteId) {
-        alert('Selecione um paciente.');
-        return;
-    }
+    if (!pacienteId) { alert('Selecione um paciente.'); return; }
 
     const dataAg = document.getElementById('agendamento-data').value;
     const horaAg = document.getElementById('agendamento-horario').value;
 
     const conflito = db.agendamentos.find(a => a.data === dataAg && a.horario === horaAg && a.id !== editId);
     if (conflito) {
-        const pacienteConflito = db.pacientes.find(p => p.id === conflito.pacienteId) || { nome: 'Outro paciente' };
-        if (!confirm(`⚠️ Já existe agendamento para "${pacienteConflito.nome}" nesse horário. Agendar mesmo assim?`)) return;
+        const pacConflito = db.pacientes.find(p => p.id === conflito.pacienteId) || { nome: 'Outro paciente' };
+        if (!confirm(`⚠️ Já existe agendamento para "${pacConflito.nome}" nesse horário. Agendar mesmo assim?`)) return;
     }
 
     const dadosAgendamento = {
@@ -1478,23 +1489,25 @@ function salvarAgendamento(event) {
         horario: horaAg,
         duracao: document.getElementById('agendamento-duracao').value,
         tipo: document.getElementById('agendamento-tipo').value,
-        obs: document.getElementById('agendamento-obs').value.trim()
+        obs: document.getElementById('agendamento-obs').value.trim(),
+        cor: document.getElementById('agendamento-cor').value // Salva a cor da paleta!
     };
 
     if (editId) {
         const index = db.agendamentos.findIndex(a => a.id === editId);
-        if (index !== -1) db.agendamentos[index] = { ...db.agendamentos[index], ...dadosAgendamento };
+        if (index !== -1) {
+            // Mantém o status que o usuário já tinha marcado antes (ex: 'atendido')
+            const statusAntigo = db.agendamentos[index].status;
+            db.agendamentos[index] = { ...db.agendamentos[index], ...dadosAgendamento, status: statusAntigo };
+        }
     } else {
-        db.agendamentos.push({ id: gerarIdUnico(), ...dadosAgendamento });
+        db.agendamentos.push({ id: gerarIdUnico(), status: 'agendado', ...dadosAgendamento });
     }
 
     persistirDB();
     fecharModal('modal-agendamento');
     atualizarCalendario();
-
-    if (!document.getElementById('tab-detalhes-paciente').classList.contains('hidden')) {
-        abrirDetalhesPaciente(pacienteId, abaOrigem);
-    }
+    if (!document.getElementById('tab-detalhes-paciente').classList.contains('hidden')) { abrirDetalhesPaciente(pacienteId, abaOrigem); }
 }
 
 function salvarPaciente(event) {
@@ -1619,3 +1632,30 @@ function removerPendenciaManual(pacienteId) {
         renderizarFinanceiro();
     }
 }
+
+// CONTROLE DA PALETA DE CORES
+function selecionarCorAgenda(corHex, elementoBtn) {
+    document.getElementById('agendamento-cor').value = corHex;
+    document.querySelectorAll('.cor-agenda-btn').forEach(btn => {
+        btn.innerHTML = '';
+        btn.classList.remove('ring-2', 'ring-offset-2', 'ring-slate-400');
+    });
+    if (elementoBtn) {
+        elementoBtn.innerHTML = '<i class="fa-solid fa-check text-white text-[10px]"></i>';
+        elementoBtn.classList.add('ring-2', 'ring-offset-2', 'ring-slate-400');
+    }
+}
+
+// CONTROLE DO STATUS (Faltou, Remarcou, Atendido)
+function alterarStatusAgendamento(id, status) {
+    const ag = db.agendamentos.find(a => a.id === id);
+    if (ag) {
+        if (ag.status === status) ag.status = 'agendado'; // Desmarca se clicar de novo
+        else ag.status = status;
+        
+        persistirDB();
+        atualizarCalendario();
+        abrirModalDetalhesAgendamento(id); // Atualiza os botões no modal
+    }
+}
+
