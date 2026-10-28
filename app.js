@@ -277,20 +277,14 @@ async function fazerLoginFirebase(event) {
     const email = document.getElementById('login-email').value.trim();
     const senha = document.getElementById('login-senha').value;
 
-    // Aguarda até meio segundo caso o módulo do Firebase esteja terminando de carregar na 1ª tentativa
-    let tentativas = 0;
-    while (!window.firebaseAuth && tentativas < 10) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        tentativas++;
-    }
-
-    if (!window.firebaseAuth || !window.signInWithEmailAndPassword) {
-        alert("⚠️ O Firebase não respondeu a tempo. Verifique sua conexão ou recarregue a página (F5).");
+    // Verificação global segura
+    if (!window.usaFirebase || !window.firebaseAuth) {
+        alert("⚠️ O Firebase ainda está carregando. Aguarde um segundo e tente novamente.");
         return;
     }
 
     try {
-        // 1. Autentica no Firebase Auth
+        // 1. Autentica no Firebase Auth global
         const userCredential = await window.signInWithEmailAndPassword(window.firebaseAuth, email, senha);
         const user = userCredential.user;
 
