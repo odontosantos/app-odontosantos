@@ -29,3 +29,5 @@ window.doc = doc;
 window.getDoc = getDoc;
 
 console.log("🔥 Firebase inicializado com sucesso!");
+// No final do seu arquivo firebase-config.js, adicione:
+window.usaFirebase = true;
