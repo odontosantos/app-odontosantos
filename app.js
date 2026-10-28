@@ -1165,38 +1165,22 @@ function salvarLancamentoCaixaCompleto(event, pacienteId) {
         return;
     }
 
-    const saldoAnterior = calcularPendenciaPaciente(pacienteId);
-
-    if (saldoAnterior < 0 && valorCobrado > 0) {
-        const creditoDisponivel = Math.abs(saldoAnterior);
-        const usarCredito = confirm('⚠️ Paciente possui um CRÉDITO de R$ ' + creditoDisponivel.toFixed(2) + '.\nDeseja utilizar para abater?');
-
-        if (usarCredito) {
-            db.prontuarios.push({ id: gerarIdUnico(), pacienteId: pacienteId, data: hoje, procedimento: descricao, valorCobrado: valorCobrado, proximaConsulta: '' });
-            const valorAbatido = Math.min(creditoDisponivel, valorCobrado);
-            db.pagamentos.push({ id: gerarIdUnico(), pacienteId: pacienteId, data: hoje, valor: 0, forma: 'Saldo Credor', descricao: 'Crédito Utilizado: Abatimento de R$ ' + valorAbatido.toFixed(2) });
-
-            if (valorPago > 0) {
-                db.pagamentos.push({ id: gerarIdUnico(), pacienteId: pacienteId, data: hoje, valor: valorPago, forma: forma, descricao: 'Pagamento Complementar: ' + descricao });
-            }
-
-            persistirDB();
-            alert('Lançamento com crédito realizado!');
-            abrirDetalhesPaciente(pacienteId, abaOrigem);
-            return;
-        }
-    }
-
-    if (valorCobrado > 0) {
-        db.prontuarios.push({ id: gerarIdUnico(), pacienteId: pacienteId, data: hoje, procedimento: descricao, valorCobrado: valorCobrado, proximaConsulta: '' });
-    }
-
+    // REGISTRA APENAS O PAGAMENTO NO CAIXA (Evita duplicar procedimentos no prontuário clínico)
     if (valorPago > 0) {
-        db.pagamentos.push({ id: gerarIdUnico(), pacienteId: pacienteId, data: hoje, valor: valorPago, forma: forma, descricao: 'Pagamento: ' + descricao });
+        db.pagamentos.push({ 
+            id: gerarIdUnico(), 
+            pacienteId: pacienteId, 
+            data: hoje, 
+            valor: valorPago, 
+            forma: forma, 
+            descricao: 'Pagamento / Recebimento: ' + descricao 
+        });
     }
 
+    // Se houver um valor cobrado que difere de um registro estrito de evolução, 
+    // mantemos o controle financeiro isolado na aba de pagamentos/saldo do paciente.
     persistirDB();
-    alert('Lançamento realizado com sucesso!');
+    alert('Lançamento financeiro realizado com sucesso!');
     abrirDetalhesPaciente(pacienteId, abaOrigem);
 }
 
