@@ -877,48 +877,30 @@ function abrirDetalhesPaciente(pacienteId, origem) {
     const prontuariosPaciente = db.prontuarios.filter(pr => pr.pacienteId === pacienteId);
     const pagamentosPaciente = db.pagamentos.filter(pg => pg.pacienteId === pacienteId);
     
-    const saldoFinanceiro = calcularPendenciaPaciente(pacienteId);
     const container = document.getElementById('detalhes-paciente-container');
 
     const telefoneLimpo = paciente.telefone ? paciente.telefone.replace(/\D/g, '') : '';
     const btnWhatsapp = telefoneLimpo ? '<a href="https://wa.me/55' + telefoneLimpo + '" target="_blank" class="text-emerald-600 hover:text-emerald-700 font-bold ml-2 inline-flex items-center gap-1"><i class="fa-brands fa-whatsapp text-base"></i> Conversar</a>' : '';
 
+    // NOVO BADGE MANUAL DE PENDÊNCIA (Sem cálculos matemáticos)
     let badgePendencia = '';
-    if (saldoFinanceiro > 0) {
+    if (paciente.possuiPendenciaManual) {
         badgePendencia = '<div class="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-2">' +
             '<div class="flex items-center justify-between">' +
-                '<span class="text-xs uppercase font-bold text-amber-600 tracking-wider"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Pendência Devedora</span>' +
-                '<span class="text-base font-extrabold text-amber-900">R$ ' + saldoFinanceiro.toFixed(2) + '</span>' +
+                '<span class="text-xs uppercase font-bold text-amber-600 tracking-wider"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Pendência Financeira</span>' +
             '</div>' +
-            '<p class="text-xs text-amber-700">O paciente possui débitos em aberto.</p>' +
-            '<div class="flex gap-2 pt-1">' +
-                '<button onclick="quitarPendenciaPaciente(\'' + paciente.id + '\')" class="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow transition flex items-center justify-center gap-1"><i class="fa-solid fa-check-double"></i> Quitar Débito</button>' +
-                '<button onclick="ajustarSaldoPaciente(\'' + paciente.id + '\')" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-medium rounded-lg transition" title="Lançar Ajuste / Conceder Desconto"><i class="fa-solid fa-sliders"></i> Ajustar</button>' +
-            '</div>' +
-        '</div>';
-    } else if (saldoFinanceiro < 0) {
-        const credito = Math.abs(saldoFinanceiro);
-        badgePendencia = '<div class="p-4 bg-blue-50 border border-blue-200 rounded-xl space-y-2">' +
-            '<div class="flex items-center justify-between">' +
-                '<span class="text-xs uppercase font-bold text-blue-600 tracking-wider"><i class="fa-solid fa-hand-holding-dollar mr-1"></i> Crédito Ativo</span>' +
-                '<span class="text-base font-extrabold text-blue-900">R$ ' + credito.toFixed(2) + '</span>' +
-            '</div>' +
-            '<p class="text-xs text-blue-700">Saldo acumulado para futuros procedimentos.</p>' +
-            '<button onclick="ajustarSaldoPaciente(\'' + paciente.id + '\')" class="w-full py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-medium rounded-lg transition"><i class="fa-solid fa-sliders mr-1"></i> Zerar / Ajustar Crédito</button>' +
+            '<p class="text-sm font-medium text-amber-900">' + (paciente.obsFinanceiraManual || 'Paciente marcado com pendência/débito.') + '</p>' +
+            '<button onclick="removerPendenciaManual(\'' + paciente.id + '\')" class="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow transition flex items-center justify-center gap-1"><i class="fa-solid fa-check"></i> Dar Baixa na Pendência</button>' +
         '</div>';
     } else {
         badgePendencia = '<div class="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">' +
-            '<div><span class="text-xs uppercase font-bold text-emerald-600 block">Financeiro</span><span class="text-xs font-semibold text-emerald-800">Sem pendências ou débitos</span></div>' +
+            '<div><span class="text-xs uppercase font-bold text-emerald-600 block">Financeiro</span><span class="text-xs font-semibold text-emerald-800">Sem pendências registradas</span></div>' +
         '</div>';
     }
 
     let etapas = [];
     if (Array.isArray(paciente.planejamentoEtapas)) {
         etapas = paciente.planejamentoEtapas;
-    } else if (typeof paciente.planejamento === 'string' && paciente.planejamento.trim() !== '') {
-        etapas = [{ id: gerarIdUnico(), dente: 'Geral', procedimento: paciente.planejamento, valor: 0, concluido: false }];
-        paciente.planejamentoEtapas = etapas;
-        persistirDB();
     }
 
     const concluidasCount = etapas.filter(e => e.concluido).length;
@@ -993,16 +975,18 @@ function abrirDetalhesPaciente(pacienteId, origem) {
         '</div>';
     }
 
-   let htmlFormCaixa = '<div id="sec-lancar-caixa" class="secao-clinica-mobile hidden md:block bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-3 shadow-sm">' +
+    // NOVO FORMULÁRIO DO CAIXA COM OS 4 CAMPOS + CHECKBOX MANUAL
+    let htmlFormCaixa = '<div id="sec-lancar-caixa" class="secao-clinica-mobile hidden md:block bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-3 shadow-sm">' +
         '<h4 class="font-bold text-emerald-900 text-sm flex items-center gap-2"><i class="fa-solid fa-cash-register text-emerald-600"></i> Lançamento & Observação Financeira</h4>' +
         '<form onsubmit="salvarLancamentoCaixaManual(event, \'' + paciente.id + '\')" class="space-y-3">' +
-            '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Descrição / Observação Financeira</label><input type="text" id="caixa-obs-manual" placeholder="Ex: Acerto combinado, valor pendente, crédito..." class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"></div>' +
+            '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Descrição do Procedimento *</label><input type="text" id="caixa-proc-desc" required placeholder="Ex: Manutenção Orto, Clareamento..." class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"></div>' +
             '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">' +
                 '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Valor do Pagamento (R$)</label><input type="number" step="0.01" id="caixa-valor-pago" placeholder="0.00" class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"></div>' +
-                '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Forma Pagamento</label><select id="caixa-forma" class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"><option value="Pix">Pix</option><option value="Cartão de Crédito">Cartão de Crédito</option><option value="Cartão de Débito">Cartão de Débito</option><option value="Dinheiro">Dinheiro</option></select></div>' +
+                '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Forma de Pagamento</label><select id="caixa-forma" class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"><option value="Pix">Pix</option><option value="Cartão de Crédito">Cartão de Crédito</option><option value="Cartão de Débito">Cartão de Débito</option><option value="Dinheiro">Dinheiro</option></select></div>' +
             '</div>' +
+            '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Observação (Pendências ou Créditos)</label><input type="text" id="caixa-obs-manual" placeholder="Ex: Acerto combinado, valor pendente, crédito..." value="' + (paciente.obsFinanceiraManual || '') + '" class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"></div>' +
             '<div class="flex items-center gap-2 pt-1">' +
-                '<input type="checkbox" id="caixa-marca-pendencia" class="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500">' +
+                '<input type="checkbox" id="caixa-marca-pendencia" class="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500" ' + (paciente.possuiPendenciaManual ? 'checked' : '') + '>' +
                 '<label for="caixa-marca-pendencia" class="text-xs font-semibold text-slate-700 cursor-pointer">Marcar paciente com pendência/débito financeiro (Exibir na aba Financeiro)</label>' +
             '</div>' +
             '<button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg text-xs shadow transition">Salvar Lançamento</button>' +
@@ -1048,16 +1032,13 @@ function abrirDetalhesPaciente(pacienteId, origem) {
             
             let htmlItensPg = '';
             gruposPg[mesAno].forEach(pg => {
-                const isEstorno = pg.valor < 0;
-                const corBg = isEstorno ? 'bg-rose-50 border-rose-100' : 'bg-emerald-50 border-emerald-100';
-                const corTexto = isEstorno ? 'text-rose-900' : 'text-emerald-900';
-                const corValor = isEstorno ? 'text-rose-600 font-bold' : 'text-emerald-700 font-bold';
-
-                const btnEstornar = !isEstorno ? '<button onclick="estornarPagamento(\'' + pg.id + '\', \'' + pacienteId + '\')" class="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded text-xs font-semibold transition flex items-center gap-1" title="Estornar Lançamento"><i class="fa-solid fa-rotate-left"></i> Estornar</button>' : '';
+                const corBg = 'bg-emerald-50 border-emerald-100';
+                const corTexto = 'text-emerald-900';
+                const corValor = 'text-emerald-700 font-bold';
 
                 htmlItensPg += '<div class="p-3 ' + corBg + ' border rounded-lg text-sm flex justify-between items-center">' +
                     '<div><p class="font-semibold ' + corTexto + '">' + pg.descricao + '</p><span class="text-xs text-slate-500">' + (pg.data ? pg.data.split('-').reverse().join('/') : '-') + ' • ' + pg.forma + '</span></div>' +
-                    '<div class="flex items-center gap-2"><span class="' + corValor + '">R$ ' + Number(pg.valor).toFixed(2) + '</span>' + btnEstornar + '</div>' +
+                    '<div class="flex items-center gap-2"><span class="' + corValor + '">R$ ' + Number(pg.valor).toFixed(2) + '</span></div>' +
                 '</div>';
             });
 
@@ -1068,25 +1049,15 @@ function abrirDetalhesPaciente(pacienteId, origem) {
                 '</button>' +
                 '<div id="' + accId + '" class="' + (estaAberto ? '' : 'hidden') + ' p-3 space-y-2 border-t border-slate-200">' + htmlItensPg + '</div>' +
             '</div>';
-
             idxPg++;
         });
     }
 
     const hubMobile = '<div class="grid grid-cols-2 gap-2.5 md:hidden mb-4">' +
-        '<button onclick="alternarSecaoMobile(\'sec-plano-tratamento\')" class="p-3 bg-indigo-600 text-white rounded-xl shadow font-semibold text-xs flex flex-col items-center justify-center text-center gap-1.5 active:scale-95 transition">' +
-            '<i class="fa-solid fa-clipboard-list text-lg"></i> Plano Tratamento' +
-        '</button>' +
-        (usuarioAtual.perfil === 'dentista' ? 
-            '<button onclick="alternarSecaoMobile(\'sec-evolucao-prontuario\')" class="p-3 bg-blue-600 text-white rounded-xl shadow font-semibold text-xs flex flex-col items-center justify-center text-center gap-1.5 active:scale-95 transition">' +
-                '<i class="fa-solid fa-stethoscope text-lg"></i> Evoluir Prontuário' +
-            '</button>' : '') +
-        '<button onclick="alternarSecaoMobile(\'sec-lancar-caixa\')" class="p-3 bg-emerald-600 text-white rounded-xl shadow font-semibold text-xs flex flex-col items-center justify-center text-center gap-1.5 active:scale-95 transition">' +
-            '<i class="fa-solid fa-cash-register text-lg"></i> Lançar Caixa' +
-        '</button>' +
-        '<button onclick="alternarSecaoMobile(\'sec-historico-abas\')" class="p-3 bg-slate-800 text-white rounded-xl shadow font-semibold text-xs flex flex-col items-center justify-center text-center gap-1.5 active:scale-95 transition">' +
-            '<i class="fa-solid fa-clock-rotate-left text-lg"></i> Históricos' +
-        '</button>' +
+        '<button onclick="alternarSecaoMobile(\'sec-plano-tratamento\')" class="p-3 bg-indigo-600 text-white rounded-xl shadow font-semibold text-xs flex flex-col items-center justify-center text-center gap-1.5 active:scale-95 transition"><i class="fa-solid fa-clipboard-list text-lg"></i> Plano Tratamento</button>' +
+        (usuarioAtual.perfil === 'dentista' ? '<button onclick="alternarSecaoMobile(\'sec-evolucao-prontuario\')" class="p-3 bg-blue-600 text-white rounded-xl shadow font-semibold text-xs flex flex-col items-center justify-center text-center gap-1.5 active:scale-95 transition"><i class="fa-solid fa-stethoscope text-lg"></i> Evoluir Prontuário</button>' : '') +
+        '<button onclick="alternarSecaoMobile(\'sec-lancar-caixa\')" class="p-3 bg-emerald-600 text-white rounded-xl shadow font-semibold text-xs flex flex-col items-center justify-center text-center gap-1.5 active:scale-95 transition"><i class="fa-solid fa-cash-register text-lg"></i> Lançar Caixa</button>' +
+        '<button onclick="alternarSecaoMobile(\'sec-historico-abas\')" class="p-3 bg-slate-800 text-white rounded-xl shadow font-semibold text-xs flex flex-col items-center justify-center text-center gap-1.5 active:scale-95 transition"><i class="fa-solid fa-clock-rotate-left text-lg"></i> Históricos</button>' +
     '</div>';
 
     container.innerHTML = '<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">' +
@@ -1275,39 +1246,27 @@ function renderizarFinanceiro() {
 
     let saldoLiquidoMes = faturamentoMes - despesasMes;
 
-    let contasAReceber = 0;
-    db.pacientes.forEach(p => {
-        const s = calcularPendenciaPaciente(p.id);
-        if (s > 0) contasAReceber += s;
-    });
+    // Conta APENAS quem tem pendência marcada manualmente
+    let qtdPacientesComPendencia = db.pacientes.filter(p => p.possuiPendenciaManual).length;
 
     document.getElementById('kpi-faturamento').innerText = 'R$ ' + faturamentoMes.toFixed(2);
     document.getElementById('kpi-despesas').innerText = 'R$ ' + despesasMes.toFixed(2);
     document.getElementById('kpi-saldo-liquido').innerText = 'R$ ' + saldoLiquidoMes.toFixed(2);
-    document.getElementById('kpi-receber').innerText = 'R$ ' + contasAReceber.toFixed(2);
+    document.getElementById('kpi-receber').innerText = qtdPacientesComPendencia + ' Pacientes'; // Atualizado para mostrar quantidade
 
     let encontrouPendencia = false;
     db.pacientes.forEach(paciente => {
-        const saldo = calcularPendenciaPaciente(paciente.id);
-        if (saldo !== 0) {
+        if (paciente.possuiPendenciaManual) {
             encontrouPendencia = true;
-            if (saldo > 0) {
-                listaPendencias.innerHTML += '<div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm flex justify-between items-center">' +
-                    '<div><p class="font-semibold text-amber-900">' + paciente.nome + '</p><span class="text-xs text-amber-700">Débito em aberto</span></div>' +
-                    '<div class="text-right flex items-center gap-2"><div><span class="font-bold text-amber-800 block">R$ ' + saldo.toFixed(2) + '</span><button onclick="abrirDetalhesPaciente(\'' + paciente.id + '\', \'financeiro\')" class="text-xs text-blue-600 hover:underline">Ver Ficha</button></div><button onclick="quitarPendenciaPaciente(\'' + paciente.id + '\')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded shadow transition">Quitar</button></div>' +
-                '</div>';
-            } else {
-                const credito = Math.abs(saldo);
-                listaPendencias.innerHTML += '<div class="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm flex justify-between items-center">' +
-                    '<div><p class="font-semibold text-blue-900">' + paciente.nome + '</p><span class="text-xs text-blue-700">Possui saldo credor</span></div>' +
-                    '<div class="text-right flex items-center gap-2"><div><span class="font-bold text-blue-800 block">+ R$ ' + credito.toFixed(2) + '</span><button onclick="abrirDetalhesPaciente(\'' + paciente.id + '\', \'financeiro\')" class="text-xs text-blue-600 hover:underline">Ver Ficha</button></div></div>' +
-                '</div>';
-            }
+            listaPendencias.innerHTML += '<div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm flex justify-between items-center">' +
+                '<div><p class="font-semibold text-amber-900">' + paciente.nome + '</p><span class="text-xs text-amber-700">' + (paciente.obsFinanceiraManual || 'Pendência manual') + '</span></div>' +
+                '<div class="text-right flex items-center gap-2"><button onclick="abrirDetalhesPaciente(\'' + paciente.id + '\', \'financeiro\')" class="text-xs text-blue-600 hover:underline px-2">Ver Ficha</button><button onclick="removerPendenciaManual(\'' + paciente.id + '\')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded shadow transition"><i class="fa-solid fa-check"></i> Baixar</button></div>' +
+            '</div>';
         }
     });
 
     if (!encontrouPendencia) {
-        listaPendencias.innerHTML = '<p class="text-sm text-slate-400">Nenhum débito ou crédito registrado em aberto.</p>';
+        listaPendencias.innerHTML = '<p class="text-sm text-slate-400">Nenhum paciente marcado com pendência.</p>';
     }
 
     let transacoes = [];
@@ -1329,13 +1288,9 @@ function renderizarFinanceiro() {
         transacoes.forEach(t => {
             if (t.tipo === 'entrada') {
                 const paciente = db.pacientes.find(p => p.id === t.pacienteId) || { nome: 'PACIENTE AVULSO' };
-                const isEstorno = t.valor < 0;
-                const corValor = isEstorno ? 'text-rose-600' : 'text-emerald-600';
-                const prefixoValor = isEstorno ? '' : '+ ';
-
                 listaFluxo.innerHTML += '<div class="p-3 bg-white border border-slate-100 rounded-lg text-sm flex justify-between items-center shadow-sm">' +
-                    '<div><p class="font-semibold text-slate-900"><i class="fa-solid fa-circle-dot text-xs mr-1 ' + corValor + '"></i> ' + paciente.nome + '</p><span class="text-xs text-slate-500">' + t.descricao + ' • ' + (t.data ? t.data.split('-').reverse().join('/') : '-') + ' (' + t.forma + ')</span></div>' +
-                    '<span class="font-bold ' + corValor + '">' + prefixoValor + 'R$ ' + Number(t.valor).toFixed(2) + '</span>' +
+                    '<div><p class="font-semibold text-slate-900"><i class="fa-solid fa-circle-dot text-xs mr-1 text-emerald-600"></i> ' + paciente.nome + '</p><span class="text-xs text-slate-500">' + t.descricao + ' • ' + (t.data ? t.data.split('-').reverse().join('/') : '-') + ' (' + t.forma + ')</span></div>' +
+                    '<span class="font-bold text-emerald-600">+ R$ ' + Number(t.valor).toFixed(2) + '</span>' +
                 '</div>';
             } else {
                 listaFluxo.innerHTML += '<div class="p-3 bg-rose-50 border border-rose-100 rounded-lg text-sm flex justify-between items-center">' +
