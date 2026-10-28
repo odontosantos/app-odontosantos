@@ -51,10 +51,6 @@ function persistirDB() {
     localStorage.setItem('odonto_prontuarios', JSON.stringify(db.prontuarios));
     localStorage.setItem('odonto_pagamentos', JSON.stringify(db.pagamentos));
     localStorage.setItem('odonto_despesas', JSON.stringify(db.despesas));
-
-    if (usaFirebase) {
-        // Futura sincronização com Firestore
-    }
 }
 
 function mascaraTelefone(input) {
@@ -76,146 +72,6 @@ function prevenirEnterBusca(e) {
     if (e.key === 'Enter') e.preventDefault();
 }
 
-
-
-
-
-function excluirAgendamento(id, pacienteId) {
-    if (!verificarSenhaExclusao()) return;
-    if (!confirm('Deseja realmente cancelar/excluir este agendamento?')) return;
-    db.agendamentos = db.agendamentos.filter(ag => ag.id !== id);
-    persistirDB();
-    atualizarCalendario();
-    if (pacienteId && !document.getElementById('tab-detalhes-paciente').classList.contains('hidden')) {
-        abrirDetalhesPaciente(pacienteId, abaOrigem);
-    }
-    alert('Agendamento excluído com sucesso!');
-}
-
-function excluirPaciente(pacienteId) {
-    const paciente = db.pacientes.find(p => p.id === pacienteId);
-    if (!paciente) return;
-
-    if (!verificarSenhaExclusao()) return;
-    if (confirm(`⚠️ Tem certeza que deseja EXCLUIR permanentemente o paciente "${paciente.nome}"?`)) {
-        
-        // 1. Exclui os dados clínicos (ficha, agenda e prontuário)
-        db.pacientes = db.pacientes.filter(p => p.id !== pacienteId);
-        db.agendamentos = db.agendamentos.filter(a => a.pacienteId !== pacienteId);
-        db.prontuarios = db.prontuarios.filter(pr => pr.pacienteId !== pacienteId);
-
-        // 2. MANTÉM OS PAGAMENTOS NO CAIXA (Apenas desvincula para não furar o fluxo)
-        db.pagamentos.forEach(pg => {
-            if (pg.pacienteId === pacienteId) {
-                pg.pacienteId = null; // Desvincula
-                pg.descricao = `[Paciente Excluído: ${paciente.nome}] ` + pg.descricao;
-            }
-        });
-
-        persistirDB();
-        atualizarCalendario();
-        renderizarPacientes();
-        alert('Paciente excluído com sucesso! (O histórico financeiro foi mantido no caixa).');
-        voltarParaOrigem();
-    }
-}
-
-function excluirProntuario(prontuarioId, pacienteId) {
-    if (!verificarSenhaExclusao()) return;
-    if (!confirm('Deseja realmente remover esta evolução do prontuário?')) return;
-    db.prontuarios = db.prontuarios.filter(pr => pr.id !== prontuarioId);
-    persistirDB();
-    abrirDetalhesPaciente(pacienteId, abaOrigem);
-}
-
-function estornarPagamento(pagamentoId, pacienteId) {
-    const pagamentoOriginal = db.pagamentos.find(pg => pg.id === pagamentoId);
-    if (!pagamentoOriginal) return;
-
-    const motivo = prompt('🔄 Motivo do estorno do pagamento (Obrigatório):');
-    if (!motivo || motivo.trim() === '') {
-        alert('O estorno foi cancelado porque o motivo é obrigatório.');
-        return;
-    }
-
-    if (!verificarSenhaExclusao()) return;
-    if (!confirm(`Deseja confirmar o estorno de R$ ${Number(pagamentoOriginal.valor).toFixed(2)}?`)) return;
-
-    db.pagamentos.push({
-        id: gerarIdUnico(),
-        pacienteId: pacienteId,
-        data: obterDataLocalISO(),
-        valor: -Math.abs(parseFloat(pagamentoOriginal.valor)),
-        forma: 'Estorno',
-        descricao: `ESTORNO: ${pagamentoOriginal.descricao} - Motivo: ${motivo}`
-    });
-
-    persistirDB();
-    alert('Estorno realizado com sucesso!');
-    if (pacienteId) {
-        abrirDetalhesPaciente(pacienteId, abaOrigem);
-    } else {
-        renderizarFinanceiro();
-    }
-}
-
-function voltarParaOrigem() {
-    mudarAba(abaOrigem || 'pacientes');
-}
-
-function exportarBackup() {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db, null, 2));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", "backup_clinica_" + obterDataLocalISO() + ".json");
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
-}
-
-function importarBackup(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            const conteudo = JSON.parse(e.target.result);
-            if (conteudo && Array.isArray(conteudo.pacientes)) {
-                if (confirm('⚠️ Deseja realmente restaurar este backup?')) {
-                    db = conteudo;
-                    persistirDB();
-                    atualizarCalendario();
-                    renderizarPacientes();
-                    alert('Backup restaurado com sucesso!');
-                }
-            } else {
-                alert('Arquivo de backup inválido.');
-            }
-        } catch (err) {
-            alert('Erro ao ler o arquivo JSON: ' + err.message);
-        }
-    };
-    reader.readAsText(file);
-    event.target.value = '';
-}
-
-function sincronizarValorPago() {
-    const valorCobrado = parseFloat(document.getElementById('caixa-valor-cobrado').value) || 0;
-    if (!pacienteAtualId) {
-        document.getElementById('caixa-valor-pago').value = valorCobrado.toFixed(2);
-        return;
-    }
-
-    const saldoAtual = calcularPendenciaPaciente(pacienteAtualId);
-    if (saldoAtual < 0) {
-        const credito = Math.abs(saldoAtual);
-        const restanteAPagar = Math.max(0, valorCobrado - credito);
-        document.getElementById('caixa-valor-pago').value = restanteAPagar.toFixed(2);
-    } else {
-        document.getElementById('caixa-valor-pago').value = valorCobrado.toFixed(2);
-    }
-}
-
 function obterDataLocalISO() {
     const d = new Date();
     const ano = d.getFullYear();
@@ -233,27 +89,27 @@ function formatarMesAno(dataStr) {
     return (meses[idxMes] || 'Mês') + ' de ' + partes[0];
 }
 
+// ==========================================
+// AUTENTICAÇÃO
+// ==========================================
+
 async function fazerLoginFirebase(event) {
     event.preventDefault();
     const email = document.getElementById('login-email').value.trim();
     const senha = document.getElementById('login-senha').value;
 
-    // Verificação global segura
     if (!window.usaFirebase || !window.firebaseAuth) {
         alert("⚠️ O Firebase ainda está carregando. Aguarde um segundo e tente novamente.");
         return;
     }
 
     try {
-        // 1. Autentica no Firebase Auth global
         const userCredential = await window.signInWithEmailAndPassword(window.firebaseAuth, email, senha);
         const user = userCredential.user;
-
-        // 2. Busca o perfil na coleção 'usuarios' do Firestore
         const docRef = window.doc(window.firebaseDb, "usuarios", user.email);
         const userDoc = await window.getDoc(docRef);
 
-        let perfilEncontrado = 'secretaria'; // Padrão caso não ache o documento
+        let perfilEncontrado = 'secretaria';
         if (userDoc.exists()) {
             perfilEncontrado = userDoc.data().perfil || 'secretaria';
         } else {
@@ -265,12 +121,10 @@ async function fazerLoginFirebase(event) {
 
     } catch (error) {
         console.error("Erro no login:", error);
-        
         let mensagemErro = error.message;
         if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-email') {
             mensagemErro = "E-mail ou senha incorretos.";
         }
-        
         alert("❌ Erro no login: " + mensagemErro);
     }
 }
@@ -291,26 +145,12 @@ function iniciarSessaoSistema() {
 }
 
 function logout() {
-    if (usaFirebase) {
-        firebase.auth().signOut();
+    if (window.usaFirebase && window.signOut) {
+        window.signOut(window.firebaseAuth);
     }
     usuarioAtual = null;
     document.getElementById('login-screen').style.display = 'flex';
     document.getElementById('login-screen').classList.remove('hidden');
-    
-    document.getElementById('main-header').classList.add('hidden');
-    document.getElementById('main-nav').classList.add('hidden');
-    document.getElementById('main-content').classList.add('hidden');
-}
-
-function logout() {
-    if (usaFirebase) {
-        firebase.auth().signOut();
-    }
-    usuarioAtual = null;
-    document.getElementById('login-screen').style.display = 'flex';
-    document.getElementById('login-screen').classList.remove('hidden');
-    
     document.getElementById('main-header').classList.add('hidden');
     document.getElementById('main-nav').classList.add('hidden');
     document.getElementById('main-content').classList.add('hidden');
@@ -365,38 +205,62 @@ function inicializarSistema() {
     }
 }
 
-function calcularHoraFim(horaInicio, duracaoMinutos) {
-    if (!horaInicio || typeof horaInicio !== 'string') return '00:00';
-    const partes = horaInicio.split(':').map(Number);
-    const horas = partes[0] || 0;
-    const minutos = partes[1] || 0;
-    const totalMinutos = horas * 60 + minutos + parseInt(duracaoMinutos || 30);
-    const hFim = Math.floor(totalMinutos / 60) % 24;
-    const mFim = totalMinutos % 60;
-    return String(hFim).padStart(2, '0') + ':' + String(mFim).padStart(2, '0');
+// ==========================================
+// AGENDA E HORA FINAL AUTOMÁTICA
+// ==========================================
+
+function atualizarHoraFimPadrao() {
+    const horaInicio = document.getElementById('agendamento-horario').value;
+    if (horaInicio) {
+        const partes = horaInicio.split(':');
+        let h = parseInt(partes[0], 10);
+        let m = parseInt(partes[1], 10) + 30; // Soma 30 minutos padrão
+        h += Math.floor(m / 60);
+        m = m % 60;
+        document.getElementById('agendamento-hora-fim').value = String(h % 24).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+    }
+}
+
+function selecionarCorAgenda(corHex, elementoBtn) {
+    document.getElementById('agendamento-cor').value = corHex;
+    document.querySelectorAll('.cor-agenda-btn').forEach(btn => {
+        btn.innerHTML = '';
+        btn.classList.remove('ring-2', 'ring-offset-2', 'ring-slate-400');
+    });
+    if (elementoBtn) {
+        elementoBtn.innerHTML = '<i class="fa-solid fa-check text-white text-[10px]"></i>';
+        elementoBtn.classList.add('ring-2', 'ring-offset-2', 'ring-slate-400');
+    }
+}
+
+function alterarStatusAgendamento(id, status) {
+    const ag = db.agendamentos.find(a => a.id === id);
+    if (ag) {
+        if (ag.status === status) ag.status = 'agendado';
+        else ag.status = status;
+        
+        persistirDB();
+        atualizarCalendario();
+        abrirModalDetalhesAgendamento(id);
+    }
 }
 
 function formatarEventoCalendario(ag) {
     const paciente = db.pacientes.find(p => p.id === ag.pacienteId);
     if (!paciente || !ag.data || !ag.horario) return null;
 
-    const duracao = ag.duracao || '30';
-    const horaFim = calcularHoraFim(ag.horario, duracao);
-    
-    // Cor padrão ou cor escolhida na paleta
     let corFundo = ag.cor || '#039be5'; 
     let prefixo = '';
 
-    // Sobrescreve a cor se houver um status especial
     if (ag.status === 'atendido') { prefixo = '✅ '; }
-    if (ag.status === 'faltou') { prefixo = '❌ [FALTOU] '; corFundo = '#ef4444'; } // Vermelho
-    if (ag.status === 'remarcou') { prefixo = '🔄 [REMARCOU] '; corFundo = '#94a3b8'; } // Cinza
+    if (ag.status === 'faltou') { prefixo = '❌ [FALTOU] '; corFundo = '#ef4444'; } 
+    if (ag.status === 'remarcou') { prefixo = '🔄 [REMARCOU] '; corFundo = '#94a3b8'; } 
 
     return {
         id: ag.id,
         title: prefixo + paciente.nome + ' (' + ag.tipo + ')',
         start: ag.data + 'T' + ag.horario,
-        end: ag.data + 'T' + horaFim,
+        end: ag.data + 'T' + (ag.horaFim || ag.horario),
         backgroundColor: corFundo,
         borderColor: corFundo,
         extendedProps: { pacienteId: ag.pacienteId, tipo: ag.tipo, obs: ag.obs, status: ag.status || 'agendado' }
@@ -454,7 +318,21 @@ function atualizarCalendario() {
     eventosFormatados.forEach(ev => calendar.addEvent(ev));
 }
 
+function excluirAgendamento(id, pacienteId) {
+    if (!verificarSenhaExclusao()) return;
+    if (!confirm('Deseja realmente cancelar/excluir este agendamento?')) return;
+    db.agendamentos = db.agendamentos.filter(ag => ag.id !== id);
+    persistirDB();
+    atualizarCalendario();
+    if (pacienteId && !document.getElementById('tab-detalhes-paciente').classList.contains('hidden')) {
+        abrirDetalhesPaciente(pacienteId, abaOrigem);
+    }
+    alert('Agendamento excluído com sucesso!');
+}
 
+// ==========================================
+// PACIENTES
+// ==========================================
 
 function obterUltimaConsultaPaciente(pacienteId) {
     const datas = [];
@@ -587,536 +465,122 @@ function renderizarPacientes() {
     });
 }
 
-function calcularPendenciaPaciente(pacienteId) {
-    let totalCobrado = 0;
-    db.prontuarios.filter(pr => pr.pacienteId === pacienteId).forEach(pr => totalCobrado += parseFloat(pr.valorCobrado || 0));
+function excluirPaciente(pacienteId) {
+    const paciente = db.pacientes.find(p => p.id === pacienteId);
+    if (!paciente) return;
 
-    let totalPago = 0;
-    db.pagamentos.filter(pg => pg.pacienteId === pacienteId).forEach(pg => totalPago += parseFloat(pg.valor || 0));
+    if (!verificarSenhaExclusao()) return;
+    if (confirm(`⚠️ Tem certeza que deseja EXCLUIR permanentemente o paciente "${paciente.nome}"?`)) {
+        
+        db.pacientes = db.pacientes.filter(p => p.id !== pacienteId);
+        db.agendamentos = db.agendamentos.filter(a => a.pacienteId !== pacienteId);
+        db.prontuarios = db.prontuarios.filter(pr => pr.pacienteId !== pacienteId);
 
-    return Math.round((totalCobrado - totalPago) * 100) / 100;
+        // Mantém pagamentos no caixa desvinculando o ID
+        db.pagamentos.forEach(pg => {
+            if (pg.pacienteId === pacienteId) {
+                pg.pacienteId = null; 
+                pg.descricao = `[Paciente Excluído: ${paciente.nome}] ` + pg.descricao;
+            }
+        });
+
+        persistirDB();
+        atualizarCalendario();
+        renderizarPacientes();
+        alert('Paciente excluído com sucesso! (O histórico financeiro foi mantido no caixa).');
+        voltarParaOrigem();
+    }
 }
 
-function ajustarSaldoPaciente(pacienteId) {
-    const saldoAtual = calcularPendenciaPaciente(pacienteId);
-
-    if (saldoAtual === 0) {
-        alert('Este paciente já está com o saldo zerado!');
-        return;
-    }
-
-    const mensagem = saldoAtual > 0 
-        ? `O paciente possui um DÉBITO de R$ ${saldoAtual.toFixed(2)}.\nDeseja realizar um lançamento de ajuste (Desconto/Perdão) para ZERAR o saldo?`
-        : `O paciente possui um CRÉDITO de R$ ${Math.abs(saldoAtual).toFixed(2)}.\nDeseja realizar um lançamento de ajuste de estorno para ZERAR o saldo?`;
-
-    if (!confirm(mensagem)) return;
+function excluirProntuario(prontuarioId, pacienteId) {
     if (!verificarSenhaExclusao()) return;
-
-    const motivo = prompt('Informe o motivo do ajuste (ex: Desconto concedido, Acordo, Ajuste manual):', 'Ajuste de Saldo');
-    if (!motivo) return;
-
-    const hoje = obterDataLocalISO();
-
-    if (saldoAtual > 0) {
-        db.pagamentos.push({
-            id: gerarIdUnico(),
-            pacienteId: pacienteId,
-            data: hoje,
-            valor: saldoAtual,
-            forma: 'Ajuste / Desconto',
-            descricao: `Ajuste de Saldo (Abatimento): ${motivo}`
-        });
-    } else {
-        const creditoAbsoluto = Math.abs(saldoAtual);
-        db.prontuarios.push({
-            id: gerarIdUnico(),
-            pacienteId: pacienteId,
-            data: hoje,
-            procedimento: `Ajuste de Saldo (Estorno de Crédito): ${motivo}`,
-            valorCobrado: creditoAbsoluto,
-            proximaConsulta: ''
-        });
-    }
-
+    if (!confirm('Deseja realmente remover esta evolução do prontuário?')) return;
+    db.prontuarios = db.prontuarios.filter(pr => pr.id !== prontuarioId);
     persistirDB();
-    alert('Saldo ajustado e zerado com sucesso!');
     abrirDetalhesPaciente(pacienteId, abaOrigem);
 }
 
-function quitarPendenciaPaciente(pacienteId) {
-    const saldoDevedor = calcularPendenciaPaciente(pacienteId);
-    const valorSugerido = saldoDevedor > 0 ? saldoDevedor.toFixed(2) : '0.00';
-    let valorStr = prompt('Valor a pagar / quitar no Caixa (R$):', valorSugerido);
-    if (!valorStr) return;
-    valorStr = valorStr.replace(',', '.');
-    const valorQuitar = parseFloat(valorStr);
-    if (isNaN(valorQuitar) || valorQuitar <= 0) {
-        alert('Valor inválido.');
+// ==========================================
+// FINANCEIRO & CAIXA (MANUAL)
+// ==========================================
+
+function estornarPagamento(pagamentoId, pacienteId) {
+    const pagamentoOriginal = db.pagamentos.find(pg => pg.id === pagamentoId);
+    if (!pagamentoOriginal) return;
+
+    const motivo = prompt('🔄 Motivo do estorno do pagamento (Obrigatório):');
+    if (!motivo || motivo.trim() === '') {
+        alert('O estorno foi cancelado porque o motivo é obrigatório.');
         return;
     }
 
-    const forma = prompt('Forma de Pagamento (Pix, Cartão de Crédito, Cartão de Débito, Dinheiro):', 'Pix');
-    
+    if (!verificarSenhaExclusao()) return;
+    if (!confirm(`Deseja confirmar o estorno de R$ ${Number(pagamentoOriginal.valor).toFixed(2)}?`)) return;
+
     db.pagamentos.push({
         id: gerarIdUnico(),
         pacienteId: pacienteId,
         data: obterDataLocalISO(),
-        valor: valorQuitar,
-        forma: forma || 'Pix',
-        descricao: 'Recebimento / Quitação de Débito'
+        valor: -Math.abs(parseFloat(pagamentoOriginal.valor)),
+        forma: 'Estorno',
+        descricao: `ESTORNO: ${pagamentoOriginal.descricao} - Motivo: ${motivo}`
     });
 
     persistirDB();
-    alert('Pagamento lançado com sucesso!');
-    abrirDetalhesPaciente(pacienteId, abaOrigem);
+    alert('Estorno realizado com sucesso!');
+    if (pacienteId) {
+        abrirDetalhesPaciente(pacienteId, abaOrigem);
+    } else {
+        renderizarFinanceiro();
+    }
 }
 
-function adicionarEtapaPlanejamento(event, pacienteId) {
+function salvarLancamentoCaixaManual(event, pacienteId) {
     event.preventDefault();
-    const denteInput = document.getElementById('plan-dente');
-    const descInput = document.getElementById('plan-desc');
-    const valorInput = document.getElementById('plan-valor');
-
-    const dente = denteInput ? (denteInput.value.trim() || 'Geral') : 'Geral';
-    const desc = descInput ? descInput.value.trim() : '';
-    const valor = valorInput ? (parseFloat(valorInput.value) || 0) : 0;
-
-    if (!desc) {
-        alert('Informe a descrição do procedimento.');
-        return;
-    }
-
-    const paciente = db.pacientes.find(p => p.id === pacienteId);
-    if (paciente) {
-        if (!Array.isArray(paciente.planejamentoEtapas)) {
-            paciente.planejamentoEtapas = [];
-        }
-
-        paciente.planejamentoEtapas.push({
-            id: gerarIdUnico(),
-            dente: dente,
-            procedimento: desc,
-            valor: valor,
-            concluido: false
-        });
-
-        persistirDB();
-        abrirDetalhesPaciente(pacienteId, abaOrigem);
-    }
-}
-
-function alternarStatusEtapa(pacienteId, etapaId) {
-    const paciente = db.pacientes.find(p => p.id === pacienteId);
-    if (paciente && Array.isArray(paciente.planejamentoEtapas)) {
-        const etapa = paciente.planejamentoEtapas.find(e => e.id === etapaId);
-        if (etapa) {
-            etapa.concluido = !etapa.concluido;
-            persistirDB();
-            abrirDetalhesPaciente(pacienteId, abaOrigem);
-        }
-    }
-}
-
-function excluirEtapaPlanejamento(pacienteId, etapaId) {
-    if (!verificarSenhaExclusao()) return;
-    const paciente = db.pacientes.find(p => p.id === pacienteId);
-    if (paciente && Array.isArray(paciente.planejamentoEtapas)) {
-        paciente.planejamentoEtapas = paciente.planejamentoEtapas.filter(e => e.id !== etapaId);
-        persistirDB();
-        abrirDetalhesPaciente(pacienteId, abaOrigem);
-    }
-}
-
-function alternarAccordion(id) {
-    const el = document.getElementById(id);
-    if (el) el.classList.toggle('hidden');
-}
-
-function alternarSecaoMobile(secaoId) {
-    const el = document.getElementById(secaoId);
-    if (!el) return;
-    const estaOculto = el.classList.contains('hidden');
+    const descricaoProc = document.getElementById('caixa-proc-desc').value.trim();
+    const valorPago = parseFloat(document.getElementById('caixa-valor-pago').value) || 0;
+    const forma = document.getElementById('caixa-forma').value;
+    const observacao = document.getElementById('caixa-obs-manual').value.trim();
+    const temPendencia = document.getElementById('caixa-marca-pendencia').checked;
     
-    document.querySelectorAll('.secao-clinica-mobile').forEach(s => s.classList.add('hidden'));
-
-    if (estaOculto) {
-        el.classList.remove('hidden');
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-}
-
-function abrirSubAbaPaciente(subAba) {
-    subAbaAtualPaciente = subAba;
-    document.querySelectorAll('.subtab-btn').forEach(btn => {
-        btn.classList.remove('border-blue-600', 'text-blue-600');
-        btn.classList.add('border-transparent', 'text-slate-500');
-    });
-    document.querySelectorAll('.subtab-content').forEach(content => content.classList.add('hidden'));
-
-    const btnAtivo = document.getElementById('btn-subtab-' + subAba);
-    const contentAtivo = document.getElementById('subtab-content-' + subAba);
-    
-    if (btnAtivo) {
-        btnAtivo.classList.remove('border-transparent', 'text-slate-500');
-        btnAtivo.classList.add('border-blue-600', 'text-blue-600');
-    }
-    if (contentAtivo) contentAtivo.classList.remove('hidden');
-}
-
-function filtrarProntuarioLinhaTempo(pacienteId) {
-    const termo = document.getElementById('busca-prontuario-input').value.toLowerCase();
-    const container = document.getElementById('container-prontuario-timeline');
-    const prontuarios = db.prontuarios.filter(pr => pr.pacienteId === pacienteId);
-
-    if (prontuarios.length === 0) return;
-
-    const prontuariosFiltrados = prontuarios.filter(pr => (pr.procedimento || '').toLowerCase().includes(termo) || (pr.data || '').includes(termo));
-    renderizarLinhaTempoProntuario(container, prontuariosFiltrados, pacienteId);
-}
-
-function renderizarLinhaTempoProntuario(container, prontuarios, pacienteId) {
-    container.innerHTML = '';
-    if (prontuarios.length === 0) {
-        container.innerHTML = '<p class="text-sm text-slate-400 p-2">Nenhum registro encontrado.</p>';
-        return;
-    }
-
-    const grupos = {};
-    const prontuariosOrdenados = prontuarios.slice().sort((a, b) => new Date(b.data) - new Date(a.data));
-    
-    prontuariosOrdenados.forEach(pr => {
-        const mesAno = formatarMesAno(pr.data);
-        if (!grupos[mesAno]) grupos[mesAno] = [];
-        grupos[mesAno].push(pr);
-    });
-
-    let index = 0;
-    const mesAtualFormatado = formatarMesAno(obterDataLocalISO());
-
-    Object.keys(grupos).forEach(mesAno => {
-        const accId = 'acc-prontuario-' + index;
-        const estaAberto = (mesAno === mesAtualFormatado) || (index === 0);
-        
-        let htmlItens = '';
-        grupos[mesAno].forEach(pr => {
-            const proxHtml = pr.proximaConsulta ? '<p class="text-xs font-semibold text-blue-700 bg-blue-50 p-1.5 rounded mt-1"><i class="fa-solid fa-clock-rotate-left mr-1"></i> Próxima consulta: ' + pr.proximaConsulta + '</p>' : '';
-            const valorHtml = pr.valorCobrado ? '<span class="text-xs font-bold text-slate-600">Valor: R$ ' + Number(pr.valorCobrado).toFixed(2) + '</span>' : '';
-            
-            htmlItens += '<div class="p-3 bg-white rounded-lg border border-slate-100 space-y-1 shadow-sm flex justify-between items-start gap-2">' +
-                '<div class="space-y-1 flex-grow">' +
-                    '<div class="flex justify-between text-xs text-slate-500"><span>Data: <strong>' + (pr.data ? pr.data.split('-').reverse().join('/') : '-') + '</strong></span>' + valorHtml + '</div>' +
-                    '<p class="text-slate-800 font-medium">Descrição: ' + pr.procedimento + '</p>' +
-                    proxHtml +
-                '</div>' +
-                '<button onclick="excluirProntuario(\'' + pr.id + '\', \'' + pacienteId + '\')" class="text-slate-400 hover:text-red-600 text-xs p-1" title="Excluir Prontuário"><i class="fa-solid fa-trash"></i></button>' +
-            '</div>';
-        });
-
-        container.innerHTML += '<div class="border border-slate-200 rounded-xl overflow-hidden bg-slate-50">' +
-            '<button onclick="alternarAccordion(\'' + accId + '\')" class="w-full px-4 py-3 text-left font-bold text-slate-800 flex justify-between items-center hover:bg-slate-100 transition text-sm">' +
-                '<span><i class="fa-regular fa-calendar-check mr-2 text-blue-600"></i>' + mesAno + ' (' + grupos[mesAno].length + ' registros)</span>' +
-                '<i class="fa-solid fa-chevron-down text-xs text-slate-400"></i>' +
-            '</button>' +
-            '<div id="' + accId + '" class="' + (estaAberto ? '' : 'hidden') + ' p-3 space-y-2 border-t border-slate-200">' + htmlItens + '</div>' +
-        '</div>';
-
-        index++;
-    });
-}
-
-function abrirDetalhesPaciente(pacienteId, origem) {
-    abaOrigem = origem;
-    pacienteAtualId = pacienteId;
     const paciente = db.pacientes.find(p => p.id === pacienteId);
     if (!paciente) return;
 
-    const agendamentosPaciente = db.agendamentos.filter(ag => ag.pacienteId === pacienteId);
-    const prontuariosPaciente = db.prontuarios.filter(pr => pr.pacienteId === pacienteId);
-    const pagamentosPaciente = db.pagamentos.filter(pg => pg.pacienteId === pacienteId);
-    
-    const container = document.getElementById('detalhes-paciente-container');
+    paciente.possuiPendenciaManual = temPendencia;
+    paciente.obsFinanceiraManual = observacao;
 
-    const telefoneLimpo = paciente.telefone ? paciente.telefone.replace(/\D/g, '') : '';
-    const btnWhatsapp = telefoneLimpo ? '<a href="https://wa.me/55' + telefoneLimpo + '" target="_blank" class="text-emerald-600 hover:text-emerald-700 font-bold ml-2 inline-flex items-center gap-1"><i class="fa-brands fa-whatsapp text-base"></i> Conversar</a>' : '';
-
-    // NOVO BADGE MANUAL DE PENDÊNCIA (Sem cálculos matemáticos)
-    let badgePendencia = '';
-    if (paciente.possuiPendenciaManual) {
-        badgePendencia = '<div class="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-2">' +
-            '<div class="flex items-center justify-between">' +
-                '<span class="text-xs uppercase font-bold text-amber-600 tracking-wider"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Pendência Financeira</span>' +
-            '</div>' +
-            '<p class="text-sm font-medium text-amber-900">' + (paciente.obsFinanceiraManual || 'Paciente marcado com pendência/débito.') + '</p>' +
-            '<button onclick="removerPendenciaManual(\'' + paciente.id + '\')" class="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow transition flex items-center justify-center gap-1"><i class="fa-solid fa-check"></i> Dar Baixa na Pendência</button>' +
-        '</div>';
-    } else {
-        badgePendencia = '<div class="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">' +
-            '<div><span class="text-xs uppercase font-bold text-emerald-600 block">Financeiro</span><span class="text-xs font-semibold text-emerald-800">Sem pendências registradas</span></div>' +
-        '</div>';
-    }
-
-    let etapas = [];
-    if (Array.isArray(paciente.planejamentoEtapas)) {
-        etapas = paciente.planejamentoEtapas;
-    }
-
-    const concluidasCount = etapas.filter(e => e.concluido).length;
-    const valorTotalPlano = etapas.reduce((acc, curr) => acc + (parseFloat(curr.valor) || 0), 0);
-
-    let htmlItensEtapas = '';
-    if (etapas.length === 0) {
-        htmlItensEtapas = '<p class="text-xs text-slate-400 italic p-2">Nenhuma etapa cadastrada no plano de tratamento.</p>';
-    } else {
-        htmlItensEtapas = etapas.map((et, index) => {
-            const numEtapa = index + 1;
-            const statusBg = et.concluido ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800';
-            const statusTexto = et.concluido ? 'Concluído' : 'Pendente';
-            const estiloTexto = et.concluido ? 'line-through text-slate-400' : 'text-slate-800 font-medium';
-            const valorFmt = et.valor ? 'R$ ' + Number(et.valor).toFixed(2) : 'R$ 0,00';
-
-            const btnCheck = usuarioAtual.perfil === 'dentista' ? 
-                '<button type="button" onclick="alternarStatusEtapa(\'' + paciente.id + '\', \'' + et.id + '\')" class="px-2 py-1 ' + (et.concluido ? 'bg-slate-200 text-slate-700' : 'bg-emerald-600 text-white') + ' text-xs font-semibold rounded hover:opacity-90 transition"><i class="fa-solid ' + (et.concluido ? 'fa-rotate-left' : 'fa-check') + '"></i> ' + (et.concluido ? 'Reabrir' : 'Concluir') + '</button>' : '';
-
-            const btnLixo = usuarioAtual.perfil === 'dentista' ? 
-                '<button type="button" onclick="excluirEtapaPlanejamento(\'' + paciente.id + '\', \'' + et.id + '\')" class="text-slate-400 hover:text-red-600 text-xs p-1" title="Excluir Etapa"><i class="fa-solid fa-trash"></i></button>' : '';
-
-            return '<div class="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-white rounded-lg border border-indigo-100 text-xs gap-2 shadow-sm">' +
-                '<div class="flex items-center space-x-2 flex-grow min-w-0">' +
-                    '<span class="font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">#' + numEtapa + '</span>' +
-                    '<span class="font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded whitespace-nowrap">' + (et.dente || 'Geral') + '</span>' +
-                    '<span class="' + estiloTexto + ' truncate">' + et.procedimento + '</span>' +
-                '</div>' +
-                '<div class="flex items-center justify-between sm:justify-end space-x-2 whitespace-nowrap pt-1 sm:pt-0 border-t sm:border-0 border-slate-100">' +
-                    '<span class="font-bold text-slate-700 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">' + valorFmt + '</span>' +
-                    '<span class="px-2 py-0.5 text-[10px] font-bold rounded-full ' + statusBg + '">' + statusTexto + '</span>' +
-                    btnCheck +
-                    btnLixo +
-                '</div>' +
-            '</div>';
-        }).join('');
-    }
-
-    let htmlFormAdicionarEtapa = '';
-    if (usuarioAtual.perfil === 'dentista') {
-        htmlFormAdicionarEtapa = '<form onsubmit="adicionarEtapaPlanejamento(event, \'' + paciente.id + '\')" class="grid grid-cols-1 sm:grid-cols-12 gap-2 pt-2 border-t border-indigo-100">' +
-            '<div class="sm:col-span-2"><input type="text" id="plan-dente" placeholder="Dente (16)" class="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white outline-none"></div>' +
-            '<div class="sm:col-span-5"><input type="text" id="plan-desc" required placeholder="Procedimento (ex: Restauração)" class="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white outline-none"></div>' +
-            '<div class="sm:col-span-3"><input type="number" step="0.01" id="plan-valor" placeholder="Valor (R$)" class="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white outline-none"></div>' +
-            '<div class="sm:col-span-2"><button type="submit" class="w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg text-xs shadow flex items-center justify-center gap-1"><i class="fa-solid fa-plus"></i> Add</button></div>' +
-        '</form>';
-    }
-
-    let htmlPlanejamentoTratamento = '<div id="sec-plano-tratamento" class="secao-clinica-mobile hidden md:block border border-indigo-200 rounded-xl overflow-hidden bg-indigo-50/30 shadow-sm">' +
-        '<div class="px-4 py-3 font-bold text-indigo-900 flex justify-between items-center bg-indigo-100/50 text-sm">' +
-            '<span class="flex items-center gap-2"><i class="fa-solid fa-clipboard-list text-indigo-600"></i> Plano de Tratamento (' + etapas.length + ' itens)</span>' +
-            '<div class="flex items-center gap-2">' +
-                '<span class="text-xs font-bold text-indigo-800 bg-indigo-100 px-2 py-0.5 rounded-full">Total: R$ ' + valorTotalPlano.toFixed(2) + '</span>' +
-                '<span class="text-xs font-semibold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">' + concluidasCount + ' / ' + etapas.length + '</span>' +
-            '</div>' +
-        '</div>' +
-        '<div class="p-4 space-y-3 bg-indigo-50/20">' +
-            '<div class="space-y-2 max-h-60 overflow-y-auto pr-1">' + htmlItensEtapas + '</div>' +
-            htmlFormAdicionarEtapa +
-        '</div>' +
-    '</div>';
-
-    let htmlFormDentista = '';
-    if (usuarioAtual.perfil === 'dentista') {
-        htmlFormDentista = '<div id="sec-evolucao-prontuario" class="secao-clinica-mobile hidden md:block bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3 shadow-sm">' +
-            '<h4 class="font-bold text-blue-900 text-sm flex items-center gap-2"><i class="fa-solid fa-stethoscope text-blue-600"></i> Registrar Evolução do Prontuário</h4>' +
-            '<form onsubmit="salvarProcedimentoDentista(event, \'' + paciente.id + '\')" class="space-y-3">' +
-                '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Procedimento Realizado *</label><input type="text" id="proc-desc" required placeholder="Ex: Restauração Resina Dente 16" class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"></div>' +
-                '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">O que fazer no Próximo Retorno?</label><input type="text" id="proc-proxima" placeholder="Ex: Moldagem e ajuste de oclusão" class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"></div>' +
-                '<button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg text-xs shadow transition">Salvar Prontuário</button>' +
-            '</form>' +
-        '</div>';
-    }
-
-    // NOVO FORMULÁRIO DO CAIXA COM OS 4 CAMPOS + CHECKBOX MANUAL
-    let htmlFormCaixa = '<div id="sec-lancar-caixa" class="secao-clinica-mobile hidden md:block bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-3 shadow-sm">' +
-        '<h4 class="font-bold text-emerald-900 text-sm flex items-center gap-2"><i class="fa-solid fa-cash-register text-emerald-600"></i> Lançamento & Observação Financeira</h4>' +
-        '<form onsubmit="salvarLancamentoCaixaManual(event, \'' + paciente.id + '\')" class="space-y-3">' +
-            '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Descrição do Procedimento *</label><input type="text" id="caixa-proc-desc" required placeholder="Ex: Manutenção Orto, Clareamento..." class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"></div>' +
-            '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">' +
-                '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Valor do Pagamento (R$)</label><input type="number" step="0.01" id="caixa-valor-pago" placeholder="0.00" class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"></div>' +
-                '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Forma de Pagamento</label><select id="caixa-forma" class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"><option value="Pix">Pix</option><option value="Cartão de Crédito">Cartão de Crédito</option><option value="Cartão de Débito">Cartão de Débito</option><option value="Dinheiro">Dinheiro</option></select></div>' +
-            '</div>' +
-            '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Observação (Pendências ou Créditos)</label><input type="text" id="caixa-obs-manual" placeholder="Ex: Acerto combinado, valor pendente, crédito..." value="' + (paciente.obsFinanceiraManual || '') + '" class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"></div>' +
-            '<div class="flex items-center gap-2 pt-1">' +
-                '<input type="checkbox" id="caixa-marca-pendencia" class="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500" ' + (paciente.possuiPendenciaManual ? 'checked' : '') + '>' +
-                '<label for="caixa-marca-pendencia" class="text-xs font-semibold text-slate-700 cursor-pointer">Marcar paciente com pendência/débito financeiro (Exibir na aba Financeiro)</label>' +
-            '</div>' +
-            '<button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg text-xs shadow transition">Salvar Lançamento</button>' +
-        '</form>' +
-    '</div>';
-
-    let htmlAgendamentos = '';
-    if (agendamentosPaciente.length === 0) {
-        htmlAgendamentos = '<p class="text-sm text-slate-400 p-2">Nenhum agendamento futuro.</p>';
-    } else {
-        agendamentosPaciente.forEach(ag => {
-            const dur = ag.duracao || '30';
-            const obsHtml = ag.obs ? '<p class="text-xs text-slate-500 mt-0.5">Obs: ' + ag.obs + '</p>' : '';
-            htmlAgendamentos += '<div class="p-3 bg-white rounded-lg border border-slate-200 text-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 shadow-sm">' +
-                '<div><p class="font-semibold text-slate-800">' + ag.tipo + ' (' + dur + ' min) • ' + (ag.data ? ag.data.split('-').reverse().join('/') : '') + ' às ' + ag.horario + '</p>' + obsHtml + '</div>' +
-                '<div class="flex gap-2 self-end sm:self-auto">' +
-                    '<button onclick="abrirModalEditarAgendamento(\'' + ag.id + '\')" class="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded text-xs font-semibold transition flex items-center gap-1"><i class="fa-solid fa-pen-to-square"></i> Editar</button>' +
-                    '<button onclick="excluirAgendamento(\'' + ag.id + '\', \'' + paciente.id + '\')" class="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded text-xs font-semibold transition flex items-center gap-1"><i class="fa-solid fa-trash"></i> Excluir</button>' +
-                '</div>' +
-            '</div>';
-        });
-    }
-
-    let htmlPagamentosTimeline = '';
-    if (pagamentosPaciente.length === 0) {
-        htmlPagamentosTimeline = '<p class="text-sm text-slate-400 p-2">Nenhum pagamento registrado.</p>';
-    } else {
-        const gruposPg = {};
-        const pagamentosOrdenados = pagamentosPaciente.slice().sort((a, b) => new Date(b.data) - new Date(a.data));
-        
-        pagamentosOrdenados.forEach(pg => {
-            const mesAno = formatarMesAno(pg.data);
-            if (!gruposPg[mesAno]) gruposPg[mesAno] = [];
-            gruposPg[mesAno].push(pg);
-        });
-
-        let idxPg = 0;
-        const mesAtualFormatado = formatarMesAno(obterDataLocalISO());
-
-        Object.keys(gruposPg).forEach(mesAno => {
-            const accId = 'acc-pagamento-' + idxPg;
-            const estaAberto = (mesAno === mesAtualFormatado) || (idxPg === 0);
-            
-            let htmlItensPg = '';
-            gruposPg[mesAno].forEach(pg => {
-                const isEstorno = pg.valor < 0;
-                const corBg = isEstorno ? 'bg-rose-50 border-rose-100' : 'bg-emerald-50 border-emerald-100';
-                const corTexto = isEstorno ? 'text-rose-900' : 'text-emerald-900';
-                const corValor = isEstorno ? 'text-rose-600 font-bold' : 'text-emerald-700 font-bold';
-
-                // Botão de estorno (só aparece se o lançamento for positivo)
-                const btnEstornar = !isEstorno ? '<button onclick="estornarPagamento(\'' + pg.id + '\', \'' + pacienteId + '\')" class="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded text-xs font-semibold transition flex items-center gap-1" title="Estornar Lançamento"><i class="fa-solid fa-rotate-left"></i> Estornar</button>' : '';
-
-                htmlItensPg += '<div class="p-3 ' + corBg + ' border rounded-lg text-sm flex justify-between items-center">' +
-                    '<div><p class="font-semibold ' + corTexto + '">' + pg.descricao + '</p><span class="text-xs text-slate-500">' + (pg.data ? pg.data.split('-').reverse().join('/') : '-') + ' • ' + pg.forma + '</span></div>' +
-                    '<div class="flex items-center gap-2"><span class="' + corValor + '">R$ ' + Number(pg.valor).toFixed(2) + '</span>' + btnEstornar + '</div>' +
-                '</div>';
-            });
-
-            htmlPagamentosTimeline += '<div class="border border-slate-200 rounded-xl overflow-hidden bg-slate-50">' +
-                '<button onclick="alternarAccordion(\'' + accId + '\')" class="w-full px-4 py-3 text-left font-bold text-slate-800 flex justify-between items-center hover:bg-slate-100 transition text-sm">' +
-                    '<span><i class="fa-solid fa-receipt mr-2 text-emerald-600"></i>' + mesAno + ' (' + gruposPg[mesAno].length + ' pagamentos)</span>' +
-                    '<i class="fa-solid fa-chevron-down text-xs text-slate-400"></i>' +
-                '</button>' +
-                '<div id="' + accId + '" class="' + (estaAberto ? '' : 'hidden') + ' p-3 space-y-2 border-t border-slate-200">' + htmlItensPg + '</div>' +
-            '</div>';
-            idxPg++;
-        });
-    }
-
-    const hubMobile = '<div class="grid grid-cols-2 gap-2.5 md:hidden mb-4">' +
-        '<button onclick="alternarSecaoMobile(\'sec-plano-tratamento\')" class="p-3 bg-indigo-600 text-white rounded-xl shadow font-semibold text-xs flex flex-col items-center justify-center text-center gap-1.5 active:scale-95 transition"><i class="fa-solid fa-clipboard-list text-lg"></i> Plano Tratamento</button>' +
-        (usuarioAtual.perfil === 'dentista' ? '<button onclick="alternarSecaoMobile(\'sec-evolucao-prontuario\')" class="p-3 bg-blue-600 text-white rounded-xl shadow font-semibold text-xs flex flex-col items-center justify-center text-center gap-1.5 active:scale-95 transition"><i class="fa-solid fa-stethoscope text-lg"></i> Evoluir Prontuário</button>' : '') +
-        '<button onclick="alternarSecaoMobile(\'sec-lancar-caixa\')" class="p-3 bg-emerald-600 text-white rounded-xl shadow font-semibold text-xs flex flex-col items-center justify-center text-center gap-1.5 active:scale-95 transition"><i class="fa-solid fa-cash-register text-lg"></i> Lançar Caixa</button>' +
-        '<button onclick="alternarSecaoMobile(\'sec-historico-abas\')" class="p-3 bg-slate-800 text-white rounded-xl shadow font-semibold text-xs flex flex-col items-center justify-center text-center gap-1.5 active:scale-95 transition"><i class="fa-solid fa-clock-rotate-left text-lg"></i> Históricos</button>' +
-    '</div>';
-
-    container.innerHTML = '<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">' +
-        '<div class="lg:col-span-1 space-y-4">' +
-            '<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-4">' +
-                '<div class="flex items-center space-x-3 border-b pb-4">' +
-                    '<div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-lg">' + paciente.nome.charAt(0) + '</div>' +
-                    '<div><h3 class="font-bold text-slate-900 text-lg leading-tight">' + paciente.nome + '</h3><span class="inline-block text-xs font-semibold px-2 py-0.5 rounded-full ' + (paciente.categoria === 'Ortodontia' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-700') + ' mt-1">' + paciente.categoria + '</span></div>' +
-                '</div>' +
-                '<div class="space-y-2 text-sm">' +
-                    '<div><span class="text-xs uppercase font-semibold text-slate-400 block">Telefone</span><span class="font-medium text-slate-800">' + (paciente.telefone || '-') + '</span>' + btnWhatsapp + '</div>' +
-                    '<div><span class="text-xs uppercase font-semibold text-slate-400 block">CPF</span><span class="font-medium text-slate-800">' + (paciente.cpf || '-') + '</span></div>' +
-                    '<div><span class="text-xs uppercase font-semibold text-slate-400 block">Nascimento</span><span class="font-medium text-slate-800">' + (paciente.nascimento ? paciente.nascimento.split('-').reverse().join('/') : '-') + '</span></div>' +
-                    (paciente.categoria === 'Ortodontia' ? '<div><span class="text-xs uppercase font-semibold text-slate-400 block">Vencimento Mensalidade</span><span class="font-medium text-slate-800">' + (paciente.vencimento ? paciente.vencimento.split('-').reverse().join('/') : 'Não definida') + '</span></div>' : '') +
-                '</div>' +
-                badgePendencia +
-                '<div class="pt-2 border-t flex flex-col gap-2">' +
-                    '<button onclick="abrirModalPaciente(\'' + paciente.id + '\')" class="w-full py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5"><i class="fa-solid fa-user-pen"></i> Editar Dados Cadastrais</button>' +
-                    '<button onclick="excluirPaciente(\'' + paciente.id + '\')" class="w-full py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5"><i class="fa-solid fa-user-xmark"></i> Excluir Paciente</button>' +
-                '</div>' +
-            '</div>' +
-        '</div>' +
-        '<div class="lg:col-span-2 space-y-4">' +
-            hubMobile +
-            htmlPlanejamentoTratamento +
-            htmlFormDentista +
-            htmlFormCaixa +
-            '<div id="sec-historico-abas" class="secao-clinica-mobile bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-4 md:block">' +
-                '<div class="border-b border-slate-200 flex space-x-4 text-xs sm:text-sm font-semibold overflow-x-auto scrollbar-none">' +
-                    '<button onclick="abrirSubAbaPaciente(\'prontuario\')" id="btn-subtab-prontuario" class="subtab-btn pb-2 border-b-2 border-blue-600 text-blue-600 flex items-center gap-2 whitespace-nowrap"><i class="fa-solid fa-notes-medical"></i> Prontuário & Evolução</button>' +
-                    '<button onclick="abrirSubAbaPaciente(\'pagamentos\')" id="btn-subtab-pagamentos" class="subtab-btn pb-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 flex items-center gap-2 whitespace-nowrap"><i class="fa-solid fa-wallet"></i> Histórico do Caixa</button>' +
-                    '<button onclick="abrirSubAbaPaciente(\'agendamentos\')" id="btn-subtab-agendamentos" class="subtab-btn pb-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 flex items-center gap-2 whitespace-nowrap"><i class="fa-solid fa-calendar-check"></i> Agendamentos Futuros</button>' +
-                '</div>' +
-                '<div id="subtab-content-prontuario" class="subtab-content space-y-4">' +
-                    '<input type="text" id="busca-prontuario-input" oninput="filtrarProntuarioLinhaTempo(\'' + paciente.id + '\')" placeholder="🔍 Pesquisar no histórico..." class="w-full px-3 py-2 border rounded-lg text-xs sm:text-sm bg-slate-50">' +
-                    '<div id="container-prontuario-timeline" class="space-y-3"></div>' +
-                '</div>' +
-                '<div id="subtab-content-pagamentos" class="subtab-content hidden space-y-3">' + htmlPagamentosTimeline + '</div>' +
-                '<div id="subtab-content-agendamentos" class="subtab-content hidden space-y-3">' + htmlAgendamentos + '</div>' +
-            '</div>' +
-        '</div>' +
-    '</div>';
-
-    mudarAba('detalhes-paciente');
-    renderizarLinhaTempoProntuario(document.getElementById('container-prontuario-timeline'), prontuariosPaciente, paciente.id);
-    abrirSubAbaPaciente(subAbaAtualPaciente);
-}
-
-function salvarProcedimentoDentista(event, pacienteId) {
-    event.preventDefault();
-    const procedimento = document.getElementById('proc-desc').value;
-    const proximaConsulta = document.getElementById('proc-proxima').value;
-    const hoje = obterDataLocalISO();
-
-    db.prontuarios.push({
-        id: gerarIdUnico(),
-        pacienteId: pacienteId,
-        data: hoje,
-        procedimento: procedimento,
-        valorCobrado: 0,
-        proximaConsulta: proximaConsulta
-    });
-
-    persistirDB();
-    alert('Evolução do Prontuário salva!');
-    abrirDetalhesPaciente(pacienteId, abaOrigem);
-}
-
-function salvarLancamentoCaixaCompleto(event, pacienteId) {
-    event.preventDefault();
-    const descricao = document.getElementById('caixa-proc-desc').value;
-    const valorCobrado = parseFloat(document.getElementById('caixa-valor-cobrado').value) || 0;
-    const valorPago = parseFloat(document.getElementById('caixa-valor-pago').value) || 0;
-    const forma = document.getElementById('caixa-forma').value;
-    const hoje = obterDataLocalISO();
-
-    if (valorCobrado <= 0 && valorPago <= 0) {
-        alert('Informe os valores corretos.');
-        return;
-    }
-
-    // REGISTRA APENAS O PAGAMENTO NO CAIXA (Evita duplicar procedimentos no prontuário clínico)
     if (valorPago > 0) {
+        let descFinal = descricaoProc;
+        if (observacao) descFinal += ' (Obs: ' + observacao + ')';
+        
         db.pagamentos.push({ 
             id: gerarIdUnico(), 
             pacienteId: pacienteId, 
-            data: hoje, 
+            data: obterDataLocalISO(), 
             valor: valorPago, 
             forma: forma, 
-            descricao: 'Pagamento / Recebimento: ' + descricao 
+            descricao: descFinal
         });
     }
 
-    // Se houver um valor cobrado que difere de um registro estrito de evolução, 
-    // mantemos o controle financeiro isolado na aba de pagamentos/saldo do paciente.
     persistirDB();
-    alert('Lançamento financeiro realizado com sucesso!');
+    alert('Lançamento salvo e status atualizado com sucesso!');
     abrirDetalhesPaciente(pacienteId, abaOrigem);
+}
+
+function removerPendenciaManual(pacienteId) {
+    const paciente = db.pacientes.find(p => p.id === pacienteId);
+    if (!paciente) return;
+    
+    paciente.possuiPendenciaManual = false;
+    paciente.obsFinanceiraManual = '';
+    persistirDB();
+    
+    if (!document.getElementById('tab-detalhes-paciente').classList.contains('hidden')) {
+        abrirDetalhesPaciente(pacienteId, abaOrigem);
+    } else {
+        renderizarFinanceiro();
+    }
 }
 
 function lancarDespesa() {
@@ -1126,10 +590,7 @@ function lancarDespesa() {
     if (!valorStr) return;
     valorStr = valorStr.replace(',', '.');
     const valor = parseFloat(valorStr);
-    if (isNaN(valor) || valor <= 0) {
-        alert('Valor inválido.');
-        return;
-    }
+    if (isNaN(valor) || valor <= 0) { alert('Valor inválido.'); return; }
 
     const categoria = prompt('Categoria:', 'Operacional');
 
@@ -1176,13 +637,29 @@ function fecharCaixaDiario() {
     resumo += 'Formas de Pagamento:\n';
     const porForma = {};
     pagamentosHoje.forEach(pg => {
-        porForma[pg.forma] = (porForma[pg.forma] || 0) + parseFloat(pg.valor || 0);
+        if(pg.valor > 0){
+           porForma[pg.forma] = (porForma[pg.forma] || 0) + parseFloat(pg.valor || 0);
+        }
     });
     for (let forma in porForma) {
         resumo += '• ' + forma + ': R$ ' + porForma[forma].toFixed(2) + '\n';
     }
 
     alert(resumo);
+}
+
+function abrirModalPagamentoAvulso() {
+    const valorStr = prompt('Digite o valor do pagamento (R$):');
+    if (!valorStr) return;
+    const valor = parseFloat(valorStr.replace(',', '.'));
+    if (isNaN(valor) || valor <= 0) { alert('Valor inválido.'); return; }
+    
+    const descricao = prompt('Digite a descrição:', 'Consulta / Procedimento');
+    const forma = prompt('Forma de pagamento (Dinheiro, Pix, Cartão):', 'Pix');
+    db.pagamentos.push({ id: gerarIdUnico(), pacienteId: null, data: obterDataLocalISO(), valor: valor, forma: forma || 'Pix', descricao: descricao || 'Pagamento Avulso' });
+    persistirDB();
+    alert('Pagamento lançado!');
+    renderizarFinanceiro();
 }
 
 function renderizarFinanceiro() {
@@ -1206,14 +683,12 @@ function renderizarFinanceiro() {
     db.despesas.forEach(d => { if (d.data && d.data.startsWith(prefixoMes)) despesasMes += parseFloat(d.valor || 0); });
 
     let saldoLiquidoMes = faturamentoMes - despesasMes;
-
-    // Conta APENAS quem tem pendência marcada manualmente
     let qtdPacientesComPendencia = db.pacientes.filter(p => p.possuiPendenciaManual).length;
 
     document.getElementById('kpi-faturamento').innerText = 'R$ ' + faturamentoMes.toFixed(2);
     document.getElementById('kpi-despesas').innerText = 'R$ ' + despesasMes.toFixed(2);
     document.getElementById('kpi-saldo-liquido').innerText = 'R$ ' + saldoLiquidoMes.toFixed(2);
-    document.getElementById('kpi-receber').innerText = qtdPacientesComPendencia + ' Pacientes'; // Atualizado para mostrar quantidade
+    document.getElementById('kpi-receber').innerText = qtdPacientesComPendencia + ' Pacientes';
 
     let encontrouPendencia = false;
     db.pacientes.forEach(paciente => {
@@ -1248,10 +723,14 @@ function renderizarFinanceiro() {
     } else {
         transacoes.forEach(t => {
             if (t.tipo === 'entrada') {
-                const paciente = db.pacientes.find(p => p.id === t.pacienteId) || { nome: 'PACIENTE AVULSO' };
+                const paciente = db.pacientes.find(p => p.id === t.pacienteId) || { nome: 'PACIENTE AVULSO / EXCLUÍDO' };
+                const isEstorno = t.valor < 0;
+                const corValor = isEstorno ? 'text-rose-600' : 'text-emerald-600';
+                const prefixoValor = isEstorno ? '' : '+ ';
+
                 listaFluxo.innerHTML += '<div class="p-3 bg-white border border-slate-100 rounded-lg text-sm flex justify-between items-center shadow-sm">' +
-                    '<div><p class="font-semibold text-slate-900"><i class="fa-solid fa-circle-dot text-xs mr-1 text-emerald-600"></i> ' + paciente.nome + '</p><span class="text-xs text-slate-500">' + t.descricao + ' • ' + (t.data ? t.data.split('-').reverse().join('/') : '-') + ' (' + t.forma + ')</span></div>' +
-                    '<span class="font-bold text-emerald-600">+ R$ ' + Number(t.valor).toFixed(2) + '</span>' +
+                    '<div><p class="font-semibold text-slate-900"><i class="fa-solid fa-circle-dot text-xs mr-1 ' + corValor + '"></i> ' + paciente.nome + '</p><span class="text-xs text-slate-500">' + t.descricao + ' • ' + (t.data ? t.data.split('-').reverse().join('/') : '-') + ' (' + t.forma + ')</span></div>' +
+                    '<span class="font-bold ' + corValor + '">' + prefixoValor + 'R$ ' + Number(t.valor).toFixed(2) + '</span>' +
                 '</div>';
             } else {
                 listaFluxo.innerHTML += '<div class="p-3 bg-rose-50 border border-rose-100 rounded-lg text-sm flex justify-between items-center">' +
@@ -1263,77 +742,333 @@ function renderizarFinanceiro() {
     }
 }
 
-function abrirModalPagamentoAvulso() {
-    const valorStr = prompt('Digite o valor do pagamento (R$):');
-    if (!valorStr) return;
-    const valor = parseFloat(valorStr.replace(',', '.'));
-    if (isNaN(valor) || valor <= 0) {
-        alert('Valor inválido.');
-        return;
+// ==========================================
+// MODAIS DE AGENDAMENTO (HORA FINAL & CORES)
+// ==========================================
+
+function abrirModalDetalhesAgendamento(agendamentoId) {
+    const ag = db.agendamentos.find(item => item.id === agendamentoId);
+    if (!ag) return;
+    const paciente = db.pacientes.find(p => p.id === ag.pacienteId) || { nome: 'PACIENTE NÃO ENCONTRADO', categoria: 'Geral' };
+    
+    document.getElementById('detalhe-ag-paciente').innerText = paciente.nome;
+    document.getElementById('detalhe-ag-categoria').innerText = paciente.categoria;
+    document.getElementById('detalhe-ag-datahora').innerText = (ag.data ? ag.data.split('-').reverse().join('/') : '') + ' • ' + ag.horario + ' às ' + (ag.horaFim || '?');
+    document.getElementById('detalhe-ag-tipo').innerText = ag.tipo;
+    document.getElementById('detalhe-ag-obs').innerText = ag.obs || 'Nenhuma observação registrada.';
+
+    let divStatus = document.getElementById('container-status-agendamento');
+    if (!divStatus) {
+        divStatus = document.createElement('div');
+        divStatus.id = 'container-status-agendamento';
+        divStatus.className = 'grid grid-cols-3 gap-2 pt-4 mt-2 border-t border-slate-100';
+        const gridAcoes = document.getElementById('btn-excluir-ag-modal').parentElement;
+        gridAcoes.parentNode.insertBefore(divStatus, gridAcoes);
     }
-    const descricao = prompt('Digite a descrição:', 'Consulta / Procedimento');
-    const forma = prompt('Forma de pagamento (Dinheiro, Pix, Cartão):', 'Pix');
-    db.pagamentos.push({ id: gerarIdUnico(), pacienteId: null, data: obterDataLocalISO(), valor: valor, forma: forma || 'Pix', descricao: descricao || 'Pagamento Avulso' });
-    persistirDB();
-    alert('Pagamento lançado!');
-    renderizarFinanceiro();
+    const statusAtual = ag.status || 'agendado';
+    divStatus.innerHTML = `
+        <button onclick="alterarStatusAgendamento('${ag.id}', 'atendido')" class="py-2 ${statusAtual === 'atendido' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'} font-semibold rounded-lg text-xs transition"><i class="fa-solid fa-check"></i> Atendido</button>
+        <button onclick="alterarStatusAgendamento('${ag.id}', 'faltou')" class="py-2 ${statusAtual === 'faltou' ? 'bg-rose-600 text-white' : 'bg-rose-50 hover:bg-rose-100 text-rose-700'} font-semibold rounded-lg text-xs transition"><i class="fa-solid fa-user-xmark"></i> Faltou</button>
+        <button onclick="alterarStatusAgendamento('${ag.id}', 'remarcou')" class="py-2 ${statusAtual === 'remarcou' ? 'bg-slate-600 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'} font-semibold rounded-lg text-xs transition"><i class="fa-solid fa-rotate"></i> Remarcou</button>
+    `;
+
+    document.getElementById('btn-excluir-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); excluirAgendamento(ag.id, ag.pacienteId); };
+    document.getElementById('btn-editar-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); abrirModalEditarAgendamento(ag.id); };
+    document.getElementById('btn-ver-ficha-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); abrirDetalhesPaciente(ag.pacienteId, 'agenda'); };
+
+    document.getElementById('modal-detalhes-agendamento').classList.remove('hidden');
+    document.getElementById('modal-detalhes-agendamento').classList.add('flex');
 }
 
+function abrirModalAgendamento(dataPreenchida, horaPreenchida) {
+    popularSelectPacientes();
+    document.getElementById('titulo-modal-agendamento').innerText = 'Novo Agendamento';
+    document.getElementById('agendamento-edit-id').value = '';
+    document.getElementById('filtro-paciente-busca').value = '';
+    document.getElementById('agendamento-obs').value = '';
 
+    const btnPadrao = document.querySelector('.cor-agenda-btn[style*="#039be5"]');
+    selecionarCorAgenda('#039be5', btnPadrao);
 
-function filtrarPacientesSelect() {
-    const termo = document.getElementById('filtro-paciente-busca').value.toLowerCase();
-    const select = document.getElementById('agendamento-paciente');
-    select.innerHTML = '';
+    document.getElementById('container-cadastro-rapido').classList.add('hidden');
+    document.getElementById('container-busca-paciente').classList.remove('hidden');
+    document.getElementById('btn-toggle-cadastro-rapido').innerHTML = '<i class="fa-solid fa-user-plus"></i> Novo Rápido';
     
-    const filtrados = db.pacientes.filter(p => p.nome.toLowerCase().includes(termo));
-    if (filtrados.length === 0) {
-        select.innerHTML = '<option value="">Nenhum paciente encontrado</option>';
+    document.getElementById('agendamento-data').value = dataPreenchida || obterDataLocalISO();
+    document.getElementById('agendamento-horario').value = horaPreenchida || '09:00';
+    
+    atualizarHoraFimPadrao();
+
+    document.getElementById('modal-agendamento').classList.remove('hidden');
+    document.getElementById('modal-agendamento').classList.add('flex');
+}
+
+function abrirModalEditarAgendamento(agendamentoId) {
+    const ag = db.agendamentos.find(a => a.id === agendamentoId);
+    if (!ag) return;
+
+    popularSelectPacientes();
+    document.getElementById('titulo-modal-agendamento').innerText = 'Editar Agendamento';
+    document.getElementById('agendamento-edit-id').value = ag.id;
+    document.getElementById('agendamento-paciente').value = ag.pacienteId;
+    document.getElementById('agendamento-data').value = ag.data;
+    document.getElementById('agendamento-horario').value = ag.horario;
+    
+    if (ag.horaFim) {
+        document.getElementById('agendamento-hora-fim').value = ag.horaFim;
+    } else {
+        document.getElementById('agendamento-horario').value = ag.horario;
+        atualizarHoraFimPadrao();
+    }
+
+    document.getElementById('agendamento-tipo').value = ag.tipo;
+    document.getElementById('agendamento-obs').value = ag.obs || '';
+
+    const corSalva = ag.cor || '#039be5';
+    const btnCorSalva = document.querySelector(`.cor-agenda-btn[style*="${corSalva}"]`) || document.querySelector('.cor-agenda-btn[style*="#039be5"]');
+    selecionarCorAgenda(corSalva, btnCorSalva);
+
+    document.getElementById('container-cadastro-rapido').classList.add('hidden');
+    document.getElementById('container-busca-paciente').classList.remove('hidden');
+    document.getElementById('modal-agendamento').classList.remove('hidden');
+    document.getElementById('modal-agendamento').classList.add('flex');
+}
+
+function salvarAgendamento(event) {
+    event.preventDefault();
+    const pacienteId = document.getElementById('agendamento-paciente').value;
+    const editId = document.getElementById('agendamento-edit-id').value;
+
+    if (!pacienteId) { alert('Selecione um paciente.'); return; }
+
+    const dataAg = document.getElementById('agendamento-data').value;
+    const horaAg = document.getElementById('agendamento-horario').value;
+    const horaFimAg = document.getElementById('agendamento-hora-fim').value;
+
+    if (horaFimAg <= horaAg) {
+        alert('A Hora Final deve ser posterior à Hora Inicial.');
         return;
     }
 
-    filtrados.forEach(p => {
-        select.innerHTML += '<option value="' + p.id + '">' + p.nome + ' (' + p.categoria + ')</option>';
+    const conflito = db.agendamentos.find(a => a.data === dataAg && a.horario === horaAg && a.id !== editId);
+    if (conflito) {
+        const pacConflito = db.pacientes.find(p => p.id === conflito.pacienteId) || { nome: 'Outro paciente' };
+        if (!confirm(`⚠️ Já existe agendamento para "${pacConflito.nome}" nesse horário. Agendar mesmo assim?`)) return;
+    }
+
+    const dadosAgendamento = {
+        pacienteId: pacienteId,
+        data: dataAg,
+        horario: horaAg,
+        horaFim: horaFimAg,
+        tipo: document.getElementById('agendamento-tipo').value,
+        obs: document.getElementById('agendamento-obs').value.trim(),
+        cor: document.getElementById('agendamento-cor').value 
+    };
+
+    if (editId) {
+        const index = db.agendamentos.findIndex(a => a.id === editId);
+        if (index !== -1) {
+            const statusAntigo = db.agendamentos[index].status;
+            db.agendamentos[index] = { ...db.agendamentos[index], ...dadosAgendamento, status: statusAntigo };
+        }
+    } else {
+        db.agendamentos.push({ id: gerarIdUnico(), status: 'agendado', ...dadosAgendamento });
+    }
+
+    persistirDB();
+    fecharModal('modal-agendamento');
+    atualizarCalendario();
+    if (!document.getElementById('tab-detalhes-paciente').classList.contains('hidden')) { abrirDetalhesPaciente(pacienteId, abaOrigem); }
+}
+
+// ==========================================
+// OUTRAS FUNÇÕES DE APOIO
+// ==========================================
+
+function voltarParaOrigem() { mudarAba(abaOrigem || 'pacientes'); }
+function alternarAccordion(id) { const el = document.getElementById(id); if (el) el.classList.toggle('hidden'); }
+function alternarSecaoMobile(secaoId) {
+    const el = document.getElementById(secaoId);
+    if (!el) return;
+    const estaOculto = el.classList.contains('hidden');
+    document.querySelectorAll('.secao-clinica-mobile').forEach(s => s.classList.add('hidden'));
+    if (estaOculto) {
+        el.classList.remove('hidden');
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+}
+
+function abrirSubAbaPaciente(subAba) {
+    subAbaAtualPaciente = subAba;
+    document.querySelectorAll('.subtab-btn').forEach(btn => {
+        btn.classList.remove('border-blue-600', 'text-blue-600');
+        btn.classList.add('border-transparent', 'text-slate-500');
+    });
+    document.querySelectorAll('.subtab-content').forEach(content => content.classList.add('hidden'));
+
+    const btnAtivo = document.getElementById('btn-subtab-' + subAba);
+    const contentAtivo = document.getElementById('subtab-content-' + subAba);
+    
+    if (btnAtivo) {
+        btnAtivo.classList.remove('border-transparent', 'text-slate-500');
+        btnAtivo.classList.add('border-blue-600', 'text-blue-600');
+    }
+    if (contentAtivo) contentAtivo.classList.remove('hidden');
+}
+
+function filtrarProntuarioLinhaTempo(pacienteId) {
+    const termo = document.getElementById('busca-prontuario-input').value.toLowerCase();
+    const container = document.getElementById('container-prontuario-timeline');
+    const prontuarios = db.prontuarios.filter(pr => pr.pacienteId === pacienteId);
+    if (prontuarios.length === 0) return;
+    const prontuariosFiltrados = prontuarios.filter(pr => (pr.procedimento || '').toLowerCase().includes(termo) || (pr.data || '').includes(termo));
+    renderizarLinhaTempoProntuario(container, prontuariosFiltrados, pacienteId);
+}
+
+function renderizarLinhaTempoProntuario(container, prontuarios, pacienteId) {
+    container.innerHTML = '';
+    if (prontuarios.length === 0) {
+        container.innerHTML = '<p class="text-sm text-slate-400 p-2">Nenhum registro encontrado.</p>';
+        return;
+    }
+
+    const grupos = {};
+    const prontuariosOrdenados = prontuarios.slice().sort((a, b) => new Date(b.data) - new Date(a.data));
+    prontuariosOrdenados.forEach(pr => {
+        const mesAno = formatarMesAno(pr.data);
+        if (!grupos[mesAno]) grupos[mesAno] = [];
+        grupos[mesAno].push(pr);
+    });
+
+    let index = 0;
+    const mesAtualFormatado = formatarMesAno(obterDataLocalISO());
+
+    Object.keys(grupos).forEach(mesAno => {
+        const accId = 'acc-prontuario-' + index;
+        const estaAberto = (mesAno === mesAtualFormatado) || (index === 0);
+        
+        let htmlItens = '';
+        grupos[mesAno].forEach(pr => {
+            const proxHtml = pr.proximaConsulta ? '<p class="text-xs font-semibold text-blue-700 bg-blue-50 p-1.5 rounded mt-1"><i class="fa-solid fa-clock-rotate-left mr-1"></i> Próxima consulta: ' + pr.proximaConsulta + '</p>' : '';
+            
+            htmlItens += '<div class="p-3 bg-white rounded-lg border border-slate-100 space-y-1 shadow-sm flex justify-between items-start gap-2">' +
+                '<div class="space-y-1 flex-grow">' +
+                    '<div class="flex justify-between text-xs text-slate-500"><span>Data: <strong>' + (pr.data ? pr.data.split('-').reverse().join('/') : '-') + '</strong></span></div>' +
+                    '<p class="text-slate-800 font-medium">Descrição: ' + pr.procedimento + '</p>' +
+                    proxHtml +
+                '</div>' +
+                '<button onclick="excluirProntuario(\'' + pr.id + '\', \'' + pacienteId + '\')" class="text-slate-400 hover:text-red-600 text-xs p-1" title="Excluir Prontuário"><i class="fa-solid fa-trash"></i></button>' +
+            '</div>';
+        });
+
+        container.innerHTML += '<div class="border border-slate-200 rounded-xl overflow-hidden bg-slate-50">' +
+            '<button onclick="alternarAccordion(\'' + accId + '\')" class="w-full px-4 py-3 text-left font-bold text-slate-800 flex justify-between items-center hover:bg-slate-100 transition text-sm">' +
+                '<span><i class="fa-regular fa-calendar-check mr-2 text-blue-600"></i>' + mesAno + ' (' + grupos[mesAno].length + ' registros)</span>' +
+                '<i class="fa-solid fa-chevron-down text-xs text-slate-400"></i>' +
+            '</button>' +
+            '<div id="' + accId + '" class="' + (estaAberto ? '' : 'hidden') + ' p-3 space-y-2 border-t border-slate-200">' + htmlItens + '</div>' +
+        '</div>';
+        index++;
     });
 }
 
-function toggleFormCadastroRapido() {
-    const bloco = document.getElementById('container-cadastro-rapido');
-    const busca = document.getElementById('container-busca-paciente');
-    const btn = document.getElementById('btn-toggle-cadastro-rapido');
+function salvarProcedimentoDentista(event, pacienteId) {
+    event.preventDefault();
+    const procedimento = document.getElementById('proc-desc').value;
+    const proximaConsulta = document.getElementById('proc-proxima').value;
+    const hoje = obterDataLocalISO();
 
-    if (bloco.classList.contains('hidden')) {
-        bloco.classList.remove('hidden');
-        busca.classList.add('hidden');
-        btn.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i> Buscar';
-        document.getElementById('rapido-nome').value = '';
-        document.getElementById('rapido-telefone').value = '';
-    } else {
-        bloco.classList.add('hidden');
-        busca.classList.remove('hidden');
-        btn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Novo Rápido';
+    db.prontuarios.push({
+        id: gerarIdUnico(),
+        pacienteId: pacienteId,
+        data: hoje,
+        procedimento: procedimento,
+        valorCobrado: 0,
+        proximaConsulta: proximaConsulta
+    });
+    persistirDB();
+    alert('Evolução do Prontuário salva!');
+    abrirDetalhesPaciente(pacienteId, abaOrigem);
+}
+
+function adicionarEtapaPlanejamento(event, pacienteId) {
+    event.preventDefault();
+    const denteInput = document.getElementById('plan-dente');
+    const descInput = document.getElementById('plan-desc');
+    const valorInput = document.getElementById('plan-valor');
+
+    const dente = denteInput ? (denteInput.value.trim() || 'Geral') : 'Geral';
+    const desc = descInput ? descInput.value.trim() : '';
+    const valor = valorInput ? (parseFloat(valorInput.value) || 0) : 0;
+
+    if (!desc) { alert('Informe a descrição.'); return; }
+
+    const paciente = db.pacientes.find(p => p.id === pacienteId);
+    if (paciente) {
+        if (!Array.isArray(paciente.planejamentoEtapas)) paciente.planejamentoEtapas = [];
+        paciente.planejamentoEtapas.push({ id: gerarIdUnico(), dente: dente, procedimento: desc, valor: valor, concluido: false });
+        persistirDB();
+        abrirDetalhesPaciente(pacienteId, abaOrigem);
     }
 }
 
-function cadastrarPacienteRapido() {
-    const nome = document.getElementById('rapido-nome').value.trim().toUpperCase();
-    const telefone = document.getElementById('rapido-telefone').value.trim();
-    const categoria = document.getElementById('rapido-categoria').value;
-
-    if (!nome) {
-        alert('Informe o nome.');
-        return;
+function alternarStatusEtapa(pacienteId, etapaId) {
+    const paciente = db.pacientes.find(p => p.id === pacienteId);
+    if (paciente && Array.isArray(paciente.planejamentoEtapas)) {
+        const etapa = paciente.planejamentoEtapas.find(e => e.id === etapaId);
+        if (etapa) {
+            etapa.concluido = !etapa.concluido;
+            persistirDB();
+            abrirDetalhesPaciente(pacienteId, abaOrigem);
+        }
     }
+}
 
-    const novoId = gerarIdUnico();
-    db.pacientes.push({ id: novoId, nome: nome, telefone: telefone, nascimento: '', cpf: '', categoria: categoria, vencimento: '', planejamentoEtapas: [] });
-    persistirDB();
+function excluirEtapaPlanejamento(pacienteId, etapaId) {
+    if (!verificarSenhaExclusao()) return;
+    const paciente = db.pacientes.find(p => p.id === pacienteId);
+    if (paciente && Array.isArray(paciente.planejamentoEtapas)) {
+        paciente.planejamentoEtapas = paciente.planejamentoEtapas.filter(e => e.id !== etapaId);
+        persistirDB();
+        abrirDetalhesPaciente(pacienteId, abaOrigem);
+    }
+}
 
-    popularSelectPacientes();
-    renderizarPacientes();
-    document.getElementById('agendamento-paciente').value = novoId;
-    toggleFormCadastroRapido();
-    alert('Paciente cadastrado!');
+function exportarBackup() {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", "backup_clinica_" + obterDataLocalISO() + ".json");
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+}
+
+function importarBackup(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const conteudo = JSON.parse(e.target.result);
+            if (conteudo && Array.isArray(conteudo.pacientes)) {
+                if (confirm('⚠️ Deseja realmente restaurar este backup?')) {
+                    db = conteudo;
+                    persistirDB();
+                    atualizarCalendario();
+                    renderizarPacientes();
+                    alert('Backup restaurado com sucesso!');
+                }
+            } else {
+                alert('Arquivo de backup inválido.');
+            }
+        } catch (err) {
+            alert('Erro ao ler o arquivo JSON: ' + err.message);
+        }
+    };
+    reader.readAsText(file);
+    event.target.value = '';
 }
 
 function abrirModalPaciente(pacienteId) {
@@ -1386,128 +1121,55 @@ function popularSelectPacientes() {
     });
 }
 
-function abrirModalDetalhesAgendamento(agendamentoId) {
-    const ag = db.agendamentos.find(item => item.id === agendamentoId);
-    if (!ag) return;
-    const paciente = db.pacientes.find(p => p.id === ag.pacienteId) || { nome: 'PACIENTE NÃO ENCONTRADO', categoria: 'Geral' };
-    
-    document.getElementById('detalhe-ag-paciente').innerText = paciente.nome;
-    document.getElementById('detalhe-ag-categoria').innerText = paciente.categoria;
-    document.getElementById('detalhe-ag-datahora').innerText = (ag.data ? ag.data.split('-').reverse().join('/') : '') + ' às ' + ag.horario;
-    document.getElementById('detalhe-ag-tipo').innerText = ag.tipo + ' (' + (ag.duracao || '30') + ' min)';
-    document.getElementById('detalhe-ag-obs').innerText = ag.obs || 'Nenhuma observação registrada.';
+function toggleFormCadastroRapido() {
+    const bloco = document.getElementById('container-cadastro-rapido');
+    const busca = document.getElementById('container-busca-paciente');
+    const btn = document.getElementById('btn-toggle-cadastro-rapido');
 
-    // BOTOES DE STATUS (Atendido, Faltou, Remarcou)
-    let divStatus = document.getElementById('container-status-agendamento');
-    if (!divStatus) {
-        divStatus = document.createElement('div');
-        divStatus.id = 'container-status-agendamento';
-        divStatus.className = 'grid grid-cols-3 gap-2 pt-4 mt-2 border-t border-slate-100';
-        const gridAcoes = document.getElementById('btn-excluir-ag-modal').parentElement;
-        gridAcoes.parentNode.insertBefore(divStatus, gridAcoes);
-    }
-    const statusAtual = ag.status || 'agendado';
-    divStatus.innerHTML = `
-        <button onclick="alterarStatusAgendamento('${ag.id}', 'atendido')" class="py-2 ${statusAtual === 'atendido' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'} font-semibold rounded-lg text-xs transition"><i class="fa-solid fa-check"></i> Atendido</button>
-        <button onclick="alterarStatusAgendamento('${ag.id}', 'faltou')" class="py-2 ${statusAtual === 'faltou' ? 'bg-rose-600 text-white' : 'bg-rose-50 hover:bg-rose-100 text-rose-700'} font-semibold rounded-lg text-xs transition"><i class="fa-solid fa-user-xmark"></i> Faltou</button>
-        <button onclick="alterarStatusAgendamento('${ag.id}', 'remarcou')" class="py-2 ${statusAtual === 'remarcou' ? 'bg-slate-600 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'} font-semibold rounded-lg text-xs transition"><i class="fa-solid fa-rotate"></i> Remarcou</button>
-    `;
-
-    document.getElementById('btn-excluir-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); excluirAgendamento(ag.id, ag.pacienteId); };
-    document.getElementById('btn-editar-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); abrirModalEditarAgendamento(ag.id); };
-    document.getElementById('btn-ver-ficha-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); abrirDetalhesPaciente(ag.pacienteId, 'agenda'); };
-
-    document.getElementById('modal-detalhes-agendamento').classList.remove('hidden');
-    document.getElementById('modal-detalhes-agendamento').classList.add('flex');
-}
-
-function abrirModalAgendamento(dataPreenchida, horaPreenchida) {
-    popularSelectPacientes();
-    document.getElementById('titulo-modal-agendamento').innerText = 'Novo Agendamento';
-    document.getElementById('agendamento-edit-id').value = '';
-    document.getElementById('filtro-paciente-busca').value = '';
-    document.getElementById('agendamento-obs').value = '';
-    document.getElementById('agendamento-duracao').value = '30';
-
-    // Seleciona o Azul como padrão
-    const btnPadrao = document.querySelector('.cor-agenda-btn[style*="#039be5"]');
-    selecionarCorAgenda('#039be5', btnPadrao);
-
-    document.getElementById('container-cadastro-rapido').classList.add('hidden');
-    document.getElementById('container-busca-paciente').classList.remove('hidden');
-    document.getElementById('btn-toggle-cadastro-rapido').innerHTML = '<i class="fa-solid fa-user-plus"></i> Novo Rápido';
-    document.getElementById('agendamento-data').value = dataPreenchida || obterDataLocalISO();
-    document.getElementById('agendamento-horario').value = horaPreenchida || '09:00';
-    document.getElementById('modal-agendamento').classList.remove('hidden');
-    document.getElementById('modal-agendamento').classList.add('flex');
-}
-
-function abrirModalEditarAgendamento(agendamentoId) {
-    const ag = db.agendamentos.find(a => a.id === agendamentoId);
-    if (!ag) return;
-
-    popularSelectPacientes();
-    document.getElementById('titulo-modal-agendamento').innerText = 'Editar Agendamento';
-    document.getElementById('agendamento-edit-id').value = ag.id;
-    document.getElementById('agendamento-paciente').value = ag.pacienteId;
-    document.getElementById('agendamento-data').value = ag.data;
-    document.getElementById('agendamento-horario').value = ag.horario;
-    document.getElementById('agendamento-duracao').value = ag.duracao || '30';
-    document.getElementById('agendamento-tipo').value = ag.tipo;
-    document.getElementById('agendamento-obs').value = ag.obs || '';
-
-    // Recupera a cor salva e seleciona a bolinha correspondente
-    const corSalva = ag.cor || '#039be5';
-    const btnCorSalva = document.querySelector(`.cor-agenda-btn[style*="${corSalva}"]`) || document.querySelector('.cor-agenda-btn[style*="#039be5"]');
-    selecionarCorAgenda(corSalva, btnCorSalva);
-
-    document.getElementById('container-cadastro-rapido').classList.add('hidden');
-    document.getElementById('container-busca-paciente').classList.remove('hidden');
-    document.getElementById('modal-agendamento').classList.remove('hidden');
-    document.getElementById('modal-agendamento').classList.add('flex');
-}
-
-function salvarAgendamento(event) {
-    event.preventDefault();
-    const pacienteId = document.getElementById('agendamento-paciente').value;
-    const editId = document.getElementById('agendamento-edit-id').value;
-
-    if (!pacienteId) { alert('Selecione um paciente.'); return; }
-
-    const dataAg = document.getElementById('agendamento-data').value;
-    const horaAg = document.getElementById('agendamento-horario').value;
-
-    const conflito = db.agendamentos.find(a => a.data === dataAg && a.horario === horaAg && a.id !== editId);
-    if (conflito) {
-        const pacConflito = db.pacientes.find(p => p.id === conflito.pacienteId) || { nome: 'Outro paciente' };
-        if (!confirm(`⚠️ Já existe agendamento para "${pacConflito.nome}" nesse horário. Agendar mesmo assim?`)) return;
-    }
-
-    const dadosAgendamento = {
-        pacienteId: pacienteId,
-        data: dataAg,
-        horario: horaAg,
-        duracao: document.getElementById('agendamento-duracao').value,
-        tipo: document.getElementById('agendamento-tipo').value,
-        obs: document.getElementById('agendamento-obs').value.trim(),
-        cor: document.getElementById('agendamento-cor').value // Salva a cor da paleta!
-    };
-
-    if (editId) {
-        const index = db.agendamentos.findIndex(a => a.id === editId);
-        if (index !== -1) {
-            // Mantém o status que o usuário já tinha marcado antes (ex: 'atendido')
-            const statusAntigo = db.agendamentos[index].status;
-            db.agendamentos[index] = { ...db.agendamentos[index], ...dadosAgendamento, status: statusAntigo };
-        }
+    if (bloco.classList.contains('hidden')) {
+        bloco.classList.remove('hidden');
+        busca.classList.add('hidden');
+        btn.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i> Buscar';
+        document.getElementById('rapido-nome').value = '';
+        document.getElementById('rapido-telefone').value = '';
     } else {
-        db.agendamentos.push({ id: gerarIdUnico(), status: 'agendado', ...dadosAgendamento });
+        bloco.classList.add('hidden');
+        busca.classList.remove('hidden');
+        btn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Novo Rápido';
     }
+}
 
+function cadastrarPacienteRapido() {
+    const nome = document.getElementById('rapido-nome').value.trim().toUpperCase();
+    const telefone = document.getElementById('rapido-telefone').value.trim();
+    const categoria = document.getElementById('rapido-categoria').value;
+
+    if (!nome) { alert('Informe o nome.'); return; }
+
+    const novoId = gerarIdUnico();
+    db.pacientes.push({ id: novoId, nome: nome, telefone: telefone, nascimento: '', cpf: '', categoria: categoria, vencimento: '', planejamentoEtapas: [] });
     persistirDB();
-    fecharModal('modal-agendamento');
-    atualizarCalendario();
-    if (!document.getElementById('tab-detalhes-paciente').classList.contains('hidden')) { abrirDetalhesPaciente(pacienteId, abaOrigem); }
+
+    popularSelectPacientes();
+    renderizarPacientes();
+    document.getElementById('agendamento-paciente').value = novoId;
+    toggleFormCadastroRapido();
+    alert('Paciente cadastrado!');
+}
+
+function filtrarPacientesSelect() {
+    const termo = document.getElementById('filtro-paciente-busca').value.toLowerCase();
+    const select = document.getElementById('agendamento-paciente');
+    select.innerHTML = '';
+    
+    const filtrados = db.pacientes.filter(p => p.nome.toLowerCase().includes(termo));
+    if (filtrados.length === 0) {
+        select.innerHTML = '<option value="">Nenhum paciente encontrado</option>';
+        return;
+    }
+    filtrados.forEach(p => {
+        select.innerHTML += '<option value="' + p.id + '">' + p.nome + ' (' + p.categoria + ')</option>';
+    });
 }
 
 function salvarPaciente(event) {
@@ -1516,10 +1178,7 @@ function salvarPaciente(event) {
     const nomeCaixaAlta = document.getElementById('paciente-nome').value.trim().toUpperCase();
     const editId = document.getElementById('paciente-edit-id').value;
 
-    if (!nomeCaixaAlta) {
-        alert('O nome do paciente é obrigatório.');
-        return;
-    }
+    if (!nomeCaixaAlta) { alert('O nome do paciente é obrigatório.'); return; }
 
     const dadosPaciente = {
         nome: nomeCaixaAlta,
@@ -1537,7 +1196,7 @@ function salvarPaciente(event) {
             db.pacientes[index] = { ...dadosPaciente, id: editId, planejamentoEtapas: etapasAnteriores };
         }
     } else {
-        db.pacientes.push({ id: gerarIdUnico(), planejamentoEtapas: [], ...dadosPaciente });
+        db.pacientes.push({ id: gerarIdUnico(), planejamentoEtapas: [], possuiPendenciaManual: false, obsFinanceiraManual: '', ...dadosPaciente });
     }
 
     persistirDB();
@@ -1548,114 +1207,194 @@ function salvarPaciente(event) {
     if (editId && !document.getElementById('tab-detalhes-paciente').classList.contains('hidden')) {
         abrirDetalhesPaciente(editId, abaOrigem);
     }
-
     alert('Dados do paciente salvos!');
 }
 
-function salvarLancamentoCaixaManual(event, pacienteId) {
-    event.preventDefault();
-    const observacao = document.getElementById('caixa-obs-manual').value.trim();
-    const valorPago = parseFloat(document.getElementById('caixa-valor-pago').value) || 0;
-    const forma = document.getElementById('caixa-forma').value;
-    const temPendencia = document.getElementById('caixa-marca-pendencia').checked;
-    const hoje = obterDataLocalISO();
-
+function abrirDetalhesPaciente(pacienteId, origem) {
+    abaOrigem = origem;
+    pacienteAtualId = pacienteId;
     const paciente = db.pacientes.find(p => p.id === pacienteId);
     if (!paciente) return;
 
-    paciente.possuiPendenciaManual = temPendencia;
-    paciente.obsFinanceiraManual = observacao;
-
-    if (valorPago > 0) {
-        db.pagamentos.push({ 
-            id: gerarIdUnico(), 
-            pacienteId: pacienteId, 
-            data: hoje, 
-            valor: valorPago, 
-            forma: forma, 
-            descricao: observacao ? 'Pagamento: ' + observacao : 'Pagamento avulso' 
-        });
-    }
-
-    persistirDB();
-    alert('Lançamento financeiro atualizado com sucesso!');
-    abrirDetalhesPaciente(pacienteId, abaOrigem);
-}
-
-function salvarLancamentoCaixaManual(event, pacienteId) {
-    event.preventDefault();
-    const descricaoProc = document.getElementById('caixa-proc-desc').value.trim();
-    const valorPago = parseFloat(document.getElementById('caixa-valor-pago').value) || 0;
-    const forma = document.getElementById('caixa-forma').value;
-    const observacao = document.getElementById('caixa-obs-manual').value.trim();
-    const temPendencia = document.getElementById('caixa-marca-pendencia').checked;
+    const agendamentosPaciente = db.agendamentos.filter(ag => ag.pacienteId === pacienteId);
+    const prontuariosPaciente = db.prontuarios.filter(pr => pr.pacienteId === pacienteId);
+    const pagamentosPaciente = db.pagamentos.filter(pg => pg.pacienteId === pacienteId);
     
-    const paciente = db.pacientes.find(p => p.id === pacienteId);
-    if (!paciente) return;
+    const container = document.getElementById('detalhes-paciente-container');
+    const telefoneLimpo = paciente.telefone ? paciente.telefone.replace(/\D/g, '') : '';
+    const btnWhatsapp = telefoneLimpo ? '<a href="https://wa.me/55' + telefoneLimpo + '" target="_blank" class="text-emerald-600 hover:text-emerald-700 font-bold ml-2 inline-flex items-center gap-1"><i class="fa-brands fa-whatsapp text-base"></i> Conversar</a>' : '';
 
-    // Salva a anotação manual e se tem pendência ou não
-    paciente.possuiPendenciaManual = temPendencia;
-    paciente.obsFinanceiraManual = observacao;
-
-    // Registra o pagamento no caixa (se o valor for maior que zero)
-    if (valorPago > 0) {
-        let descFinal = descricaoProc;
-        if (observacao) descFinal += ' (Obs: ' + observacao + ')';
-        
-        db.pagamentos.push({ 
-            id: gerarIdUnico(), 
-            pacienteId: pacienteId, 
-            data: obterDataLocalISO(), 
-            valor: valorPago, 
-            forma: forma, 
-            descricao: descFinal
-        });
-    }
-
-    persistirDB();
-    alert('Lançamento salvo e status atualizado com sucesso!');
-    abrirDetalhesPaciente(pacienteId, abaOrigem);
-}
-
-function removerPendenciaManual(pacienteId) {
-    const paciente = db.pacientes.find(p => p.id === pacienteId);
-    if (!paciente) return;
-    
-    paciente.possuiPendenciaManual = false;
-    paciente.obsFinanceiraManual = '';
-    persistirDB();
-    
-    // Atualiza a tela correspondente
-    if (!document.getElementById('tab-detalhes-paciente').classList.contains('hidden')) {
-        abrirDetalhesPaciente(pacienteId, abaOrigem);
+    let badgePendencia = '';
+    if (paciente.possuiPendenciaManual) {
+        badgePendencia = '<div class="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-2">' +
+            '<div class="flex items-center justify-between">' +
+                '<span class="text-xs uppercase font-bold text-amber-600 tracking-wider"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Pendência Financeira</span>' +
+            '</div>' +
+            '<p class="text-sm font-medium text-amber-900">' + (paciente.obsFinanceiraManual || 'Paciente marcado com pendência/débito.') + '</p>' +
+            '<button onclick="removerPendenciaManual(\'' + paciente.id + '\')" class="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow transition flex items-center justify-center gap-1"><i class="fa-solid fa-check"></i> Dar Baixa na Pendência</button>' +
+        '</div>';
     } else {
-        renderizarFinanceiro();
+        badgePendencia = '<div class="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">' +
+            '<div><span class="text-xs uppercase font-bold text-emerald-600 block">Financeiro</span><span class="text-xs font-semibold text-emerald-800">Sem pendências registradas</span></div>' +
+        '</div>';
     }
-}
 
-// CONTROLE DA PALETA DE CORES
-function selecionarCorAgenda(corHex, elementoBtn) {
-    document.getElementById('agendamento-cor').value = corHex;
-    document.querySelectorAll('.cor-agenda-btn').forEach(btn => {
-        btn.innerHTML = '';
-        btn.classList.remove('ring-2', 'ring-offset-2', 'ring-slate-400');
+    let etapas = Array.isArray(paciente.planejamentoEtapas) ? paciente.planejamentoEtapas : [];
+    const concluidasCount = etapas.filter(e => e.concluido).length;
+    const valorTotalPlano = etapas.reduce((acc, curr) => acc + (parseFloat(curr.valor) || 0), 0);
+
+    let htmlItensEtapas = etapas.length === 0 ? '<p class="text-xs text-slate-400 italic p-2">Nenhuma etapa cadastrada no plano de tratamento.</p>' :
+        etapas.map((et, index) => {
+            const numEtapa = index + 1;
+            const statusBg = et.concluido ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800';
+            const statusTexto = et.concluido ? 'Concluído' : 'Pendente';
+            const estiloTexto = et.concluido ? 'line-through text-slate-400' : 'text-slate-800 font-medium';
+            const valorFmt = et.valor ? 'R$ ' + Number(et.valor).toFixed(2) : 'R$ 0,00';
+
+            const btnCheck = usuarioAtual.perfil === 'dentista' ? '<button type="button" onclick="alternarStatusEtapa(\'' + paciente.id + '\', \'' + et.id + '\')" class="px-2 py-1 ' + (et.concluido ? 'bg-slate-200 text-slate-700' : 'bg-emerald-600 text-white') + ' text-xs font-semibold rounded hover:opacity-90 transition"><i class="fa-solid ' + (et.concluido ? 'fa-rotate-left' : 'fa-check') + '"></i> ' + (et.concluido ? 'Reabrir' : 'Concluir') + '</button>' : '';
+            const btnLixo = usuarioAtual.perfil === 'dentista' ? '<button type="button" onclick="excluirEtapaPlanejamento(\'' + paciente.id + '\', \'' + et.id + '\')" class="text-slate-400 hover:text-red-600 text-xs p-1" title="Excluir Etapa"><i class="fa-solid fa-trash"></i></button>' : '';
+
+            return '<div class="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-white rounded-lg border border-indigo-100 text-xs gap-2 shadow-sm">' +
+                '<div class="flex items-center space-x-2 flex-grow min-w-0">' +
+                    '<span class="font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">#' + numEtapa + '</span>' +
+                    '<span class="font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded whitespace-nowrap">' + (et.dente || 'Geral') + '</span>' +
+                    '<span class="' + estiloTexto + ' truncate">' + et.procedimento + '</span>' +
+                '</div>' +
+                '<div class="flex items-center justify-between sm:justify-end space-x-2 whitespace-nowrap pt-1 sm:pt-0 border-t sm:border-0 border-slate-100">' +
+                    '<span class="font-bold text-slate-700 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">' + valorFmt + '</span>' +
+                    '<span class="px-2 py-0.5 text-[10px] font-bold rounded-full ' + statusBg + '">' + statusTexto + '</span>' + btnCheck + btnLixo +
+                '</div></div>';
+        }).join('');
+
+    let htmlFormAdicionarEtapa = '';
+    if (usuarioAtual.perfil === 'dentista') {
+        htmlFormAdicionarEtapa = '<form onsubmit="adicionarEtapaPlanejamento(event, \'' + paciente.id + '\')" class="grid grid-cols-1 sm:grid-cols-12 gap-2 pt-2 border-t border-indigo-100">' +
+            '<div class="sm:col-span-2"><input type="text" id="plan-dente" placeholder="Dente (16)" class="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white outline-none"></div>' +
+            '<div class="sm:col-span-5"><input type="text" id="plan-desc" required placeholder="Procedimento (ex: Restauração)" class="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white outline-none"></div>' +
+            '<div class="sm:col-span-3"><input type="number" step="0.01" id="plan-valor" placeholder="Valor (R$)" class="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white outline-none"></div>' +
+            '<div class="sm:col-span-2"><button type="submit" class="w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg text-xs shadow flex items-center justify-center gap-1"><i class="fa-solid fa-plus"></i> Add</button></div></form>';
+    }
+
+    let htmlPlanejamentoTratamento = '<div id="sec-plano-tratamento" class="secao-clinica-mobile hidden md:block border border-indigo-200 rounded-xl overflow-hidden bg-indigo-50/30 shadow-sm">' +
+        '<div class="px-4 py-3 font-bold text-indigo-900 flex justify-between items-center bg-indigo-100/50 text-sm">' +
+            '<span class="flex items-center gap-2"><i class="fa-solid fa-clipboard-list text-indigo-600"></i> Plano de Tratamento (' + etapas.length + ' itens)</span>' +
+            '<div class="flex items-center gap-2">' +
+                '<span class="text-xs font-bold text-indigo-800 bg-indigo-100 px-2 py-0.5 rounded-full">Total: R$ ' + valorTotalPlano.toFixed(2) + '</span>' +
+                '<span class="text-xs font-semibold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">' + concluidasCount + ' / ' + etapas.length + '</span>' +
+            '</div></div>' +
+        '<div class="p-4 space-y-3 bg-indigo-50/20"><div class="space-y-2 max-h-60 overflow-y-auto pr-1">' + htmlItensEtapas + '</div>' + htmlFormAdicionarEtapa + '</div></div>';
+
+    let htmlFormDentista = '';
+    if (usuarioAtual.perfil === 'dentista') {
+        htmlFormDentista = '<div id="sec-evolucao-prontuario" class="secao-clinica-mobile hidden md:block bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3 shadow-sm">' +
+            '<h4 class="font-bold text-blue-900 text-sm flex items-center gap-2"><i class="fa-solid fa-stethoscope text-blue-600"></i> Registrar Evolução do Prontuário</h4>' +
+            '<form onsubmit="salvarProcedimentoDentista(event, \'' + paciente.id + '\')" class="space-y-3">' +
+                '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Procedimento Realizado *</label><input type="text" id="proc-desc" required placeholder="Ex: Restauração Resina Dente 16" class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"></div>' +
+                '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">O que fazer no Próximo Retorno?</label><input type="text" id="proc-proxima" placeholder="Ex: Moldagem e ajuste de oclusão" class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"></div>' +
+                '<button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg text-xs shadow transition">Salvar Prontuário</button></form></div>';
+    }
+
+    let htmlFormCaixa = '<div id="sec-lancar-caixa" class="secao-clinica-mobile hidden md:block bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-3 shadow-sm">' +
+        '<h4 class="font-bold text-emerald-900 text-sm flex items-center gap-2"><i class="fa-solid fa-cash-register text-emerald-600"></i> Lançamento & Observação Financeira</h4>' +
+        '<form onsubmit="salvarLancamentoCaixaManual(event, \'' + paciente.id + '\')" class="space-y-3">' +
+            '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Descrição do Procedimento *</label><input type="text" id="caixa-proc-desc" required placeholder="Ex: Manutenção Orto, Clareamento..." class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"></div>' +
+            '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">' +
+                '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Valor do Pagamento (R$)</label><input type="number" step="0.01" id="caixa-valor-pago" placeholder="0.00" class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"></div>' +
+                '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Forma de Pagamento</label><select id="caixa-forma" class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"><option value="Pix">Pix</option><option value="Cartão de Crédito">Cartão de Crédito</option><option value="Cartão de Débito">Cartão de Débito</option><option value="Dinheiro">Dinheiro</option></select></div>' +
+            '</div>' +
+            '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Observação (Pendências ou Créditos)</label><input type="text" id="caixa-obs-manual" placeholder="Ex: Acerto combinado, valor pendente, crédito..." value="' + (paciente.obsFinanceiraManual || '') + '" class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"></div>' +
+            '<div class="flex items-center gap-2 pt-1">' +
+                '<input type="checkbox" id="caixa-marca-pendencia" class="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500" ' + (paciente.possuiPendenciaManual ? 'checked' : '') + '>' +
+                '<label for="caixa-marca-pendencia" class="text-xs font-semibold text-slate-700 cursor-pointer">Marcar paciente com pendência/débito financeiro (Exibir na aba Financeiro)</label>' +
+            '</div>' +
+            '<button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg text-xs shadow transition">Salvar Lançamento</button></form></div>';
+
+    let htmlAgendamentos = agendamentosPaciente.length === 0 ? '<p class="text-sm text-slate-400 p-2">Nenhum agendamento futuro.</p>' : '';
+    agendamentosPaciente.forEach(ag => {
+        const obsHtml = ag.obs ? '<p class="text-xs text-slate-500 mt-0.5">Obs: ' + ag.obs + '</p>' : '';
+        htmlAgendamentos += '<div class="p-3 bg-white rounded-lg border border-slate-200 text-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 shadow-sm">' +
+            '<div><p class="font-semibold text-slate-800">' + ag.tipo + ' • ' + (ag.data ? ag.data.split('-').reverse().join('/') : '') + ' • ' + ag.horario + ' às ' + (ag.horaFim || '?') + '</p>' + obsHtml + '</div>' +
+            '<div class="flex gap-2 self-end sm:self-auto">' +
+                '<button onclick="abrirModalEditarAgendamento(\'' + ag.id + '\')" class="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded text-xs font-semibold transition flex items-center gap-1"><i class="fa-solid fa-pen-to-square"></i> Editar</button>' +
+                '<button onclick="excluirAgendamento(\'' + ag.id + '\', \'' + paciente.id + '\')" class="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded text-xs font-semibold transition flex items-center gap-1"><i class="fa-solid fa-trash"></i> Excluir</button>' +
+            '</div></div>';
     });
-    if (elementoBtn) {
-        elementoBtn.innerHTML = '<i class="fa-solid fa-check text-white text-[10px]"></i>';
-        elementoBtn.classList.add('ring-2', 'ring-offset-2', 'ring-slate-400');
-    }
-}
 
-// CONTROLE DO STATUS (Faltou, Remarcou, Atendido)
-function alterarStatusAgendamento(id, status) {
-    const ag = db.agendamentos.find(a => a.id === id);
-    if (ag) {
-        if (ag.status === status) ag.status = 'agendado'; // Desmarca se clicar de novo
-        else ag.status = status;
-        
-        persistirDB();
-        atualizarCalendario();
-        abrirModalDetalhesAgendamento(id); // Atualiza os botões no modal
-    }
-}
+    let htmlPagamentosTimeline = '';
+    if (pagamentosPaciente.length === 0) {
+        htmlPagamentosTimeline = '<p class="text-sm text-slate-400 p-2">Nenhum pagamento registrado.</p>';
+    } else {
+        const gruposPg = {};
+        const pagamentosOrdenados = pagamentosPaciente.slice().sort((a, b) => new Date(b.data) - new Date(a.data));
+        pagamentosOrdenados.forEach(pg => {
+            const mesAno = formatarMesAno(pg.data);
+            if (!gruposPg[mesAno]) gruposPg[mesAno] = [];
+            gruposPg[mesAno].push(pg);
+        });
 
+        let idxPg = 0;
+        const mesAtualFormatado = formatarMesAno(obterDataLocalISO());
+
+        Object.keys(gruposPg).forEach(mesAno => {
+            const accId = 'acc-pagamento-' + idxPg;
+            const estaAberto = (mesAno === mesAtualFormatado) || (idxPg === 0);
+            let htmlItensPg = '';
+            gruposPg[mesAno].forEach(pg => {
+                const isEstorno = pg.valor < 0;
+                const corBg = isEstorno ? 'bg-rose-50 border-rose-100' : 'bg-emerald-50 border-emerald-100';
+                const corTexto = isEstorno ? 'text-rose-900' : 'text-emerald-900';
+                const corValor = isEstorno ? 'text-rose-600 font-bold' : 'text-emerald-700 font-bold';
+
+                const btnEstornar = !isEstorno ? '<button onclick="estornarPagamento(\'' + pg.id + '\', \'' + pacienteId + '\')" class="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded text-xs font-semibold transition flex items-center gap-1" title="Estornar Lançamento"><i class="fa-solid fa-rotate-left"></i> Estornar</button>' : '';
+
+                htmlItensPg += '<div class="p-3 ' + corBg + ' border rounded-lg text-sm flex justify-between items-center">' +
+                    '<div><p class="font-semibold ' + corTexto + '">' + pg.descricao + '</p><span class="text-xs text-slate-500">' + (pg.data ? pg.data.split('-').reverse().join('/') : '-') + ' • ' + pg.forma + '</span></div>' +
+                    '<div class="flex items-center gap-2"><span class="' + corValor + '">R$ ' + Number(pg.valor).toFixed(2) + '</span>' + btnEstornar + '</div>' +
+                '</div>';
+            });
+            htmlPagamentosTimeline += '<div class="border border-slate-200 rounded-xl overflow-hidden bg-slate-50">' +
+                '<button onclick="alternarAccordion(\'' + accId + '\')" class="w-full px-4 py-3 text-left font-bold text-slate-800 flex justify-between items-center hover:bg-slate-100 transition text-sm"><span><i class="fa-solid fa-receipt mr-2 text-emerald-600"></i>' + mesAno + ' (' + gruposPg[mesAno].length + ' pagamentos)</span><i class="fa-solid fa-chevron-down text-xs text-slate-400"></i></button>' +
+                '<div id="' + accId + '" class="' + (estaAberto ? '' : 'hidden') + ' p-3 space-y-2 border-t border-slate-200">' + htmlItensPg + '</div></div>';
+            idxPg++;
+        });
+    }
+
+    const hubMobile = '<div class="grid grid-cols-2 gap-2.5 md:hidden mb-4">' +
+        '<button onclick="alternarSecaoMobile(\'sec-plano-tratamento\')" class="p-3 bg-indigo-600 text-white rounded-xl shadow font-semibold text-xs flex flex-col items-center justify-center text-center gap-1.5 active:scale-95 transition"><i class="fa-solid fa-clipboard-list text-lg"></i> Plano Tratamento</button>' +
+        (usuarioAtual.perfil === 'dentista' ? '<button onclick="alternarSecaoMobile(\'sec-evolucao-prontuario\')" class="p-3 bg-blue-600 text-white rounded-xl shadow font-semibold text-xs flex flex-col items-center justify-center text-center gap-1.5 active:scale-95 transition"><i class="fa-solid fa-stethoscope text-lg"></i> Evoluir Prontuário</button>' : '') +
+        '<button onclick="alternarSecaoMobile(\'sec-lancar-caixa\')" class="p-3 bg-emerald-600 text-white rounded-xl shadow font-semibold text-xs flex flex-col items-center justify-center text-center gap-1.5 active:scale-95 transition"><i class="fa-solid fa-cash-register text-lg"></i> Lançar Caixa</button>' +
+        '<button onclick="alternarSecaoMobile(\'sec-historico-abas\')" class="p-3 bg-slate-800 text-white rounded-xl shadow font-semibold text-xs flex flex-col items-center justify-center text-center gap-1.5 active:scale-95 transition"><i class="fa-solid fa-clock-rotate-left text-lg"></i> Históricos</button></div>';
+
+    container.innerHTML = '<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">' +
+        '<div class="lg:col-span-1 space-y-4">' +
+            '<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-4">' +
+                '<div class="flex items-center space-x-3 border-b pb-4"><div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-lg">' + paciente.nome.charAt(0) + '</div><div><h3 class="font-bold text-slate-900 text-lg leading-tight">' + paciente.nome + '</h3><span class="inline-block text-xs font-semibold px-2 py-0.5 rounded-full ' + (paciente.categoria === 'Ortodontia' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-700') + ' mt-1">' + paciente.categoria + '</span></div></div>' +
+                '<div class="space-y-2 text-sm">' +
+                    '<div><span class="text-xs uppercase font-semibold text-slate-400 block">Telefone</span><span class="font-medium text-slate-800">' + (paciente.telefone || '-') + '</span>' + btnWhatsapp + '</div>' +
+                    '<div><span class="text-xs uppercase font-semibold text-slate-400 block">CPF</span><span class="font-medium text-slate-800">' + (paciente.cpf || '-') + '</span></div>' +
+                    '<div><span class="text-xs uppercase font-semibold text-slate-400 block">Nascimento</span><span class="font-medium text-slate-800">' + (paciente.nascimento ? paciente.nascimento.split('-').reverse().join('/') : '-') + '</span></div>' +
+                    (paciente.categoria === 'Ortodontia' ? '<div><span class="text-xs uppercase font-semibold text-slate-400 block">Vencimento Mensalidade</span><span class="font-medium text-slate-800">' + (paciente.vencimento ? paciente.vencimento.split('-').reverse().join('/') : 'Não definida') + '</span></div>' : '') +
+                '</div>' + badgePendencia +
+                '<div class="pt-2 border-t flex flex-col gap-2">' +
+                    '<button onclick="abrirModalPaciente(\'' + paciente.id + '\')" class="w-full py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5"><i class="fa-solid fa-user-pen"></i> Editar Dados Cadastrais</button>' +
+                    '<button onclick="excluirPaciente(\'' + paciente.id + '\')" class="w-full py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5"><i class="fa-solid fa-user-xmark"></i> Excluir Paciente</button>' +
+                '</div></div></div>' +
+        '<div class="lg:col-span-2 space-y-4">' + hubMobile + htmlPlanejamentoTratamento + htmlFormDentista + htmlFormCaixa +
+            '<div id="sec-historico-abas" class="secao-clinica-mobile bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-4 md:block">' +
+                '<div class="border-b border-slate-200 flex space-x-4 text-xs sm:text-sm font-semibold overflow-x-auto scrollbar-none">' +
+                    '<button onclick="abrirSubAbaPaciente(\'prontuario\')" id="btn-subtab-prontuario" class="subtab-btn pb-2 border-b-2 border-blue-600 text-blue-600 flex items-center gap-2 whitespace-nowrap"><i class="fa-solid fa-notes-medical"></i> Prontuário & Evolução</button>' +
+                    '<button onclick="abrirSubAbaPaciente(\'pagamentos\')" id="btn-subtab-pagamentos" class="subtab-btn pb-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 flex items-center gap-2 whitespace-nowrap"><i class="fa-solid fa-wallet"></i> Histórico do Caixa</button>' +
+                    '<button onclick="abrirSubAbaPaciente(\'agendamentos\')" id="btn-subtab-agendamentos" class="subtab-btn pb-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 flex items-center gap-2 whitespace-nowrap"><i class="fa-solid fa-calendar-check"></i> Agendamentos Futuros</button>' +
+                '</div>' +
+                '<div id="subtab-content-prontuario" class="subtab-content space-y-4">' +
+                    '<input type="text" id="busca-prontuario-input" oninput="filtrarProntuarioLinhaTempo(\'' + paciente.id + '\')" placeholder="🔍 Pesquisar no histórico..." class="w-full px-3 py-2 border rounded-lg text-xs sm:text-sm bg-slate-50">' +
+                    '<div id="container-prontuario-timeline" class="space-y-3"></div>' +
+                '</div>' +
+                '<div id="subtab-content-pagamentos" class="subtab-content hidden space-y-3">' + htmlPagamentosTimeline + '</div>' +
+                '<div id="subtab-content-agendamentos" class="subtab-content hidden space-y-3">' + htmlAgendamentos + '</div>' +
+            '</div></div></div>';
+
+    mudarAba('detalhes-paciente');
+    renderizarLinhaTempoProntuario(document.getElementById('container-prontuario-timeline'), prontuariosPaciente, paciente.id);
+    abrirSubAbaPaciente(subAbaAtualPaciente);
+}
