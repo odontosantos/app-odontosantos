@@ -348,10 +348,14 @@
                     </div>
                     <div>
                         <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Horário Inicial</label>
-                        <input type="time" id="agendamento-horario" required class="w-full px-3 py-2 border rounded-lg text-sm">
+                        <input type="time" id="agendamento-horario" onchange="atualizarHoraFimPadrao()" required class="w-full px-3 py-2 border rounded-lg text-sm">
                     </div>
                 </div>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Horário Final</label>
+                        <input type="time" id="agendamento-hora-fim" required class="w-full px-3 py-2 border rounded-lg text-sm bg-white">
+                    </div>
                     <div>
                         <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Tipo de Atendimento</label>
                         <select id="agendamento-tipo" required class="w-full px-3 py-2 border rounded-lg text-sm bg-white">
@@ -359,14 +363,6 @@
                             <option value="Retorno">Retorno</option>
                             <option value="Procedimento">Procedimento</option>
                             <option value="Avaliação">Avaliação</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Duração</label>
-                        <select id="agendamento-duracao" required class="w-full px-3 py-2 border rounded-lg text-sm bg-white">
-                            <option value="15">15 minutos</option>
-                            <option value="30" selected>30 minutos</option>
-                            <option value="60">60 minutos (1 hora)</option>
                         </select>
                     </div>
                 </div>
