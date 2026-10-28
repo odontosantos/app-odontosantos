@@ -1,4 +1,3 @@
-// Importa os SDKs do Firebase via CDN modular oficial
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
 import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
@@ -18,7 +17,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const dbFirestore = getFirestore(app);
 
-// Expõe as variáveis e funções globalmente para o app.js enxergar sem erros
+// Expõe explicitamente de forma global
 window.usaFirebase = true;
 window.firebaseAuth = auth;
 window.firebaseDb = dbFirestore;
@@ -27,4 +26,4 @@ window.signOut = signOut;
 window.doc = doc;
 window.getDoc = getDoc;
 
-console.log("🔥 Firebase inicializado com sucesso!");
+console.log("🔥 Firebase inicializado e global!");
