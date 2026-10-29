@@ -336,8 +336,18 @@ function inicializarCalendario() {
         headerToolbar: {
             left: 'prev,next today',
             center: 'title',
-            right: isMobile ? 'dayGridMonth,timeGridDay' : 'dayGridMonth,timeGridWeek,timeGridDay'
+            // Adicionado listMonth (Agenda) para mobile e desktop
+            right: isMobile ? 'dayGridMonth,timeGridDay,listMonth' : 'dayGridMonth,timeGridWeek,timeGridDay,listMonth'
         },
+        buttonText: {
+            listMonth: 'Agenda', // Nome amigável no menu
+            timeGridDay: 'Dia',
+            timeGridWeek: 'Semana',
+            dayGridMonth: 'Mês'
+        },
+        navLinks: true, // Permite clicar no dia (na visão Mensal) para ir para a visão Diária
+        selectLongPressDelay: 50, // MELHORIA MOBILE: Reduz o delay para que o toque pareça um clique para agendar
+        eventLongPressDelay: 50,  // MELHORIA MOBILE: Reduz o delay para abrir um evento já criado
         slotMinTime: '07:00:00',
         slotMaxTime: '22:00:00',
         allDaySlot: false,
@@ -691,23 +701,52 @@ function fecharCaixaDiario() {
 
     let saldoDia = totalEntradas - totalSaidas;
 
-    let resumo = '=== FECHAMENTO DE CAIXA (' + hoje.split('-').reverse().join('/') + ') ===\n\n';
-    resumo += '📥 Total Entradas/Movimentos: R$ ' + totalEntradas.toFixed(2) + '\n';
-    resumo += '📤 Total Despesas: R$ ' + totalSaidas.toFixed(2) + '\n';
-    resumo += '💰 Saldo Líquido do Dia: R$ ' + saldoDia.toFixed(2) + '\n\n';
-
-    resumo += 'Formas de Pagamento:\n';
     const porForma = {};
     pagamentosHoje.forEach(pg => {
         if(pg.valor > 0){
            porForma[pg.forma] = (porForma[pg.forma] || 0) + parseFloat(pg.valor || 0);
         }
     });
-    for (let forma in porForma) {
-        resumo += '• ' + forma + ': R$ ' + porForma[forma].toFixed(2) + '\n';
+
+    let html = `<div class="bg-blue-50 p-4 rounded-xl border border-blue-100 text-center mb-4">
+                    <p class="text-xs font-bold text-blue-800 uppercase tracking-wider">Data do Fechamento</p>
+                    <h4 class="text-lg font-extrabold text-blue-900">${hoje.split('-').reverse().join('/')}</h4>
+                </div>`;
+
+    html += `<div class="space-y-2 mb-4">
+                <div class="flex justify-between items-center p-3 bg-slate-50 border rounded-lg">
+                    <span class="font-semibold text-slate-600"><i class="fa-solid fa-arrow-down text-emerald-500 mr-2"></i>Entradas/Movimentos</span>
+                    <span class="font-bold text-emerald-600">R$ ${totalEntradas.toFixed(2)}</span>
+                </div>
+                <div class="flex justify-between items-center p-3 bg-slate-50 border rounded-lg">
+                    <span class="font-semibold text-slate-600"><i class="fa-solid fa-arrow-up text-rose-500 mr-2"></i>Despesas</span>
+                    <span class="font-bold text-rose-600">R$ ${totalSaidas.toFixed(2)}</span>
+                </div>
+                <div class="flex justify-between items-center p-3 bg-blue-100 border border-blue-200 rounded-lg">
+                    <span class="font-bold text-blue-900"><i class="fa-solid fa-wallet text-blue-600 mr-2"></i>Saldo Líquido</span>
+                    <span class="font-extrabold text-blue-700">R$ ${saldoDia.toFixed(2)}</span>
+                </div>
+             </div>`;
+
+    if (Object.keys(porForma).length > 0) {
+        html += `<h4 class="font-bold text-slate-800 mb-2 border-b pb-1">Resumo por Forma de Pagamento</h4><div class="space-y-1">`;
+        for (let forma in porForma) {
+            html += `<div class="flex justify-between text-sm p-2 bg-slate-50 rounded border">
+                        <span class="text-slate-700 font-medium">${forma}</span>
+                        <span class="font-bold text-slate-900">R$ ${porForma[forma].toFixed(2)}</span>
+                     </div>`;
+        }
+        html += `</div>`;
+    } else {
+        html += `<p class="text-sm text-slate-500 italic text-center">Nenhuma entrada registrada hoje.</p>`;
     }
 
-    alert(resumo);
+    document.getElementById('conteudo-fechamento-caixa').innerHTML = html;
+    
+    // Abre o novo Modal de Fechamento de Caixa
+    const modal = document.getElementById('modal-fechamento-caixa');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
 }
 
 function abrirModalPagamentoAvulso() {
