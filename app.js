@@ -336,26 +336,29 @@ function inicializarCalendario() {
         headerToolbar: {
             left: 'prev,next today',
             center: 'title',
-            // Adicionado listMonth (Agenda) para mobile e desktop
-            right: isMobile ? 'dayGridMonth,timeGridDay,listMonth' : 'dayGridMonth,timeGridWeek,timeGridDay,listMonth'
+            right: isMobile ? 'timeGridDay,dayGridMonth,listMonth' : 'dayGridMonth,timeGridWeek,timeGridDay,listMonth'
         },
         buttonText: {
-            listMonth: 'Agenda', // Nome amigável no menu
+            listMonth: 'Agenda',
             timeGridDay: 'Dia',
             timeGridWeek: 'Semana',
             dayGridMonth: 'Mês'
         },
-        navLinks: true, // Permite clicar no dia (na visão Mensal) para ir para a visão Diária
-        selectLongPressDelay: 50, // MELHORIA MOBILE: Reduz o delay para que o toque pareça um clique para agendar
-        eventLongPressDelay: 50,  // MELHORIA MOBILE: Reduz o delay para abrir um evento já criado
+        navLinks: true, 
+        selectLongPressDelay: 50, 
+        eventLongPressDelay: 50,  
         slotMinTime: '07:00:00',
         slotMaxTime: '22:00:00',
         allDaySlot: false,
         selectable: true,
+        slotDuration: '00:30:00', // Intervalos de 30 min limpos
+        slotLabelInterval: '01:00',
         eventTimeFormat: { hour: '2-digit', minute: '2-digit', meridiem: false, hour12: false },
-        windowResize: function() {
-            if (window.innerWidth < 768) calendar.changeView('timeGridDay');
-            else calendar.changeView('timeGridWeek');
+        windowResize: function(view) {
+            // Evita forçar mudança indesejada se o usuário redimensionar o ecra manualmente no desktop
+            if (window.innerWidth < 768 && calendar.view.type === 'timeGridWeek') {
+                calendar.changeView('timeGridDay');
+            }
         },
         select: function(info) {
             const dataStr = info.startStr.split('T')[0];
