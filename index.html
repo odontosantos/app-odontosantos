@@ -281,6 +281,24 @@
     </main>
 
     <!-- MODAIS -->
+
+    <!-- NOVO MODAL: FECHAMENTO DE CAIXA -->
+    <div id="modal-fechamento-caixa" class="fixed inset-0 bg-slate-900 bg-opacity-75 hidden items-center justify-center z-50 p-3 sm:p-4">
+        <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5 space-y-4">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 class="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2"><i class="fa-solid fa-calculator text-blue-600"></i> Caixa Diário</h3>
+                <button onclick="fecharModal('modal-fechamento-caixa')" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div id="conteudo-fechamento-caixa" class="text-sm max-h-[60vh] overflow-y-auto scrollbar-none">
+                <!-- Conteúdo será injetado via JavaScript -->
+            </div>
+            <div class="pt-2 border-t text-right">
+                <button onclick="fecharModal('modal-fechamento-caixa')" class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow transition">Concluir Fechamento</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DETALHES AGENDAMENTO -->
     <div id="modal-detalhes-agendamento" class="fixed inset-0 bg-slate-900 bg-opacity-75 hidden items-center justify-center z-50 p-3 sm:p-4">
         <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-5 space-y-4">
             <div class="flex justify-between items-center border-b pb-3">
