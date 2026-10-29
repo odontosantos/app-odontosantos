@@ -17,11 +17,35 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     <style>
+        /* Otimizações visuais e responsivas para o FullCalendar em Dispositivos Móveis */
         @media (max-width: 768px) {
-            .fc .fc-toolbar { flex-direction: column; gap: 0.5rem; }
-            .fc .fc-toolbar-title { font-size: 1rem !important; }
-            .fc-button { padding: 0.25rem 0.4rem !important; font-size: 0.75rem !important; }
-            .fc-header-toolbar { margin-bottom: 1rem !important; }
+            .fc .fc-toolbar { 
+                flex-direction: column; 
+                gap: 0.5rem; 
+                align-items: stretch !important;
+            }
+            .fc .fc-toolbar-title { 
+                font-size: 0.95rem !important; 
+                text-align: center;
+            }
+            .fc-header-toolbar { 
+                margin-bottom: 0.75rem !important; 
+            }
+            .fc-button { 
+                padding: 0.3rem 0.5rem !important; 
+                font-size: 0.7rem !important; 
+                font-weight: 600 !important;
+            }
+            .fc-toolbar-chunk {
+                display: flex;
+                justify-content: center;
+                flex-wrap: wrap;
+                gap: 2px;
+            }
+            /* Melhora a legibilidade das horas na lateral esquerda */
+            .fc-timegrid-axis-cushion, .fc-timegrid-slot-label-cushion {
+                font-size: 0.7rem !important;
+            }
         }
     </style>
 </head>
