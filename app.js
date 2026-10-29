@@ -45,12 +45,43 @@ function gerarIdUnico() {
     return Date.now().toString() + '-' + Math.floor(Math.random() * 10000);
 }
 
-function persistirDB() {
+// Salva localmente e sincroniza automaticamente com o Firebase Firestore
+async function persistirDB() {
     localStorage.setItem('odonto_pacientes', JSON.stringify(db.pacientes));
     localStorage.setItem('odonto_agendamentos', JSON.stringify(db.agendamentos));
     localStorage.setItem('odonto_prontuarios', JSON.stringify(db.prontuarios));
     localStorage.setItem('odonto_pagamentos', JSON.stringify(db.pagamentos));
     localStorage.setItem('odonto_despesas', JSON.stringify(db.despesas));
+
+    if (window.usaFirebase && window.firebaseDb) {
+        try {
+            const docRef = window.doc(window.firebaseDb, "clinica", "dados_compartilhados");
+            if (window.setDoc) {
+                await window.setDoc(docRef, db);
+            }
+        } catch (e) {
+            console.warn("Aviso: Falha ao sincronizar com o Firebase.", e);
+        }
+    }
+}
+
+// Puxa os dados atualizados do Firebase (Sincroniza PC e Celular)
+async function sincronizarDadosNuvem() {
+    if (window.usaFirebase && window.firebaseDb) {
+        try {
+            const docRef = window.doc(window.firebaseDb, "clinica", "dados_compartilhados");
+            if (window.getDoc) {
+                const snap = await window.getDoc(docRef);
+                if (snap.exists()) {
+                    const dadosNuvem = snap.data();
+                    db = Object.assign(db, dadosNuvem);
+                    persistirDB(); 
+                }
+            }
+        } catch (e) {
+            console.warn("Aviso: Falha ao puxar dados da nuvem.", e);
+        }
+    }
 }
 
 function mascaraTelefone(input) {
@@ -129,13 +160,15 @@ async function fazerLoginFirebase(event) {
     }
 }
 
-function iniciarSessaoSistema() {
+async function iniciarSessaoSistema() {
     const telaLogin = document.getElementById('login-screen');
     if (telaLogin) {
         telaLogin.style.display = 'none';
         telaLogin.classList.remove('flex');
         telaLogin.classList.add('hidden');
     }
+
+    await sincronizarDadosNuvem();
 
     document.getElementById('main-header').classList.remove('hidden');
     document.getElementById('main-nav').classList.remove('hidden');
@@ -159,6 +192,9 @@ function logout() {
     document.getElementById('main-header').classList.add('hidden');
     document.getElementById('main-nav').classList.add('hidden');
     document.getElementById('main-content').classList.add('hidden');
+    
+    const fab = document.getElementById('fab-agenda-mobile');
+    if (fab) fab.classList.add('hidden');
 }
 
 function configurarNavbar() {
@@ -195,6 +231,15 @@ function mudarAba(nomeAba) {
         ativoBtn.classList.add('border-blue-500', 'text-white');
     }
 
+    const fab = document.getElementById('fab-agenda-mobile');
+    if (fab) {
+        if (nomeAba === 'agenda') {
+            fab.classList.remove('hidden');
+        } else {
+            fab.classList.add('hidden');
+        }
+    }
+
     if (nomeAba === 'agenda' && calendar) {
         setTimeout(() => calendar.updateSize(), 100);
     }
@@ -225,7 +270,7 @@ function atualizarHoraFimPadrao() {
     if (horaInicio) {
         const partes = horaInicio.split(':');
         let h = parseInt(partes[0], 10);
-        let m = parseInt(partes[1], 10) + 30; // Soma 30 minutos padrão
+        let m = parseInt(partes[1], 10) + 30;
         h += Math.floor(m / 60);
         m = m % 60;
         inputFim.value = String(h % 24).padStart(2, '0') + ':' + String(m).padStart(2, '0');
@@ -345,17 +390,16 @@ function inicializarCalendario() {
             dayGridMonth: 'Mês'
         },
         navLinks: true, 
-        selectLongPressDelay: 50, 
-        eventLongPressDelay: 50,  
+        selectLongPressDelay: 400, 
+        eventLongPressDelay: 400,  
         slotMinTime: '07:00:00',
         slotMaxTime: '22:00:00',
         allDaySlot: false,
         selectable: true,
-        slotDuration: '00:30:00', // Intervalos de 30 min limpos
+        slotDuration: '00:30:00',
         slotLabelInterval: '01:00',
         eventTimeFormat: { hour: '2-digit', minute: '2-digit', meridiem: false, hour12: false },
         windowResize: function(view) {
-            // Evita forçar mudança indesejada se o usuário redimensionar o ecra manualmente no desktop
             if (window.innerWidth < 768 && calendar.view.type === 'timeGridWeek') {
                 calendar.changeView('timeGridDay');
             }
@@ -746,7 +790,6 @@ function fecharCaixaDiario() {
 
     document.getElementById('conteudo-fechamento-caixa').innerHTML = html;
     
-    // Abre o novo Modal de Fechamento de Caixa
     const modal = document.getElementById('modal-fechamento-caixa');
     modal.classList.remove('hidden');
     modal.classList.add('flex');
@@ -766,11 +809,27 @@ function abrirModalPagamentoAvulso() {
     renderizarFinanceiro();
 }
 
+function alternarFiltroPersonalizadoFinanceiro() {
+    const filtro = document.getElementById('filtro-periodo-financeiro').value;
+    const container = document.getElementById('container-datas-personalizadas');
+    if (filtro === 'personalizado') {
+        container.classList.remove('hidden');
+        container.classList.add('flex');
+    } else {
+        container.classList.add('hidden');
+        container.classList.remove('flex');
+        renderizarFinanceiro();
+    }
+}
+
 function renderizarFinanceiro() {
     const listaPendencias = document.getElementById('lista-pendencias-financeiras');
     const listaFluxo = document.getElementById('lista-pagamentos-realizados');
     const filtroPeriodo = document.getElementById('filtro-periodo-financeiro')?.value || 'mes';
     
+    const dataInicioFin = document.getElementById('data-inicio-fin')?.value;
+    const dataFimFin = document.getElementById('data-fim-fin')?.value;
+
     if (!listaPendencias || !listaFluxo) return;
 
     listaPendencias.innerHTML = '';
@@ -782,13 +841,29 @@ function renderizarFinanceiro() {
     const prefixoMes = anoAtual + '-' + mesAtual;
     const hojeIso = obterDataLocalISO();
 
-    let faturamentoMes = 0;
-    db.pagamentos.forEach(pg => { if (pg.data && pg.data.startsWith(prefixoMes)) faturamentoMes += parseFloat(pg.valor || 0); });
+    let transacoes = [];
+    db.pagamentos.forEach(pg => transacoes.push({ id: pg.id, tipo: 'entrada', data: pg.data, valor: pg.valor, forma: pg.forma, descricao: pg.descricao, pacienteId: pg.pacienteId }));
+    db.despesas.forEach(d => transacoes.push({ id: d.id, tipo: 'saida', data: d.data, valor: d.valor, forma: 'Despesa', descricao: d.descricao + ' (' + d.categoria + ')', pacienteId: null }));
 
-    let despesasMes = 0;
-    db.despesas.forEach(d => { if (d.data && d.data.startsWith(prefixoMes)) despesasMes += parseFloat(d.valor || 0); });
+    transacoes = transacoes.filter(t => {
+        if (!t.data) return false;
+        if (filtroPeriodo === 'hoje') return t.data === hojeIso;
+        if (filtroPeriodo === 'mes') return t.data.startsWith(prefixoMes);
+        if (filtroPeriodo === 'personalizado') {
+            if (dataInicioFin && t.data < dataInicioFin) return false;
+            if (dataFimFin && t.data > dataFimFin) return false;
+            return true;
+        }
+        return true;
+    });
 
-    let saldoLiquidoMes = faturamentoMes - despesasMes;
+    let faturamentoFiltrado = 0;
+    let despesasFiltradas = 0;
+    transacoes.forEach(t => {
+        if (t.tipo === 'entrada') faturamentoFiltrado += parseFloat(t.valor || 0);
+        else despesasFiltradas += parseFloat(t.valor || 0);
+    });
+    let saldoLiquidoFiltrado = faturamentoFiltrado - despesasFiltradas;
     let qtdPacientesComPendencia = db.pacientes.filter(p => p.possuiPendenciaManual).length;
 
     const elFat = document.getElementById('kpi-faturamento');
@@ -796,9 +871,9 @@ function renderizarFinanceiro() {
     const elSaldo = document.getElementById('kpi-saldo-liquido');
     const elRec = document.getElementById('kpi-receber');
 
-    if (elFat) elFat.innerText = 'R$ ' + faturamentoMes.toFixed(2);
-    if (elDesp) elDesp.innerText = 'R$ ' + despesasMes.toFixed(2);
-    if (elSaldo) elSaldo.innerText = 'R$ ' + saldoLiquidoMes.toFixed(2);
+    if (elFat) elFat.innerText = 'R$ ' + faturamentoFiltrado.toFixed(2);
+    if (elDesp) elDesp.innerText = 'R$ ' + despesasFiltradas.toFixed(2);
+    if (elSaldo) elSaldo.innerText = 'R$ ' + saldoLiquidoFiltrado.toFixed(2);
     if (elRec) elRec.innerText = qtdPacientesComPendencia + ' Pacientes';
 
     let encontrouPendencia = false;
@@ -815,17 +890,6 @@ function renderizarFinanceiro() {
     if (!encontrouPendencia) {
         listaPendencias.innerHTML = '<p class="text-sm text-slate-400">Nenhum paciente marcado com pendência.</p>';
     }
-
-    let transacoes = [];
-    db.pagamentos.forEach(pg => transacoes.push({ id: pg.id, tipo: 'entrada', data: pg.data, valor: pg.valor, forma: pg.forma, descricao: pg.descricao, pacienteId: pg.pacienteId }));
-    db.despesas.forEach(d => transacoes.push({ id: d.id, tipo: 'saida', data: d.data, valor: d.valor, forma: 'Despesa', descricao: d.descricao + ' (' + d.categoria + ')', pacienteId: null }));
-
-    transacoes = transacoes.filter(t => {
-        if (!t.data) return false;
-        if (filtroPeriodo === 'hoje') return t.data === hojeIso;
-        if (filtroPeriodo === 'mes') return t.data.startsWith(prefixoMes);
-        return true;
-    });
 
     transacoes.sort((a, b) => new Date(b.data) - new Date(a.data));
 
@@ -869,18 +933,18 @@ function abrirModalDetalhesAgendamento(agendamentoId) {
         document.getElementById('detalhe-ag-obs').innerText = ag.obs || 'Nenhuma observação registrada.';
 
         let divStatus = document.getElementById('container-status-agendamento');
-        if (divStatus) divStatus.innerHTML = ''; // Lembretes não têm status de paciente
+        if (divStatus) divStatus.innerHTML = ''; 
 
+        // Botões de Excluir e Editar Lembrete
         document.getElementById('btn-excluir-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); excluirAgendamento(ag.id, null); };
         document.getElementById('btn-editar-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); abrirModalEditarLembrete(ag.id); };
-        document.getElementById('btn-ver-ficha-ag-modal').parentElement.style.display = 'none'; // Esconde botão ver ficha
+        document.getElementById('btn-ver-ficha-ag-modal').parentElement.style.display = 'none'; 
 
         document.getElementById('modal-detalhes-agendamento').classList.remove('hidden');
         document.getElementById('modal-detalhes-agendamento').classList.add('flex');
         return;
     }
 
-    // Caso seja paciente normal
     document.getElementById('btn-ver-ficha-ag-modal').parentElement.style.display = 'flex';
     const paciente = db.pacientes.find(p => p.id === ag.pacienteId) || { nome: 'PACIENTE NÃO ENCONTRADO', categoria: 'Geral' };
     
@@ -1029,7 +1093,6 @@ function salvarAgendamento(event) {
     }
 }
 
-// Funções para Lembretes / Bloqueios de Agenda
 function abrirModalLembrete(dataPreenchida, horaPreenchida) {
     document.getElementById('titulo-modal-lembrete').innerText = 'Novo Lembrete / Bloqueio';
     document.getElementById('lembrete-edit-id').value = '';
