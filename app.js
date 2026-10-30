@@ -45,6 +45,7 @@ function gerarIdUnico() {
     return Date.now().toString() + '-' + Math.floor(Math.random() * 10000);
 }
 
+// Salva localmente e sincroniza automaticamente com o Firebase Firestore
 async function persistirDB() {
     localStorage.setItem('odonto_pacientes', JSON.stringify(db.pacientes));
     localStorage.setItem('odonto_agendamentos', JSON.stringify(db.agendamentos));
@@ -64,6 +65,7 @@ async function persistirDB() {
     }
 }
 
+// Puxa os dados atualizados do Firebase (Sincroniza PC e Celular)
 async function sincronizarDadosNuvem() {
     if (window.usaFirebase && window.firebaseDb) {
         try {
@@ -141,6 +143,8 @@ async function fazerLoginFirebase(event) {
         let perfilEncontrado = 'secretaria';
         if (userDoc.exists()) {
             perfilEncontrado = userDoc.data().perfil || 'secretaria';
+        } else {
+            console.warn("⚠️ E-mail autenticado, mas o documento não existe na coleção 'usuarios'. Definindo como secretaria.");
         }
 
         usuarioAtual = { perfil: perfilEncontrado, email: user.email };
@@ -417,24 +421,6 @@ function inicializarCalendario() {
         events: eventosFormatados,
         eventClick: function(info) {
             abrirModalDetalhesAgendamento(info.event.id);
-        },
-        eventDrop: function(info) {
-            const ag = db.agendamentos.find(a => a.id === info.event.id);
-            if (ag) {
-                ag.data = info.event.startStr.split('T')[0];
-                ag.horario = info.event.startStr.split('T')[1] ? info.event.startStr.split('T')[1].substring(0, 5) : ag.horario;
-                if (info.event.endStr) {
-                    ag.horaFim = info.event.endStr.split('T')[1] ? info.event.endStr.split('T')[1].substring(0, 5) : ag.horaFim;
-                }
-                persistirDB();
-            }
-        },
-        eventResize: function(info) {
-            const ag = db.agendamentos.find(a => a.id === info.event.id);
-            if (ag && info.event.endStr) {
-                ag.horaFim = info.event.endStr.split('T')[1] ? info.event.endStr.split('T')[1].substring(0, 5) : ag.horaFim;
-                persistirDB();
-            }
         }
     });
     calendar.render();
@@ -445,23 +431,6 @@ function atualizarCalendario() {
     calendar.removeAllEvents();
     const eventosFormatados = db.agendamentos.map(formatarEventoCalendario).filter(e => e !== null);
     eventosFormatados.forEach(ev => calendar.addEvent(ev));
-}
-
-function filtrarAgendaRapida() {
-    const termo = (document.getElementById('busca-agenda-input')?.value || '').toLowerCase().trim();
-    if (!calendar) return;
-
-    if (!termo) {
-        atualizarCalendario();
-        return;
-    }
-
-    const eventosFiltrados = db.agendamentos.map(formatarEventoCalendario).filter(e => e !== null).filter(ev => {
-        return ev.title.toLowerCase().includes(termo) || (ev.extendedProps.obs && ev.extendedProps.obs.toLowerCase().includes(termo));
-    });
-
-    calendar.removeAllEvents();
-    eventosFiltrados.forEach(ev => calendar.addEvent(ev));
 }
 
 function excluirAgendamento(id, pacienteId) {
@@ -637,7 +606,7 @@ function excluirPaciente(pacienteId) {
         persistirDB();
         atualizarCalendario();
         renderizarPacientes();
-        alert('Paciente excluído com sucesso!');
+        alert('Paciente excluído com sucesso! (O histórico financeiro foi mantido no caixa).');
         voltarParaOrigem();
     }
 }
@@ -966,6 +935,7 @@ function abrirModalDetalhesAgendamento(agendamentoId) {
         let divStatus = document.getElementById('container-status-agendamento');
         if (divStatus) divStatus.innerHTML = ''; 
 
+        // Botões de Excluir e Editar Lembrete
         document.getElementById('btn-excluir-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); excluirAgendamento(ag.id, null); };
         document.getElementById('btn-editar-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); abrirModalEditarLembrete(ag.id); };
         document.getElementById('btn-ver-ficha-ag-modal').parentElement.style.display = 'none'; 
@@ -1085,6 +1055,12 @@ function salvarAgendamento(event) {
     if (horaFimAg <= horaAg) {
         alert('A Hora Final deve ser posterior à Hora Inicial.');
         return;
+    }
+
+    const conflito = db.agendamentos.find(a => a.data === dataAg && a.horario === horaAg && a.id !== editId);
+    if (conflito) {
+        const nomeConflito = conflito.isLembrete ? conflito.titulo : (db.pacientes.find(p => p.id === conflito.pacienteId)?.nome || 'Outro evento');
+        if (!confirm(`⚠️ Já existe agendamento/bloqueio para "${nomeConflito}" nesse horário. Agendar mesmo assim?`)) return;
     }
 
     const inputCor = document.getElementById('agendamento-cor');
