@@ -2,8 +2,9 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema Odontológico - Consultório</title>
+    <!-- Bloqueia o zoom indesejado no celular e ajusta à tela -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>OdontoSantos - Consultório</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome -->
@@ -17,56 +18,41 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     <style>
+        /* Ajustes do Calendário para Mobile */
         @media (max-width: 768px) {
-            .fc .fc-toolbar { 
-                flex-direction: column; 
-                gap: 0.5rem; 
-                align-items: stretch !important;
-            }
-            .fc .fc-toolbar-title { 
-                font-size: 0.95rem !important; 
-                text-align: center;
-            }
-            .fc-header-toolbar { 
-                margin-bottom: 0.75rem !important; 
-            }
-            .fc-button { 
-                padding: 0.3rem 0.5rem !important; 
-                font-size: 0.7rem !important; 
-                font-weight: 600 !important;
-            }
-            .fc-toolbar-chunk {
-                display: flex;
-                justify-content: center;
-                flex-wrap: wrap;
-                gap: 2px;
-            }
-            .fc-timegrid-axis-cushion, .fc-timegrid-slot-label-cushion {
-                font-size: 0.7rem !important;
-            }
+            .fc .fc-toolbar { flex-direction: column; gap: 0.5rem; align-items: stretch !important; }
+            .fc .fc-toolbar-title { font-size: 1rem !important; text-align: center; }
+            .fc-header-toolbar { margin-bottom: 0.75rem !important; }
+            .fc-button { padding: 0.5rem !important; font-size: 0.8rem !important; font-weight: 600 !important; }
+            .fc-toolbar-chunk { display: flex; justify-content: center; flex-wrap: wrap; gap: 4px; }
+            .fc-timegrid-axis-cushion, .fc-timegrid-slot-label-cushion { font-size: 0.75rem !important; }
+            /* Esconde cabeçalho da tabela no mobile para virar card */
+            .tabela-responsiva thead { display: none; }
         }
+        /* Touch Targets Maiores */
+        button, select, input { min-height: 44px; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col">
 
-  <!-- TELA DE LOGIN -->
+    <!-- TELA DE LOGIN -->
     <div id="login-screen" class="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-50 p-4">
         <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-8 border border-slate-100">
             <div class="text-center mb-6 sm:mb-8">
                 <div class="inline-flex items-center justify-center w-16 h-16 bg-blue-100 text-blue-600 rounded-full mb-4 text-2xl">
                     <i class="fa-solid fa-tooth"></i>
                 </div>
-                <h1 class="text-xl sm:text-2xl font-bold text-slate-900">Consultório Odontológico</h1>
+                <h1 class="text-xl sm:text-2xl font-bold text-slate-900">OdontoSantos</h1>
                 <p class="text-sm text-slate-500 mt-1">Entre com sua conta do Firebase</p>
             </div>
             <form onsubmit="fazerLoginFirebase(event)" class="space-y-4">
                 <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">E-mail de Acesso</label>
-                    <input type="email" id="login-email" required placeholder="seu@email.com" class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm">
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">E-mail</label>
+                    <input type="email" id="login-email" required placeholder="seu@email.com" class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm">
                 </div>
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Senha</label>
-                    <input type="password" id="login-senha" required placeholder="••••••••" class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm">
+                    <input type="password" id="login-senha" required placeholder="••••••••" class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm">
                 </div>
                 <button type="submit" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md transition duration-200 text-sm">
                     Entrar no Sistema
@@ -75,489 +61,199 @@
         </div>
     </div>
 
-    <!-- CABEÇALHO DO SISTEMA -->
+    <!-- CABEÇALHO -->
     <header id="main-header" class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm hidden">
-        <div class="max-w-7xl mx-auto px-4 py-3 flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-0">
-            <div class="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-start">
-                <div class="flex items-center space-x-3">
-                    <div class="w-9 h-9 sm:w-10 sm:h-10 bg-blue-600 text-white rounded-lg flex items-center justify-center text-base sm:text-lg">
-                        <i class="fa-solid fa-tooth"></i>
-                    </div>
-                    <div>
-                        <h2 class="font-bold text-slate-900 leading-tight text-sm sm:text-base">Clínica Odontológica</h2>
-                        <span id="header-user-badge" class="inline-block px-2 py-0.5 text-[10px] sm:text-xs font-medium bg-blue-100 text-blue-700 rounded-full mt-0.5">Perfil: Carregando...</span>
-                    </div>
+        <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 bg-blue-600 text-white rounded-lg flex items-center justify-center text-lg">
+                    <i class="fa-solid fa-tooth"></i>
                 </div>
-                <div class="flex items-center space-x-2 sm:hidden">
-                    <button onclick="exportarBackup()" class="text-xs text-slate-600 hover:text-blue-600 font-medium px-2 py-1 border rounded bg-slate-50 flex items-center gap-1" title="Baixar Backup">
-                        <i class="fa-solid fa-download"></i>
-                    </button>
-                    <button onclick="document.getElementById('input-importar-backup').click()" class="text-xs text-slate-600 hover:text-blue-600 font-medium px-2 py-1 border rounded bg-slate-50 flex items-center gap-1" title="Restaurar Backup">
-                        <i class="fa-solid fa-upload"></i>
-                    </button>
-                    <button onclick="logout()" class="text-sm text-slate-600 hover:text-red-600 font-medium p-1 transition">
-                        <i class="fa-solid fa-right-from-bracket"></i>
-                    </button>
+                <div>
+                    <h2 class="font-bold text-slate-900 leading-tight">OdontoSantos</h2>
+                    <span id="header-user-badge" class="inline-block px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded-full mt-0.5">Perfil: Carregando...</span>
                 </div>
             </div>
-            <div class="hidden sm:flex items-center space-x-4">
-                <input type="file" id="input-importar-backup" accept=".json" class="hidden" onchange="importarBackup(event)">
-                <button onclick="exportarBackup()" class="text-xs text-slate-600 hover:text-blue-600 font-semibold flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 transition">
-                    <i class="fa-solid fa-download text-blue-600"></i>
-                    <span>Baixar Backup</span>
-                </button>
-                <button onclick="document.getElementById('input-importar-backup').click()" class="text-xs text-slate-600 hover:text-blue-600 font-semibold flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 transition">
-                    <i class="fa-solid fa-upload text-blue-600"></i>
-                    <span>Restaurar Backup</span>
-                </button>
-                <div class="h-5 w-px bg-slate-200"></div>
-                <button onclick="logout()" class="text-sm text-slate-600 hover:text-red-600 font-medium flex items-center space-x-1 transition">
-                    <i class="fa-solid fa-right-from-bracket"></i>
-                    <span>Sair</span>
-                </button>
-            </div>
+            <button onclick="logout()" class="text-sm text-slate-600 hover:text-red-600 font-medium flex items-center space-x-1 p-2">
+                <i class="fa-solid fa-right-from-bracket text-lg"></i><span class="hidden sm:inline">Sair</span>
+            </button>
         </div>
     </header>
 
-    <!-- MENU DE NAVEGAÇÃO -->
+    <!-- NAVEGAÇÃO -->
     <nav id="main-nav" class="bg-slate-900 text-white shadow-inner hidden">
-        <div class="max-w-7xl mx-auto px-2 sm:px-4 flex space-x-1 overflow-x-auto scrollbar-none" id="nav-tabs"></div>
+        <div class="max-w-7xl mx-auto px-2 flex space-x-1 overflow-x-auto scrollbar-none" id="nav-tabs"></div>
     </nav>
 
-    <!-- CONTEÚDO PRINCIPAL -->
-    <main id="main-content" class="flex-grow max-w-7xl w-full mx-auto p-3 sm:p-6 space-y-4 sm:space-y-6 hidden relative">
+    <!-- CONTEÚDO -->
+    <main id="main-content" class="flex-grow max-w-7xl w-full mx-auto p-3 sm:p-6 space-y-4 hidden relative">
 
         <!-- ABA 1: AGENDA -->
-        <section id="tab-agenda" class="tab-content space-y-4 relative">
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                <div class="w-full sm:w-auto">
-                    <h3 class="text-lg sm:text-xl font-bold text-slate-900">Agenda do Consultório</h3>
-                    <p class="text-xs sm:text-sm text-slate-500">Pressione e segure em qualquer horário para agendar</p>
+        <section id="tab-agenda" class="tab-content space-y-4">
+            <div class="flex flex-col sm:flex-row justify-between gap-3 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                <div class="relative flex-grow">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                    <input type="text" id="busca-agenda-input" oninput="filtrarAgendaRapida()" placeholder="Pesquisar na agenda..." class="w-full pl-9 pr-3 py-2 border rounded-lg text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-blue-500">
                 </div>
-                <!-- Barra de Pesquisa Rápida na Agenda -->
-                <div class="flex items-center gap-2 w-full sm:w-auto">
-                    <div class="relative flex-grow sm:w-64">
-                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                        <input type="text" id="busca-agenda-input" oninput="filtrarAgendaRapida()" placeholder="Pesquisar na agenda..." class="w-full pl-8 pr-3 py-1.5 border rounded-lg text-xs sm:text-sm bg-slate-50 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500">
-                    </div>
-                </div>
-                <div class="hidden sm:flex flex-wrap gap-2 w-full sm:w-auto">
-                    <button onclick="abrirModalLembrete()" class="px-3.5 py-2 bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold rounded-lg shadow transition flex items-center justify-center gap-1.5">
-                        <i class="fa-solid fa-thumbtack"></i> + Lembrete / Bloqueio
+                <div class="flex gap-2 w-full sm:w-auto">
+                    <button onclick="abrirModalLembrete()" class="flex-1 sm:flex-none px-3 py-2 bg-slate-700 text-white text-sm font-semibold rounded-lg flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-thumbtack"></i> Bloqueio
                     </button>
-                    <button onclick="abrirModalAgendamento()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow transition flex items-center justify-center gap-2">
-                        <i class="fa-solid fa-plus"></i> Novo Agendamento
+                    <button onclick="abrirModalAgendamento()" class="flex-1 sm:flex-none px-3 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-plus"></i> Agendar
                     </button>
                 </div>
             </div>
             
             <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-2 sm:p-4">
-                <div id="calendar" class="min-h-[550px] sm:min-h-[700px]"></div>
+                <div id="calendar" class="min-h-[60vh]"></div>
             </div>
 
-            <!-- BOTÃO FAB MOBILE -->
-            <button onclick="abrirModalAgendamento()" id="fab-agenda-mobile" class="fixed bottom-6 right-6 w-14 h-14 bg-emerald-500 text-white rounded-full shadow-[0_4px_12px_rgba(0,0,0,0.3)] flex items-center justify-center text-2xl z-50 sm:hidden hover:scale-105 active:scale-95 transition-transform hidden">
+            <!-- FAB MOBILE -->
+            <button onclick="abrirModalAgendamento()" id="fab-agenda-mobile" class="fixed bottom-6 right-6 w-14 h-14 bg-emerald-500 text-white rounded-full shadow-lg flex items-center justify-center text-2xl z-40 sm:hidden active:scale-95 transition-transform hidden">
                 <i class="fa-solid fa-plus"></i>
             </button>
         </section>
 
         <!-- ABA 2: PACIENTES -->
         <section id="tab-pacientes" class="tab-content hidden space-y-4">
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between cursor-pointer hover:border-blue-400 transition" onclick="definirFiltroCategoria('todos')">
-                    <div>
-                        <p class="text-xs font-bold uppercase text-slate-400">Total Pacientes</p>
-                        <h4 id="kpi-total-pacientes" class="text-xl font-extrabold text-slate-800 mt-1">0</h4>
-                    </div>
-                    <div class="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center text-lg"><i class="fa-solid fa-users"></i></div>
-                </div>
-                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between cursor-pointer hover:border-indigo-400 transition" onclick="definirFiltroCategoria('clinico')">
-                    <div>
-                        <p class="text-xs font-bold uppercase text-slate-400">Clínico Geral</p>
-                        <h4 id="kpi-clinico-pacientes" class="text-xl font-extrabold text-blue-600 mt-1">0</h4>
-                    </div>
-                    <div class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center text-lg"><i class="fa-solid fa-stethoscope"></i></div>
-                </div>
-                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between cursor-pointer hover:border-purple-400 transition" onclick="definirFiltroCategoria('orto')">
-                    <div>
-                        <p class="text-xs font-bold uppercase text-slate-400">Ortodontia</p>
-                        <h4 id="kpi-orto-pacientes" class="text-xl font-extrabold text-purple-600 mt-1">0</h4>
-                    </div>
-                    <div class="w-12 h-12 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center text-lg"><i class="fa-solid fa-teeth-open"></i></div>
-                </div>
-                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between cursor-pointer hover:border-amber-400 transition" onclick="alternarFiltroInativos()">
-                    <div>
-                        <p class="text-xs font-bold uppercase text-slate-400">Inativos (> 30 dias)</p>
-                        <h4 id="kpi-inativos-pacientes" class="text-xl font-extrabold text-amber-600 mt-1">0</h4>
-                    </div>
-                    <div class="w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center text-lg"><i class="fa-solid fa-user-clock"></i></div>
-                </div>
-            </div>
-
-            <div class="flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-3 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-grow">
-                    <div class="relative flex-grow max-w-md">
-                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
-                        <input type="text" id="busca-pacientes-tabela" oninput="renderizarPacientes()" placeholder="Pesquisar por nome ou CPF..." class="w-full pl-9 pr-4 py-2 border rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition">
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <select id="filtro-categoria-pacientes" onchange="renderizarPacientes()" class="px-3 py-2 border rounded-lg text-xs sm:text-sm bg-slate-50 font-semibold text-slate-700 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none">
-                            <option value="todos">Todos os Pacientes</option>
-                            <option value="clinico">Clínico Geral</option>
-                            <option value="orto">Ortodontia</option>
-                        </select>
-                    </div>
-                    <button id="btn-filtro-inativos" onclick="alternarFiltroInativos()" class="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs sm:text-sm font-semibold rounded-lg border border-amber-200 transition flex items-center justify-center gap-1.5 whitespace-nowrap">
-                        <i class="fa-solid fa-filter"></i> Mostrar Inativos (> 30 dias)
-                    </button>
-                </div>
-                <button onclick="abrirModalPaciente()" class="w-full lg:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow transition flex items-center justify-center gap-2 whitespace-nowrap">
+            <div class="flex flex-col md:flex-row gap-3 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                <input type="text" id="busca-pacientes-tabela" oninput="renderizarPacientes()" placeholder="Buscar paciente..." class="flex-grow px-4 py-2 border rounded-lg text-sm bg-slate-50">
+                <select id="filtro-categoria-pacientes" onchange="renderizarPacientes()" class="px-3 py-2 border rounded-lg text-sm bg-slate-50">
+                    <option value="todos">Todos</option><option value="clinico">Clínico</option><option value="orto">Ortodontia</option>
+                </select>
+                <button onclick="abrirModalPaciente()" class="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg flex items-center justify-center gap-2">
                     <i class="fa-solid fa-user-plus"></i> Novo Paciente
                 </button>
             </div>
-
-            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse min-w-[700px]">
-                        <thead>
-                            <tr class="bg-slate-100 text-slate-600 text-xs uppercase tracking-wider border-b border-slate-200">
-                                <th class="p-3 sm:p-4">Nome</th>
-                                <th class="p-3 sm:p-4">Telefone</th>
-                                <th class="p-3 sm:p-4">Categoria</th>
-                                <th class="p-3 sm:p-4">Última Consulta</th>
-                                <th class="p-3 sm:p-4">Vencimento Orto</th>
-                                <th class="p-3 sm:p-4 text-right">Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabela-pacientes-body" class="divide-y divide-slate-100 text-sm"></tbody>
-                    </table>
-                </div>
+            <div class="bg-transparent sm:bg-white rounded-xl sm:shadow-sm sm:border sm:border-slate-200 overflow-hidden">
+                <table class="w-full text-left border-collapse tabela-responsiva">
+                    <thead class="bg-slate-100 text-slate-600 text-xs uppercase hidden sm:table-header-group">
+                        <tr><th class="p-4">Nome</th><th class="p-4">Telefone</th><th class="p-4">Categoria</th><th class="p-4">Vencimento Orto</th><th class="p-4 text-right">Ações</th></tr>
+                    </thead>
+                    <tbody id="tabela-pacientes-body" class="text-sm space-y-2 sm:space-y-0 sm:divide-y sm:divide-slate-100 block sm:table-row-group"></tbody>
+                </table>
             </div>
         </section>
 
         <!-- ABA 3: FINANCEIRO -->
         <section id="tab-financeiro" class="tab-content hidden space-y-4">
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
-                    <div>
-                        <p class="text-xs font-bold uppercase text-slate-400">Faturamento Líquido</p>
-                        <h4 id="kpi-faturamento" class="text-xl font-extrabold text-emerald-600 mt-1">R$ 0,00</h4>
-                    </div>
-                    <div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center text-lg"><i class="fa-solid fa-arrow-trend-up"></i></div>
-                </div>
-                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
-                    <div>
-                        <p class="text-xs font-bold uppercase text-slate-400">Despesas Operacionais</p>
-                        <h4 id="kpi-despesas" class="text-xl font-extrabold text-rose-600 mt-1">R$ 0,00</h4>
-                    </div>
-                    <div class="w-12 h-12 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center text-lg"><i class="fa-solid fa-arrow-trend-down"></i></div>
-                </div>
-                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
-                    <div>
-                        <p class="text-xs font-bold uppercase text-slate-400">Saldo Consolidado</p>
-                        <h4 id="kpi-saldo-liquido" class="text-xl font-extrabold text-blue-600 mt-1">R$ 0,00</h4>
-                    </div>
-                    <div class="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center text-lg"><i class="fa-solid fa-wallet"></i></div>
-                </div>
-                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
-                    <div>
-                        <p class="text-xs font-bold uppercase text-slate-400">Contas a Receber</p>
-                        <h4 id="kpi-receber" class="text-xl font-extrabold text-amber-600 mt-1">0</h4>
-                    </div>
-                    <div class="w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center text-lg"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+            <div class="flex flex-col sm:flex-row gap-3 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                <select id="filtro-periodo-financeiro" onchange="renderizarFinanceiro()" class="px-3 py-2 border rounded-lg text-sm bg-slate-50 flex-grow">
+                    <option value="mes">Mês Atual</option><option value="hoje">Hoje</option><option value="todos">Todo Histórico</option>
+                </select>
+                <div class="flex gap-2">
+                    <button onclick="fecharCaixaDiario()" class="flex-1 px-4 py-2 bg-slate-800 text-white text-sm font-semibold rounded-lg">Caixa</button>
                 </div>
             </div>
-
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full md:w-auto">
-                    <label class="text-xs font-semibold text-slate-500 uppercase shrink-0">Filtrar Período:</label>
-                    <select id="filtro-periodo-financeiro" onchange="alternarFiltroPersonalizadoFinanceiro()" class="px-3 py-2 border rounded-lg text-sm bg-slate-50 font-medium outline-none">
-                        <option value="mes">Mês Atual</option>
-                        <option value="hoje">Hoje</option>
-                        <option value="personalizado">Período Personalizado...</option>
-                        <option value="todos">Todo o Histórico</option>
-                    </select>
-                    
-                    <div id="container-datas-personalizadas" class="hidden items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
-                        <input type="date" id="data-inicio-fin" onchange="renderizarFinanceiro()" class="px-2.5 py-1.5 border rounded-lg text-sm outline-none bg-slate-50 flex-1 sm:flex-none">
-                        <span class="text-xs font-bold text-slate-400">Até</span>
-                        <input type="date" id="data-fim-fin" onchange="renderizarFinanceiro()" class="px-2.5 py-1.5 border rounded-lg text-sm outline-none bg-slate-50 flex-1 sm:flex-none">
-                    </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+                    <h4 class="font-bold text-slate-800 border-b pb-2 mb-3">Pendências</h4>
+                    <div id="lista-pendencias-financeiras" class="space-y-2"></div>
                 </div>
-
-                <div class="flex flex-wrap gap-2 w-full md:w-auto">
-                    <button onclick="lancarDespesa()" class="flex-1 sm:flex-none px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs sm:text-sm font-semibold rounded-lg shadow transition flex items-center justify-center gap-1.5">
-                        <i class="fa-solid fa-minus"></i> Despesa
-                    </button>
-                    <button onclick="abrirModalPagamentoAvulso()" class="flex-1 sm:flex-none px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-semibold rounded-lg shadow transition flex items-center justify-center gap-1.5">
-                        <i class="fa-solid fa-cash-register"></i> Pgto Avulso
-                    </button>
-                    <button onclick="fecharCaixaDiario()" class="w-full sm:w-auto px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs sm:text-sm font-semibold rounded-lg shadow transition flex items-center justify-center gap-1.5">
-                        <i class="fa-solid fa-calculator"></i> Caixa Diário
-                    </button>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3">
-                    <h4 class="font-bold text-slate-800 border-b pb-2 text-sm sm:text-base"><i class="fa-solid fa-scale-unbalanced text-blue-600 mr-2"></i> Pendências & Créditos de Pacientes</h4>
-                    <div id="lista-pendencias-financeiras" class="space-y-2 max-h-96 overflow-y-auto"></div>
-                </div>
-
-                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3">
-                    <div class="flex justify-between items-center border-b pb-2">
-                        <h4 class="font-bold text-slate-800 text-sm sm:text-base"><i class="fa-solid fa-right-left text-emerald-600 mr-2"></i> Histórico de Movimentações</h4>
-                    </div>
-                    <div id="lista-pagamentos-realizados" class="space-y-2 max-h-96 overflow-y-auto"></div>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+                    <h4 class="font-bold text-slate-800 border-b pb-2 mb-3">Movimentações</h4>
+                    <div id="lista-pagamentos-realizados" class="space-y-2"></div>
                 </div>
             </div>
         </section>
 
-        <!-- ABA 4: PRONTUÁRIO / DETALHES DO PACIENTE -->
+        <!-- ABA 4: DETALHES -->
         <section id="tab-detalhes-paciente" class="tab-content hidden space-y-4">
-            <button onclick="voltarParaOrigem()" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 rounded-lg text-sm font-medium transition flex items-center gap-2 w-max">
-                <i class="fa-solid fa-arrow-left"></i> Voltar
-            </button>
-            <div id="detalhes-paciente-container" class="space-y-6"></div>
+            <button onclick="voltarParaOrigem()" class="px-4 py-2 bg-slate-200 text-slate-800 font-bold rounded-lg mb-2"><i class="fa-solid fa-arrow-left"></i> Voltar</button>
+            <div id="detalhes-paciente-container"></div>
         </section>
 
     </main>
 
-    <!-- MODAIS -->
-
-    <div id="modal-fechamento-caixa" class="fixed inset-0 bg-slate-900 bg-opacity-75 hidden items-center justify-center z-50 p-3 sm:p-4">
-        <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5 space-y-4">
-            <div class="flex justify-between items-center border-b pb-3">
-                <h3 class="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2"><i class="fa-solid fa-calculator text-blue-600"></i> Caixa Diário</h3>
-                <button onclick="fecharModal('modal-fechamento-caixa')" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark text-lg"></i></button>
-            </div>
-            <div id="conteudo-fechamento-caixa" class="text-sm max-h-[60vh] overflow-y-auto scrollbar-none"></div>
-            <div class="pt-2 border-t text-right">
-                <button onclick="fecharModal('modal-fechamento-caixa')" class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow transition">Concluir Fechamento</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="modal-detalhes-agendamento" class="fixed inset-0 bg-slate-900 bg-opacity-75 hidden items-center justify-center z-50 p-3 sm:p-4">
-        <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-5 space-y-4">
-            <div class="flex justify-between items-center border-b pb-3">
-                <h3 class="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2"><i class="fa-solid fa-calendar-day text-blue-600"></i> Detalhes do Evento</h3>
-                <button onclick="fecharModal('modal-detalhes-agendamento')" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark text-lg"></i></button>
+    <!-- MODAL DETALHES EVENTO -->
+    <div id="modal-detalhes-agendamento" class="fixed inset-0 bg-slate-900 bg-opacity-75 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-5 space-y-4">
+            <div class="flex justify-between items-center border-b pb-2">
+                <h3 class="text-lg font-bold">Detalhes</h3>
+                <button onclick="fecharModal('modal-detalhes-agendamento')" class="p-2 text-2xl"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="space-y-3 text-sm">
-                <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
-                    <p class="text-xs uppercase font-bold text-slate-400">Paciente / Título</p>
-                    <h4 id="detalhe-ag-paciente" class="text-base font-bold text-slate-900 mt-0.5">---</h4>
-                    <span id="detalhe-ag-categoria" class="inline-block text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 mt-1">---</span>
+                <div class="bg-slate-50 p-3 rounded-lg">
+                    <p class="text-xs text-slate-500 uppercase">Título/Paciente</p>
+                    <h4 id="detalhe-ag-paciente" class="text-base font-bold">---</h4>
                 </div>
+                <div class="bg-slate-50 p-3 rounded-lg">
+                    <p class="text-xs text-slate-500 uppercase">Data e Hora</p>
+                    <p id="detalhe-ag-datahora" class="font-semibold">---</p>
+                </div>
+                <div class="bg-slate-50 p-3 rounded-lg">
+                    <p class="text-xs text-slate-500 uppercase">Observações</p>
+                    <p id="detalhe-ag-obs">---</p>
+                </div>
+            </div>
+            <div id="container-status-agendamento"></div>
+            <div class="grid grid-cols-2 gap-2 pt-3 border-t">
+                <button id="btn-excluir-ag-modal" class="py-3 bg-rose-100 text-rose-700 font-bold rounded-lg"><i class="fa-solid fa-trash"></i> Excluir</button>
+                <button id="btn-editar-ag-modal" class="py-3 bg-amber-100 text-amber-800 font-bold rounded-lg"><i class="fa-solid fa-pen"></i> Editar</button>
+            </div>
+            <button id="btn-ver-ficha-ag-modal" class="w-full py-3 bg-blue-600 text-white font-bold rounded-lg mt-2 hidden"><i class="fa-solid fa-user"></i> Ver Ficha</button>
+        </div>
+    </div>
+
+    <!-- MODAL AGENDAMENTO E LEMBRETE (Simplificados por espaço, mantêm a estrutura) -->
+    <div id="modal-agendamento" class="fixed inset-0 bg-slate-900 bg-opacity-75 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-5 max-h-[90vh] overflow-y-auto">
+            <h3 id="titulo-modal-agendamento" class="font-bold text-lg mb-4">Novo Agendamento</h3>
+            <form onsubmit="salvarAgendamento(event)" class="space-y-3">
+                <input type="hidden" id="agendamento-edit-id">
+                <select id="agendamento-paciente" class="w-full p-3 border rounded-lg"></select>
                 <div class="grid grid-cols-2 gap-2">
-                    <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
-                        <p class="text-xs uppercase font-bold text-slate-400">Data & Hora</p>
-                        <p id="detalhe-ag-datahora" class="font-semibold text-slate-800 mt-0.5">---</p>
-                    </div>
-                    <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
-                        <p class="text-xs uppercase font-bold text-slate-400">Tipo / Duração</p>
-                        <p id="detalhe-ag-tipo" class="font-semibold text-slate-800 mt-0.5">---</p>
-                    </div>
+                    <input type="date" id="agendamento-data" required class="w-full p-3 border rounded-lg">
+                    <input type="time" id="agendamento-horario" onchange="atualizarHoraFimPadrao()" required class="w-full p-3 border rounded-lg">
+                    <input type="time" id="agendamento-hora-fim" required class="w-full p-3 border rounded-lg col-span-2">
                 </div>
-                <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
-                    <p class="text-xs uppercase font-bold text-slate-400">Observações</p>
-                    <p id="detalhe-ag-obs" class="text-slate-700 italic mt-0.5">Nenhuma observação registrada.</p>
-                </div>
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-3 border-t">
-                <button id="btn-excluir-ag-modal" class="py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 font-semibold rounded-lg text-xs transition flex items-center justify-center gap-1"><i class="fa-solid fa-trash"></i> Excluir</button>
-                <button id="btn-editar-ag-modal" class="py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-700 font-semibold rounded-lg text-xs transition flex items-center justify-center gap-1"><i class="fa-solid fa-pen-to-square"></i> Editar</button>
-                <button id="btn-ver-ficha-ag-modal" class="py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg text-xs shadow transition flex items-center justify-center gap-1"><i class="fa-solid fa-user-gear"></i> Ver Ficha</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="modal-agendamento" class="fixed inset-0 bg-slate-900 bg-opacity-75 hidden items-center justify-center z-50 p-3 sm:p-4">
-        <div class="bg-white rounded-2xl shadow-xl max-w-lg w-full p-4 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div class="flex justify-between items-center border-b pb-3">
-                <h3 id="titulo-modal-agendamento" class="text-base sm:text-lg font-bold text-slate-900">Novo Agendamento</h3>
-                <button onclick="fecharModal('modal-agendamento')" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark text-lg"></i></button>
-            </div>
-            <form onsubmit="salvarAgendamento(event)" class="space-y-4">
-                <input type="hidden" id="agendamento-edit-id" value="">
-                <div class="space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
-                    <div class="flex justify-between items-center">
-                        <label class="block text-xs font-semibold uppercase text-slate-600">Paciente</label>
-                        <button type="button" onclick="toggleFormCadastroRapido()" id="btn-toggle-cadastro-rapido" class="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1"><i class="fa-solid fa-user-plus"></i> Novo Rápido</button>
-                    </div>
-                    <div id="container-busca-paciente">
-                        <input type="text" id="filtro-paciente-busca" onkeydown="prevenirEnterBusca(event)" oninput="filtrarPacientesSelect()" placeholder="🔍 Pesquisar paciente..." class="w-full px-3 py-2 border rounded-lg text-sm bg-white mb-2">
-                        <select id="agendamento-paciente" required class="w-full px-3 py-2 border rounded-lg text-sm bg-white font-medium"></select>
-                    </div>
-                    <div id="container-cadastro-rapido" class="hidden space-y-2 pt-2 border-t border-slate-200">
-                        <p class="text-xs font-bold text-blue-700">Cadastro Rápido (Caixa Alta)</p>
-                        <input type="text" id="rapido-nome" placeholder="Nome Completo *" class="w-full px-3 py-2 border rounded-lg text-sm bg-white uppercase">
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            <input type="text" id="rapido-telefone" oninput="mascaraTelefone(this)" placeholder="(00) 00000-0000" class="w-full px-3 py-2 border rounded-lg text-sm bg-white">
-                            <select id="rapido-categoria" class="w-full px-3 py-2 border rounded-lg text-sm bg-white">
-                                <option value="Clínico">Clínico</option>
-                                <option value="Ortodontia">Ortodontia</option>
-                            </select>
-                        </div>
-                        <button type="button" onclick="cadastrarPacienteRapido()" class="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow">Cadastrar e Selecionar</button>
-                    </div>
-                </div>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                    <div>
-                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Data</label>
-                        <input type="date" id="agendamento-data" required class="w-full px-3 py-2 border rounded-lg text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Horário Inicial</label>
-                        <input type="time" id="agendamento-horario" onchange="atualizarHoraFimPadrao()" required class="w-full px-3 py-2 border rounded-lg text-sm">
-                    </div>
-                </div>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                    <div>
-                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Horário Final</label>
-                        <input type="time" id="agendamento-hora-fim" required class="w-full px-3 py-2 border rounded-lg text-sm bg-white">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Tipo de Atendimento</label>
-                        <select id="agendamento-tipo" required class="w-full px-3 py-2 border rounded-lg text-sm bg-white">
-                            <option value="Manutenção ortodôntica">Manutenção ortodôntica</option>
-                            <option value="Retorno">Retorno</option>
-                            <option value="Procedimento">Procedimento</option>
-                            <option value="Avaliação">Avaliação</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="pt-2">
-                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-2">Cor do Agendamento</label>
-                    <input type="hidden" id="agendamento-cor" value="#039be5">
-                    <div class="flex flex-wrap gap-2" id="container-cores-agenda">
-                        <button type="button" onclick="selecionarCorAgenda('#d50000', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #d50000;" title="Tomate"></button>
-                        <button type="button" onclick="selecionarCorAgenda('#e67c73', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #e67c73;" title="Flamingo"></button>
-                        <button type="button" onclick="selecionarCorAgenda('#f4511e', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #f4511e;" title="Tangerina"></button>
-                        <button type="button" onclick="selecionarCorAgenda('#f6bf26', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #f6bf26;" title="Banana"></button>
-                        <button type="button" onclick="selecionarCorAgenda('#33b679', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #33b679;" title="Sálvia"></button>
-                        <button type="button" onclick="selecionarCorAgenda('#0b8043', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #0b8043;" title="Manjericão"></button>
-                        <button type="button" onclick="selecionarCorAgenda('#039be5', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #039be5;" title="Pavão"></button>
-                        <button type="button" onclick="selecionarCorAgenda('#3f51b5', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #3f51b5;" title="Mirtilo"></button>
-                        <button type="button" onclick="selecionarCorAgenda('#7986cb', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #7986cb;" title="Lavanda"></button>
-                        <button type="button" onclick="selecionarCorAgenda('#8e24aa', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #8e24aa;" title="Uva"></button>
-                        <button type="button" onclick="selecionarCorAgenda('#616161', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #616161;" title="Grafite"></button>
-                    </div>
-                </div>
-
-                <div>
-                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Observações</label>
-                    <textarea id="agendamento-obs" rows="2" class="w-full px-3 py-2 border rounded-lg text-sm"></textarea>
-                </div>
-                <div class="flex justify-end space-x-3 pt-4 border-t">
-                    <button type="button" onclick="fecharModal('modal-agendamento')" class="px-4 py-2 border rounded-lg text-sm text-slate-600 hover:bg-slate-100">Cancelar</button>
-                    <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow">Salvar Agendamento</button>
+                <select id="agendamento-tipo" class="w-full p-3 border rounded-lg"><option value="Procedimento">Procedimento</option><option value="Retorno">Retorno</option></select>
+                <textarea id="agendamento-obs" class="w-full p-3 border rounded-lg" placeholder="Obs"></textarea>
+                <div class="flex gap-2">
+                    <button type="button" onclick="fecharModal('modal-agendamento')" class="flex-1 py-3 bg-slate-200 rounded-lg font-bold">Cancelar</button>
+                    <button type="submit" class="flex-1 py-3 bg-blue-600 text-white rounded-lg font-bold">Salvar</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <div id="modal-lembrete" class="fixed inset-0 bg-slate-900 bg-opacity-75 hidden items-center justify-center z-50 p-3 sm:p-4">
-        <div class="bg-white rounded-2xl shadow-xl max-w-lg w-full p-4 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div class="flex justify-between items-center border-b pb-3">
-                <h3 id="titulo-modal-lembrete" class="text-base sm:text-lg font-bold text-slate-900">Novo Lembrete / Bloqueio</h3>
-                <button onclick="fecharModal('modal-lembrete')" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark text-lg"></i></button>
-            </div>
-            <form onsubmit="salvarLembrete(event)" class="space-y-4">
-                <input type="hidden" id="lembrete-edit-id" value="">
-                <div>
-                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Título do Lembrete / Motivo do Bloqueio *</label>
-                    <input type="text" id="lembrete-titulo" required placeholder="Ex: Almoço, Reunião, Curso, Manutenção..." class="w-full px-3 py-2 border rounded-lg text-sm">
+    <div id="modal-lembrete" class="fixed inset-0 bg-slate-900 bg-opacity-75 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-5 max-h-[90vh] overflow-y-auto">
+            <h3 id="titulo-modal-lembrete" class="font-bold text-lg mb-4">Novo Lembrete</h3>
+            <form onsubmit="salvarLembrete(event)" class="space-y-3">
+                <input type="hidden" id="lembrete-edit-id">
+                <input type="text" id="lembrete-titulo" required placeholder="Título" class="w-full p-3 border rounded-lg">
+                <div class="grid grid-cols-2 gap-2">
+                    <input type="date" id="lembrete-data" required class="w-full p-3 border rounded-lg">
+                    <input type="time" id="lembrete-horario" required class="w-full p-3 border rounded-lg">
+                    <input type="time" id="lembrete-hora-fim" required class="w-full p-3 border rounded-lg col-span-2">
                 </div>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                    <div>
-                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Data</label>
-                        <input type="date" id="lembrete-data" required class="w-full px-3 py-2 border rounded-lg text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Horário Inicial</label>
-                        <input type="time" id="lembrete-horario" onchange="atualizarHoraFimLembretePadrao()" required class="w-full px-3 py-2 border rounded-lg text-sm">
-                    </div>
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Horário Final</label>
-                    <input type="time" id="lembrete-hora-fim" required class="w-full px-3 py-2 border rounded-lg text-sm bg-white">
-                </div>
-                <div class="pt-2">
-                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-2">Cor do Bloqueio</label>
-                    <input type="hidden" id="lembrete-cor" value="#616161">
-                    <div class="flex flex-wrap gap-2" id="container-cores-lembrete">
-                        <button type="button" onclick="selecionarCorLembrete('#616161', this)" class="cor-lembrete-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #616161;" title="Grafite"></button>
-                        <button type="button" onclick="selecionarCorLembrete('#d50000', this)" class="cor-lembrete-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #d50000;" title="Vermelho"></button>
-                        <button type="button" onclick="selecionarCorLembrete('#f4511e', this)" class="cor-lembrete-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #f4511e;" title="Laranja"></button>
-                        <button type="button" onclick="selecionarCorLembrete('#f6bf26', this)" class="cor-lembrete-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #f6bf26;" title="Amarelo"></button>
-                        <button type="button" onclick="selecionarCorLembrete('#33b679', this)" class="cor-lembrete-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #33b679;" title="Verde"></button>
-                        <button type="button" onclick="selecionarCorLembrete('#3f51b5', this)" class="cor-lembrete-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #3f51b5;" title="Azul"></button>
-                        <button type="button" onclick="selecionarCorLembrete('#8e24aa', this)" class="cor-lembrete-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #8e24aa;" title="Roxo"></button>
-                    </div>
-                </div>
-
-                <div>
-                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Observações Adicionais</label>
-                    <textarea id="lembrete-obs" rows="2" class="w-full px-3 py-2 border rounded-lg text-sm"></textarea>
-                </div>
-                <div class="flex justify-end space-x-3 pt-4 border-t">
-                    <button type="button" onclick="fecharModal('modal-lembrete')" class="px-4 py-2 border rounded-lg text-sm text-slate-600 hover:bg-slate-100">Cancelar</button>
-                    <button type="submit" class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold rounded-lg shadow">Salvar Lembrete</button>
+                <textarea id="lembrete-obs" class="w-full p-3 border rounded-lg" placeholder="Obs"></textarea>
+                <div class="flex gap-2">
+                    <button type="button" onclick="fecharModal('modal-lembrete')" class="flex-1 py-3 bg-slate-200 rounded-lg font-bold">Cancelar</button>
+                    <button type="submit" class="flex-1 py-3 bg-slate-800 text-white rounded-lg font-bold">Salvar</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <div id="modal-paciente" class="fixed inset-0 bg-slate-900 bg-opacity-75 hidden items-center justify-center z-50 p-3 sm:p-4">
-        <div class="bg-white rounded-2xl shadow-xl max-w-lg w-full p-4 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div class="flex justify-between items-center border-b pb-3">
-                <h3 id="titulo-modal-paciente" class="text-base sm:text-lg font-bold text-slate-900">Cadastrar Novo Paciente</h3>
-                <button onclick="fecharModal('modal-paciente')" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark text-lg"></i></button>
-            </div>
-            <form id="form-paciente" onsubmit="salvarPaciente(event)" class="space-y-4">
-                <input type="hidden" id="paciente-edit-id" value="">
-                <div>
-                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Nome Completo * (Caixa Alta)</label>
-                    <input type="text" id="paciente-nome" required class="w-full px-3 py-2 border rounded-lg text-sm uppercase">
-                </div>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                    <div>
-                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Telefone</label>
-                        <input type="text" id="paciente-telefone" oninput="mascaraTelefone(this)" placeholder="(00) 00000-0000" class="w-full px-3 py-2 border rounded-lg text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Data Nascimento</label>
-                        <input type="date" id="paciente-nascimento" class="w-full px-3 py-2 border rounded-lg text-sm">
-                    </div>
-                </div>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                    <div>
-                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">CPF</label>
-                        <input type="text" id="paciente-cpf" oninput="mascaraCPF(this)" placeholder="000.000.000-00" class="w-full px-3 py-2 border rounded-lg text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Categoria</label>
-                        <select id="paciente-categoria" onchange="toggleVencimentoOrto()" class="w-full px-3 py-2 border rounded-lg text-sm bg-white">
-                            <option value="Clínico">Clínico</option>
-                            <option value="Ortodontia">Ortodontia</option>
-                        </select>
-                    </div>
-                </div>
-                <div id="grupo-vencimento-orto" class="hidden">
-                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Data de Vencimento Mensal (Orto)</label>
-                    <input type="date" id="paciente-vencimento" class="w-full px-3 py-2 border rounded-lg text-sm">
-                </div>
-                <div class="flex justify-end space-x-3 pt-4 border-t">
-                    <button type="button" onclick="fecharModal('modal-paciente')" class="px-4 py-2 border rounded-lg text-sm text-slate-600 hover:bg-slate-100">Cancelar</button>
-                    <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow">Salvar Paciente</button>
+    <!-- MODAL PACIENTE -->
+    <div id="modal-paciente" class="fixed inset-0 bg-slate-900 bg-opacity-75 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-5 max-h-[90vh] overflow-y-auto">
+            <h3 class="font-bold text-lg mb-4">Paciente</h3>
+            <form id="form-paciente" onsubmit="salvarPaciente(event)" class="space-y-3">
+                <input type="hidden" id="paciente-edit-id">
+                <input type="text" id="paciente-nome" required placeholder="Nome Completo" class="w-full p-3 border rounded-lg uppercase">
+                <input type="text" id="paciente-telefone" placeholder="Telefone" class="w-full p-3 border rounded-lg">
+                <select id="paciente-categoria" class="w-full p-3 border rounded-lg"><option value="Clínico">Clínico</option><option value="Ortodontia">Ortodontia</option></select>
+                <div class="flex gap-2">
+                    <button type="button" onclick="fecharModal('modal-paciente')" class="flex-1 py-3 bg-slate-200 rounded-lg font-bold">Cancelar</button>
+                    <button type="submit" class="flex-1 py-3 bg-blue-600 text-white rounded-lg font-bold">Salvar</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Scripts separados -->
     <script type="module" src="firebase-config.js"></script>
     <script src="app.js"></script>
 </body>
