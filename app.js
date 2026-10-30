@@ -81,9 +81,6 @@ async function sincronizarDadosNuvem() {
     }
 }
 
-// ==========================================
-// UTILITÁRIOS E MÁSCARAS
-// ==========================================
 function mascaraTelefone(input) {
     let v = input.value.replace(/\D/g, "");
     v = v.replace(/^(\d{2})(\d)/g, "($1) $2");
@@ -107,9 +104,6 @@ function fecharModal(id) {
     }
 }
 
-// ==========================================
-// AUTENTICAÇÃO
-// ==========================================
 async function fazerLoginFirebase(event) {
     event.preventDefault();
     const email = document.getElementById('login-email').value.trim();
@@ -153,9 +147,6 @@ function logout() {
     location.reload();
 }
 
-// ==========================================
-// NAVEGAÇÃO
-// ==========================================
 function configurarNavbar() {
     const navTabs = document.getElementById('nav-tabs');
     navTabs.innerHTML = `
@@ -192,9 +183,6 @@ function mudarAba(nomeAba) {
 
 function voltarParaOrigem() { mudarAba(abaOrigem || 'pacientes'); }
 
-// ==========================================
-// AGENDA E CALENDÁRIO
-// ==========================================
 function inicializarCalendario() {
     const calendarEl = document.getElementById('calendar');
     if (!calendarEl) return;
@@ -273,9 +261,6 @@ function atualizarHoraFimPadrao() {
     }
 }
 
-// ==========================================
-// MODAIS DE AGENDAMENTO E LEMBRETE
-// ==========================================
 function abrirModalAgendamento(data, hora) {
     popularSelectPacientes();
     document.getElementById('titulo-modal-agendamento').innerText = 'Novo Agendamento';
@@ -417,9 +402,6 @@ function alterarStatusAgendamento(id, status) {
     if (ag) { ag.status = status; ag.cor = status === 'faltou' ? '#ef4444' : (status === 'remarcou' ? '#94a3b8' : '#039be5'); persistirDB(); atualizarCalendario(); fecharModal('modal-detalhes-agendamento'); }
 }
 
-// ==========================================
-// PACIENTES (CRUD & VIEW)
-// ==========================================
 function renderizarPacientes() {
     const tbody = document.getElementById('tabela-pacientes-body');
     if (!tbody) return;
@@ -526,9 +508,6 @@ function excluirPaciente(id) {
     voltarParaOrigem();
 }
 
-// ==========================================
-// FINANCEIRO
-// ==========================================
 function renderizarFinanceiro() {
     const list = document.getElementById('lista-pagamentos-realizados');
     if (!list) return;
@@ -538,4 +517,7 @@ function renderizarFinanceiro() {
         list.innerHTML += `<div class="p-3 bg-slate-50 border rounded-lg mb-2 flex justify-between"><span>${t.descricao || 'Despesa'}</span><span class="font-bold">R$ ${t.valor}</span></div>`;
     });
 }
-function fecharCaixaDiario() { alert("Caixa diário fechado."); }
+
+function fecharCaixaDiario() { 
+    alert("Caixa diário fechado."); 
+}
