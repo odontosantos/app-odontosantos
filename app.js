@@ -129,43 +129,41 @@ return (meses\[idxMes\] || 'Mês') + ' de ' + partes\[0\];
 // ==========================================
 
 async function fazerLoginFirebase(event) {
-event.preventDefault();
-const email = document.getElementById('login-email').value.trim();
-const senha = document.getElementById('login-senha').value;
+    event.preventDefault();
+    const email = document.getElementById('login-email').value.trim();
+    const senha = document.getElementById('login-senha').value;
 
-```
-if (!window.usaFirebase || !window.firebaseAuth) {
-    alert("⚠️ O Firebase ainda está carregando. Aguarde um segundo e tente novamente.");
-    return;
-}
-
-try {
-    const userCredential = await window.signInWithEmailAndPassword(window.firebaseAuth, email, senha);
-    const user = userCredential.user;
-    const docRef = window.doc(window.firebaseDb, "usuarios", user.email);
-    const userDoc = await window.getDoc(docRef);
-
-    let perfilEncontrado = 'secretaria';
-    if (userDoc.exists()) {
-        perfilEncontrado = userDoc.data().perfil || 'secretaria';
-    } else {
-        console.warn("⚠️ E-mail autenticado, mas o documento não existe na coleção 'usuarios'. Definindo como secretaria.");
+    if (!window.usaFirebase || !window.firebaseAuth) {
+        alert("⚠️ O Firebase ainda está carregando. Aguarde um segundo e tente novamente.");
+        return;
     }
 
-    usuarioAtual = { perfil: perfilEncontrado, email: user.email };
-    iniciarSessaoSistema();
+    try {
+        const userCredential = await window.signInWithEmailAndPassword(window.firebaseAuth, email, senha);
+        const user = userCredential.user;
+        
+        let perfilEncontrado = 'dentista'; // Padrão caso não ache no Firestore
+        try {
+            const docRef = window.doc(window.firebaseDb, "usuarios", user.email);
+            const userDoc = await window.getDoc(docRef);
+            if (userDoc.exists()) {
+                perfilEncontrado = userDoc.data().perfil || 'dentista';
+            }
+        } catch (err) {
+            console.warn("Aviso: Não foi possível ler o perfil na coleção usuarios (usando padrão).", err);
+        }
 
-} catch (error) {
-    console.error("Erro no login:", error);
-    let mensagemErro = error.message;
-    if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-email') {
-        mensagemErro = "E-mail ou senha incorretos.";
+        usuarioAtual = { perfil: perfilEncontrado, email: user.email };
+        iniciarSessaoSistema();
+
+    } catch (error) {
+        console.error("Erro no login:", error);
+        let mensagemErro = error.message;
+        if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-email') {
+            mensagemErro = "E-mail ou senha incorretos.";
+        }
+        alert("❌ Erro no login: " + mensagemErro);
     }
-    alert("❌ Erro no login: " + mensagemErro);
-}
-
-```
-
 }
 
 async function iniciarSessaoSistema() {
