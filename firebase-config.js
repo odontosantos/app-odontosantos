@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
-import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyCGbIFMtMxhhHf34NrbibGqt2JkDzM170k",
@@ -25,5 +25,6 @@ window.signInWithEmailAndPassword = signInWithEmailAndPassword;
 window.signOut = signOut;
 window.doc = doc;
 window.getDoc = getDoc;
+window.setDoc = setDoc; // <--- ADICIONADO AQUI
 
 console.log("🔥 Firebase inicializado e global!");
