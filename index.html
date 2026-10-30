@@ -130,16 +130,9 @@
         <!-- ABA 1: AGENDA -->
         <section id="tab-agenda" class="tab-content space-y-4 relative">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                <div class="w-full sm:w-auto">
+                <div>
                     <h3 class="text-lg sm:text-xl font-bold text-slate-900">Agenda do Consultório</h3>
                     <p class="text-xs sm:text-sm text-slate-500">Pressione e segure em qualquer horário para agendar</p>
-                </div>
-                <!-- Barra de Pesquisa Rápida na Agenda -->
-                <div class="flex items-center gap-2 w-full sm:w-auto">
-                    <div class="relative flex-grow sm:w-64">
-                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                        <input type="text" id="busca-agenda-input" oninput="filtrarAgendaRapida()" placeholder="Pesquisar na agenda..." class="w-full pl-8 pr-3 py-1.5 border rounded-lg text-xs sm:text-sm bg-slate-50 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500">
-                    </div>
                 </div>
                 <div class="hidden sm:flex flex-wrap gap-2 w-full sm:w-auto">
                     <button onclick="abrirModalLembrete()" class="px-3.5 py-2 bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold rounded-lg shadow transition flex items-center justify-center gap-1.5">
