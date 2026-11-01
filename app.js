@@ -20,9 +20,7 @@ function verificarSenhaExclusao() {
 
 function carregarDadosLocais() {
     try {
-        db.pacientes = JSON.parse(localStorage.getItem('odonto_pacientes')) || [
-            { id: '1', nome: 'ANA SOUZA', telefone: '(11) 98888-7777', nascimento: '1992-05-14', cpf: '123.456.789-00', categoria: 'Ortodontia', vencimento: '2026-11-10', planejamentoEtapas: [] }
-        ];
+        db.pacientes = JSON.parse(localStorage.getItem('odonto_pacientes')) || [];
         db.agendamentos = JSON.parse(localStorage.getItem('odonto_agendamentos')) || [];
         db.prontuarios = JSON.parse(localStorage.getItem('odonto_prontuarios')) || [];
         db.pagamentos = JSON.parse(localStorage.getItem('odonto_pagamentos')) || [];
@@ -37,15 +35,17 @@ carregarDadosLocais();
 let usuarioAtual = null;
 let abaOrigem = 'agenda';
 let subAbaAtualPaciente = 'prontuario';
-let calendar = null;
 let pacienteAtualId = null;
 let exibiApenasInativos = false;
+let dataAgendaAtual = obterDataLocalISO(); // Variável para controlar o dia da agenda
 
 function gerarIdUnico() {
     return Date.now().toString() + '-' + Math.floor(Math.random() * 10000);
 }
 
-// Salva localmente e sincroniza automaticamente com o Firebase Firestore
+// ==========================================
+// SINCRONIZAÇÃO
+// ==========================================
 async function persistirDB() {
     localStorage.setItem('odonto_pacientes', JSON.stringify(db.pacientes));
     localStorage.setItem('odonto_agendamentos', JSON.stringify(db.agendamentos));
@@ -53,30 +53,24 @@ async function persistirDB() {
     localStorage.setItem('odonto_pagamentos', JSON.stringify(db.pagamentos));
     localStorage.setItem('odonto_despesas', JSON.stringify(db.despesas));
 
-    if (window.usaFirebase && window.firebaseDb) {
+    if (window.usaFirebase && window.firebaseDb && window.setDoc) {
         try {
             const docRef = window.doc(window.firebaseDb, "clinica", "dados_compartilhados");
-            if (window.setDoc) {
-                await window.setDoc(docRef, db);
-            }
+            await window.setDoc(docRef, db);
         } catch (e) {
             console.warn("Aviso: Falha ao sincronizar com o Firebase.", e);
         }
     }
 }
 
-// Puxa os dados atualizados do Firebase (Sincroniza PC e Celular)
 async function sincronizarDadosNuvem() {
-    if (window.usaFirebase && window.firebaseDb) {
+    if (window.usaFirebase && window.firebaseDb && window.getDoc) {
         try {
             const docRef = window.doc(window.firebaseDb, "clinica", "dados_compartilhados");
-            if (window.getDoc) {
-                const snap = await window.getDoc(docRef);
-                if (snap.exists()) {
-                    const dadosNuvem = snap.data();
-                    db = Object.assign(db, dadosNuvem);
-                    persistirDB(); 
-                }
+            const snap = await window.getDoc(docRef);
+            if (snap.exists()) {
+                db = Object.assign(db, snap.data());
+                persistirDB(); 
             }
         } catch (e) {
             console.warn("Aviso: Falha ao puxar dados da nuvem.", e);
@@ -116,14 +110,12 @@ function formatarMesAno(dataStr) {
     const partes = dataStr.split('-');
     if (partes.length < 2) return 'Outros';
     const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-    const idxMes = parseInt(partes[1], 10) - 1;
-    return (meses[idxMes] || 'Mês') + ' de ' + partes[0];
+    return (meses[parseInt(partes[1], 10) - 1] || 'Mês') + ' de ' + partes[0];
 }
 
 // ==========================================
 // AUTENTICAÇÃO
 // ==========================================
-
 async function fazerLoginFirebase(event) {
     event.preventDefault();
     const email = document.getElementById('login-email').value.trim();
@@ -140,18 +132,10 @@ async function fazerLoginFirebase(event) {
         const docRef = window.doc(window.firebaseDb, "usuarios", user.email);
         const userDoc = await window.getDoc(docRef);
 
-        let perfilEncontrado = 'secretaria';
-        if (userDoc.exists()) {
-            perfilEncontrado = userDoc.data().perfil || 'secretaria';
-        } else {
-            console.warn("⚠️ E-mail autenticado, mas o documento não existe na coleção 'usuarios'. Definindo como secretaria.");
-        }
-
+        let perfilEncontrado = userDoc.exists() ? userDoc.data().perfil : 'secretaria';
         usuarioAtual = { perfil: perfilEncontrado, email: user.email };
         iniciarSessaoSistema();
-
     } catch (error) {
-        console.error("Erro no login:", error);
         let mensagemErro = error.message;
         if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-email') {
             mensagemErro = "E-mail ou senha incorretos.";
@@ -162,11 +146,7 @@ async function fazerLoginFirebase(event) {
 
 async function iniciarSessaoSistema() {
     const telaLogin = document.getElementById('login-screen');
-    if (telaLogin) {
-        telaLogin.style.display = 'none';
-        telaLogin.classList.remove('flex');
-        telaLogin.classList.add('hidden');
-    }
+    if (telaLogin) telaLogin.classList.replace('flex', 'hidden');
 
     await sincronizarDadosNuvem();
 
@@ -184,17 +164,10 @@ function logout() {
         window.signOut(window.firebaseAuth);
     }
     usuarioAtual = null;
-    const telaLogin = document.getElementById('login-screen');
-    if (telaLogin) {
-        telaLogin.style.display = 'flex';
-        telaLogin.classList.remove('hidden');
-    }
+    document.getElementById('login-screen').classList.replace('hidden', 'flex');
     document.getElementById('main-header').classList.add('hidden');
     document.getElementById('main-nav').classList.add('hidden');
     document.getElementById('main-content').classList.add('hidden');
-    
-    const fab = document.getElementById('fab-agenda-mobile');
-    if (fab) fab.classList.add('hidden');
 }
 
 function configurarNavbar() {
@@ -233,16 +206,10 @@ function mudarAba(nomeAba) {
 
     const fab = document.getElementById('fab-agenda-mobile');
     if (fab) {
-        if (nomeAba === 'agenda') {
-            fab.classList.remove('hidden');
-        } else {
-            fab.classList.add('hidden');
-        }
+        fab.classList.toggle('hidden', nomeAba !== 'agenda');
     }
 
-    if (nomeAba === 'agenda' && calendar) {
-        setTimeout(() => calendar.updateSize(), 100);
-    }
+    if (nomeAba === 'agenda') renderizarAgendaCards();
     if (nomeAba === 'pacientes') renderizarPacientes();
     if (nomeAba === 'financeiro') renderizarFinanceiro();
 }
@@ -250,17 +217,113 @@ function mudarAba(nomeAba) {
 function inicializarSistema() {
     popularSelectPacientes();
     mudarAba('agenda');
-    if (!calendar) {
-        inicializarCalendario();
+    inicializarCalendario();
+}
+
+// ==========================================
+// AGENDA (NOVA ESTRUTURA EM CARDS)
+// ==========================================
+function inicializarCalendario() {
+    renderizarAgendaCards();
+}
+
+function atualizarCalendario() {
+    renderizarAgendaCards();
+}
+
+function mudarDiaAgenda(dias) {
+    const data = new Date(dataAgendaAtual + 'T12:00:00');
+    data.setDate(data.getDate() + dias);
+    dataAgendaAtual = data.toISOString().split('T')[0];
+    renderizarAgendaCards();
+}
+
+function alterarDataAgendaManual(event) {
+    if (event.target.value) {
+        dataAgendaAtual = event.target.value;
+        renderizarAgendaCards();
+    }
+}
+
+function renderizarAgendaCards() {
+    const container = document.getElementById('agenda-cards-container');
+    const displayData = document.getElementById('data-agenda-display');
+    const inputData = document.getElementById('input-data-agenda');
+    if (!container || !displayData) return;
+
+    if (inputData) inputData.value = dataAgendaAtual;
+
+    const dataObj = new Date(dataAgendaAtual + 'T12:00:00');
+    const diasSemana = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+    const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    
+    // Se for hoje, exibe "Hoje, Dia de Mês"
+    const hojeIso = obterDataLocalISO();
+    if (dataAgendaAtual === hojeIso) {
+        displayData.innerText = `Hoje, ${String(dataObj.getDate()).padStart(2,'0')} de ${meses[dataObj.getMonth()]}`;
     } else {
+        displayData.innerText = `${diasSemana[dataObj.getDay()]}, ${String(dataObj.getDate()).padStart(2,'0')} de ${meses[dataObj.getMonth()]}`;
+    }
+
+    container.innerHTML = '';
+    const eventos = db.agendamentos.filter(a => a.data === dataAgendaAtual);
+    eventos.sort((a, b) => a.horario.localeCompare(b.horario));
+
+    if (eventos.length === 0) {
+        container.innerHTML = '<div class="text-center p-10 bg-slate-50 rounded-xl border border-dashed border-slate-300 text-slate-400"><i class="fa-solid fa-mug-hot text-4xl mb-3 text-slate-300"></i><p class="font-medium">Sem pacientes agendados para este dia.</p></div>';
+        return;
+    }
+
+    eventos.forEach(ag => {
+        const isLembrete = ag.isLembrete;
+        let titulo = isLembrete ? '📌 ' + ag.titulo : (db.pacientes.find(p => p.id === ag.pacienteId)?.nome || 'Paciente Não Encontrado');
+        let subtitulo = isLembrete ? (ag.obs || 'Bloqueio') : (ag.tipo + (ag.obs ? ' • Obs: ' + ag.obs : ''));
+        let corFundo = ag.cor || '#039be5';
+        
+        let statusHtml = '';
+        if(!isLembrete) {
+            const statusAtual = ag.status || 'agendado';
+            let corStatus = 'bg-blue-100 text-blue-700';
+            let iconStatus = 'fa-clock';
+            if (statusAtual === 'atendido') { corStatus = 'bg-emerald-100 text-emerald-700'; iconStatus = 'fa-check-double'; corFundo = '#10b981'; }
+            if (statusAtual === 'faltou') { corStatus = 'bg-rose-100 text-rose-700'; iconStatus = 'fa-user-xmark'; corFundo = '#f43f5e'; }
+            if (statusAtual === 'remarcou') { corStatus = 'bg-slate-200 text-slate-700'; iconStatus = 'fa-rotate'; corFundo = '#94a3b8'; }
+            statusHtml = `<span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${corStatus}"><i class="fa-solid ${iconStatus} mr-1"></i> ${statusAtual}</span>`;
+        }
+
+        container.innerHTML += `
+        <div class="relative bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col sm:flex-row cursor-pointer hover:shadow-md transition active:scale-[0.98]" onclick="abrirModalDetalhesAgendamento('${ag.id}')">
+            <div class="absolute left-0 top-0 bottom-0 w-2.5 sm:w-3" style="background-color: ${corFundo};"></div>
+            <div class="p-3.5 pl-6 sm:pl-7 flex-grow flex flex-col justify-center">
+                <div class="flex justify-between items-start mb-1.5 gap-2">
+                    <span class="font-extrabold text-slate-900 text-sm sm:text-base"><i class="fa-regular fa-clock mr-1 text-slate-400"></i> ${ag.horario} às ${ag.horaFim || '?'}</span>
+                    ${statusHtml}
+                </div>
+                <h4 class="font-bold text-slate-800 text-base sm:text-lg leading-tight mb-1">${titulo}</h4>
+                <p class="text-xs sm:text-sm text-slate-500 line-clamp-2">${subtitulo}</p>
+            </div>
+            <div class="p-2 sm:p-4 bg-slate-50 border-t sm:border-t-0 sm:border-l border-slate-100 flex justify-center items-center">
+                 <span class="text-xs font-bold text-blue-600 flex items-center gap-1"><span class="sm:hidden">Detalhes / Editar </span><i class="fa-solid fa-chevron-right sm:text-lg"></i></span>
+            </div>
+        </div>`;
+    });
+}
+
+function alterarStatusAgendamento(id, status) {
+    const ag = db.agendamentos.find(a => a.id === id);
+    if (ag && !ag.isLembrete) {
+        if (ag.status === status) ag.status = 'agendado';
+        else ag.status = status;
+        
+        persistirDB();
         atualizarCalendario();
+        abrirModalDetalhesAgendamento(id);
     }
 }
 
 // ==========================================
-// AGENDA, HORA FINAL E LEMBRETES/BLOQUEIOS
+// MODAIS DE AGENDAMENTO E LEMBRETES/BLOQUEIOS
 // ==========================================
-
 function atualizarHoraFimPadrao() {
     const inputInicio = document.getElementById('agendamento-horario');
     const inputFim = document.getElementById('agendamento-hora-fim');
@@ -321,118 +384,6 @@ function selecionarCorLembrete(corHex, elementoBtn) {
     }
 }
 
-function alterarStatusAgendamento(id, status) {
-    const ag = db.agendamentos.find(a => a.id === id);
-    if (ag && !ag.isLembrete) {
-        if (ag.status === status) ag.status = 'agendado';
-        else ag.status = status;
-        
-        persistirDB();
-        atualizarCalendario();
-        abrirModalDetalhesAgendamento(id);
-    }
-}
-
-function formatarEventoCalendario(ag) {
-    if (ag.isLembrete) {
-        let corFundo = ag.cor || '#616161';
-        return {
-            id: ag.id,
-            title: '📌 ' + ag.titulo,
-            start: ag.data + 'T' + ag.horario,
-            end: ag.data + 'T' + (ag.horaFim || ag.horario),
-            backgroundColor: corFundo,
-            borderColor: corFundo,
-            extendedProps: { isLembrete: true, titulo: ag.titulo, obs: ag.obs }
-        };
-    }
-
-    const paciente = db.pacientes.find(p => p.id === ag.pacienteId);
-    if (!paciente || !ag.data || !ag.horario) return null;
-
-    let corFundo = ag.cor || '#039be5'; 
-    let prefixo = '';
-
-    if (ag.status === 'atendido') { prefixo = '✅ '; }
-    if (ag.status === 'faltou') { prefixo = '❌ [FALTOU] '; corFundo = '#ef4444'; } 
-    if (ag.status === 'remarcou') { prefixo = '🔄 [REMARCOU] '; corFundo = '#94a3b8'; } 
-
-    return {
-        id: ag.id,
-        title: prefixo + paciente.nome + ' (' + ag.tipo + ')',
-        start: ag.data + 'T' + ag.horario,
-        end: ag.data + 'T' + (ag.horaFim || ag.horario),
-        backgroundColor: corFundo,
-        borderColor: corFundo,
-        extendedProps: { pacienteId: ag.pacienteId, tipo: ag.tipo, obs: ag.obs, status: ag.status || 'agendado', isLembrete: false }
-    };
-}
-
-function inicializarCalendario() {
-    const calendarEl = document.getElementById('calendar');
-    if (!calendarEl) return;
-
-    const eventosFormatados = db.agendamentos.map(formatarEventoCalendario).filter(e => e !== null);
-    const isMobile = window.innerWidth < 768;
-
-    calendar = new FullCalendar.Calendar(calendarEl, {
-        locale: 'pt-br',
-        initialView: isMobile ? 'timeGridDay' : 'timeGridWeek',
-        headerToolbar: {
-            left: 'prev,next today',
-            center: 'title',
-            right: isMobile ? 'timeGridDay,dayGridMonth,listMonth' : 'dayGridMonth,timeGridWeek,timeGridDay,listMonth'
-        },
-        buttonText: {
-            listMonth: 'Agenda',
-            timeGridDay: 'Dia',
-            timeGridWeek: 'Semana',
-            dayGridMonth: 'Mês'
-        },
-        navLinks: true, 
-        selectLongPressDelay: 400, 
-        eventLongPressDelay: 400,  
-        slotMinTime: '07:00:00',
-        slotMaxTime: '22:00:00',
-        allDaySlot: false,
-        selectable: true,
-        slotDuration: '00:30:00',
-        slotLabelInterval: '01:00',
-        eventTimeFormat: { hour: '2-digit', minute: '2-digit', meridiem: false, hour12: false },
-        windowResize: function(view) {
-            if (window.innerWidth < 768 && calendar.view.type === 'timeGridWeek') {
-                calendar.changeView('timeGridDay');
-            }
-        },
-        select: function(info) {
-            const dataStr = info.startStr.split('T')[0];
-            let horaStr = '08:00';
-            if (info.startStr.split('T')[1]) {
-                const partesHora = info.startStr.split('T')[1].substring(0, 5).split(':');
-                let h = partesHora[0];
-                let m = parseInt(partesHora[1], 10);
-                m = Math.round(m / 15) * 15;
-                if (m === 60) { h = String(parseInt(h, 10) + 1).padStart(2, '0'); m = 0; }
-                horaStr = h + ':' + String(m).padStart(2, '0');
-            }
-            abrirModalAgendamento(dataStr, horaStr);
-            calendar.unselect();
-        },
-        events: eventosFormatados,
-        eventClick: function(info) {
-            abrirModalDetalhesAgendamento(info.event.id);
-        }
-    });
-    calendar.render();
-}
-
-function atualizarCalendario() {
-    if (!calendar) return;
-    calendar.removeAllEvents();
-    const eventosFormatados = db.agendamentos.map(formatarEventoCalendario).filter(e => e !== null);
-    eventosFormatados.forEach(ev => calendar.addEvent(ev));
-}
-
 function excluirAgendamento(id, pacienteId) {
     if (!verificarSenhaExclusao()) return;
     if (!confirm('Deseja realmente excluir este item da agenda?')) return;
@@ -445,10 +396,257 @@ function excluirAgendamento(id, pacienteId) {
     alert('Item excluído com sucesso!');
 }
 
-// ==========================================
-// PACIENTES
-// ==========================================
+function abrirModalDetalhesAgendamento(agendamentoId) {
+    const ag = db.agendamentos.find(item => item.id === agendamentoId);
+    if (!ag) return;
 
+    if (ag.isLembrete) {
+        document.getElementById('detalhe-ag-paciente').innerText = '📌 ' + ag.titulo;
+        document.getElementById('detalhe-ag-categoria').innerText = 'Lembrete / Bloqueio';
+        document.getElementById('detalhe-ag-datahora').innerText = (ag.data ? ag.data.split('-').reverse().join('/') : '') + ' • ' + ag.horario + ' às ' + (ag.horaFim || '?');
+        document.getElementById('detalhe-ag-tipo').innerText = 'Bloqueio de Agenda';
+        document.getElementById('detalhe-ag-obs').innerText = ag.obs || 'Nenhuma observação registrada.';
+
+        let divStatus = document.getElementById('container-status-agendamento');
+        if (divStatus) divStatus.innerHTML = ''; 
+
+        document.getElementById('btn-excluir-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); excluirAgendamento(ag.id, null); };
+        document.getElementById('btn-editar-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); abrirModalEditarLembrete(ag.id); };
+        document.getElementById('btn-ver-ficha-ag-modal').parentElement.style.display = 'none'; 
+
+        document.getElementById('modal-detalhes-agendamento').classList.remove('hidden');
+        document.getElementById('modal-detalhes-agendamento').classList.add('flex');
+        return;
+    }
+
+    document.getElementById('btn-ver-ficha-ag-modal').parentElement.style.display = 'flex';
+    const paciente = db.pacientes.find(p => p.id === ag.pacienteId) || { nome: 'PACIENTE NÃO ENCONTRADO', categoria: 'Geral' };
+    
+    document.getElementById('detalhe-ag-paciente').innerText = paciente.nome;
+    document.getElementById('detalhe-ag-categoria').innerText = paciente.categoria;
+    document.getElementById('detalhe-ag-datahora').innerText = (ag.data ? ag.data.split('-').reverse().join('/') : '') + ' • ' + ag.horario + ' às ' + (ag.horaFim || '?');
+    document.getElementById('detalhe-ag-tipo').innerText = ag.tipo;
+    document.getElementById('detalhe-ag-obs').innerText = ag.obs || 'Nenhuma observação registrada.';
+
+    let divStatus = document.getElementById('container-status-agendamento');
+    if (!divStatus) {
+        divStatus = document.createElement('div');
+        divStatus.id = 'container-status-agendamento';
+        divStatus.className = 'grid grid-cols-3 gap-2 pt-4 mt-2 border-t border-slate-100';
+        const gridAcoes = document.getElementById('btn-excluir-ag-modal').parentElement;
+        gridAcoes.parentNode.insertBefore(divStatus, gridAcoes);
+    }
+    const statusAtual = ag.status || 'agendado';
+    divStatus.innerHTML = `
+        <button onclick="alterarStatusAgendamento('${ag.id}', 'atendido')" class="py-2 ${statusAtual === 'atendido' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'} font-semibold rounded-lg text-xs transition"><i class="fa-solid fa-check"></i> Atendido</button>
+        <button onclick="alterarStatusAgendamento('${ag.id}', 'faltou')" class="py-2 ${statusAtual === 'faltou' ? 'bg-rose-600 text-white' : 'bg-rose-50 hover:bg-rose-100 text-rose-700'} font-semibold rounded-lg text-xs transition"><i class="fa-solid fa-user-xmark"></i> Faltou</button>
+        <button onclick="alterarStatusAgendamento('${ag.id}', 'remarcou')" class="py-2 ${statusAtual === 'remarcou' ? 'bg-slate-600 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'} font-semibold rounded-lg text-xs transition"><i class="fa-solid fa-rotate"></i> Remarcou</button>
+    `;
+
+    document.getElementById('btn-excluir-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); excluirAgendamento(ag.id, ag.pacienteId); };
+    document.getElementById('btn-editar-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); abrirModalEditarAgendamento(ag.id); };
+    document.getElementById('btn-ver-ficha-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); abrirDetalhesPaciente(ag.pacienteId, 'agenda'); };
+
+    document.getElementById('modal-detalhes-agendamento').classList.remove('hidden');
+    document.getElementById('modal-detalhes-agendamento').classList.add('flex');
+}
+
+function abrirModalAgendamento(dataPreenchida, horaPreenchida) {
+    popularSelectPacientes();
+    document.getElementById('titulo-modal-agendamento').innerText = 'Novo Agendamento';
+    document.getElementById('agendamento-edit-id').value = '';
+    const filtroBusca = document.getElementById('filtro-paciente-busca');
+    if (filtroBusca) filtroBusca.value = '';
+    document.getElementById('agendamento-obs').value = '';
+
+    const btnPadrao = document.querySelector('.cor-agenda-btn[style*="#039be5"]');
+    selecionarCorAgenda('#039be5', btnPadrao);
+
+    const containerCadRapido = document.getElementById('container-cadastro-rapido');
+    const containerBuscaPac = document.getElementById('container-busca-paciente');
+    const btnToggleCad = document.getElementById('btn-toggle-cadastro-rapido');
+
+    if (containerCadRapido) containerCadRapido.classList.add('hidden');
+    if (containerBuscaPac) containerBuscaPac.classList.remove('hidden');
+    if (btnToggleCad) btnToggleCad.innerHTML = '<i class="fa-solid fa-user-plus"></i> Novo Rápido';
+    
+    document.getElementById('agendamento-data').value = dataPreenchida || dataAgendaAtual || obterDataLocalISO();
+    document.getElementById('agendamento-horario').value = horaPreenchida || '09:00';
+    
+    atualizarHoraFimPadrao();
+
+    const modalAg = document.getElementById('modal-agendamento');
+    modalAg.classList.remove('hidden');
+    modalAg.classList.add('flex');
+}
+
+function abrirModalEditarAgendamento(agendamentoId) {
+    const ag = db.agendamentos.find(a => a.id === agendamentoId);
+    if (!ag || ag.isLembrete) return;
+
+    popularSelectPacientes();
+    document.getElementById('titulo-modal-agendamento').innerText = 'Editar Agendamento';
+    document.getElementById('agendamento-edit-id').value = ag.id;
+    document.getElementById('agendamento-paciente').value = ag.pacienteId;
+    document.getElementById('agendamento-data').value = ag.data;
+    document.getElementById('agendamento-horario').value = ag.horario;
+    
+    if (ag.horaFim) {
+        document.getElementById('agendamento-hora-fim').value = ag.horaFim;
+    } else {
+        document.getElementById('agendamento-horario').value = ag.horario;
+        atualizarHoraFimPadrao();
+    }
+
+    document.getElementById('agendamento-tipo').value = ag.tipo;
+    document.getElementById('agendamento-obs').value = ag.obs || '';
+
+    const corSalva = ag.cor || '#039be5';
+    const btnCorSalva = document.querySelector(`.cor-agenda-btn[style*="${corSalva}"]`) || document.querySelector('.cor-agenda-btn[style*="#039be5"]');
+    selecionarCorAgenda(corSalva, btnCorSalva);
+
+    const containerCadRapido = document.getElementById('container-cadastro-rapido');
+    const containerBuscaPac = document.getElementById('container-busca-paciente');
+    if (containerCadRapido) containerCadRapido.classList.add('hidden');
+    if (containerBuscaPac) containerBuscaPac.classList.remove('hidden');
+
+    const modalAg = document.getElementById('modal-agendamento');
+    modalAg.classList.remove('hidden');
+    modalAg.classList.add('flex');
+}
+
+function salvarAgendamento(event) {
+    event.preventDefault();
+    const pacienteId = document.getElementById('agendamento-paciente').value;
+    const editId = document.getElementById('agendamento-edit-id').value;
+
+    if (!pacienteId) { alert('Selecione um paciente.'); return; }
+
+    const dataAg = document.getElementById('agendamento-data').value;
+    const horaAg = document.getElementById('agendamento-horario').value;
+    const horaFimAg = document.getElementById('agendamento-hora-fim').value;
+
+    if (horaFimAg <= horaAg) {
+        alert('A Hora Final deve ser posterior à Hora Inicial.');
+        return;
+    }
+
+    const conflito = db.agendamentos.find(a => a.data === dataAg && a.horario === horaAg && a.id !== editId);
+    if (conflito) {
+        const nomeConflito = conflito.isLembrete ? conflito.titulo : (db.pacientes.find(p => p.id === conflito.pacienteId)?.nome || 'Outro evento');
+        if (!confirm(`⚠️ Já existe agendamento/bloqueio para "${nomeConflito}" nesse horário. Agendar mesmo assim?`)) return;
+    }
+
+    const inputCor = document.getElementById('agendamento-cor');
+    const dadosAgendamento = {
+        isLembrete: false,
+        pacienteId: pacienteId,
+        data: dataAg,
+        horario: horaAg,
+        horaFim: horaFimAg,
+        tipo: document.getElementById('agendamento-tipo').value,
+        obs: document.getElementById('agendamento-obs').value.trim(),
+        cor: inputCor ? inputCor.value : '#039be5' 
+    };
+
+    if (editId) {
+        const index = db.agendamentos.findIndex(a => a.id === editId);
+        if (index !== -1) {
+            const statusAntigo = db.agendamentos[index].status;
+            db.agendamentos[index] = { ...db.agendamentos[index], ...dadosAgendamento, status: statusAntigo };
+        }
+    } else {
+        db.agendamentos.push({ id: gerarIdUnico(), status: 'agendado', ...dadosAgendamento });
+    }
+
+    persistirDB();
+    fecharModal('modal-agendamento');
+    atualizarCalendario();
+    if (!document.getElementById('tab-detalhes-paciente').classList.contains('hidden')) { 
+        abrirDetalhesPaciente(pacienteId, abaOrigem); 
+    }
+}
+
+function abrirModalLembrete(dataPreenchida, horaPreenchida) {
+    document.getElementById('titulo-modal-lembrete').innerText = 'Novo Lembrete / Bloqueio';
+    document.getElementById('lembrete-edit-id').value = '';
+    document.getElementById('lembrete-titulo').value = '';
+    document.getElementById('lembrete-obs').value = '';
+
+    const btnPadrao = document.querySelector('.cor-lembrete-btn[style*="#616161"]');
+    selecionarCorLembrete('#616161', btnPadrao);
+
+    document.getElementById('lembrete-data').value = dataPreenchida || dataAgendaAtual || obterDataLocalISO();
+    document.getElementById('lembrete-horario').value = horaPreenchida || '12:00';
+    atualizarHoraFimLembretePadrao();
+
+    const modal = document.getElementById('modal-lembrete');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function abrirModalEditarLembrete(lembreteId) {
+    const ag = db.agendamentos.find(a => a.id === lembreteId);
+    if (!ag || !ag.isLembrete) return;
+
+    document.getElementById('titulo-modal-lembrete').innerText = 'Editar Lembrete / Bloqueio';
+    document.getElementById('lembrete-edit-id').value = ag.id;
+    document.getElementById('lembrete-titulo').value = ag.titulo;
+    document.getElementById('lembrete-data').value = ag.data;
+    document.getElementById('lembrete-horario').value = ag.horario;
+    document.getElementById('lembrete-hora-fim').value = ag.horaFim || '';
+    document.getElementById('lembrete-obs').value = ag.obs || '';
+
+    const corSalva = ag.cor || '#616161';
+    const btnCorSalva = document.querySelector(`.cor-lembrete-btn[style*="${corSalva}"]`) || document.querySelector('.cor-lembrete-btn[style*="#616161"]');
+    selecionarCorLembrete(corSalva, btnCorSalva);
+
+    const modal = document.getElementById('modal-lembrete');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function salvarLembrete(event) {
+    event.preventDefault();
+    const editId = document.getElementById('lembrete-edit-id').value;
+    const titulo = document.getElementById('lembrete-titulo').value.trim();
+    const dataLembrete = document.getElementById('lembrete-data').value;
+    const horaInicio = document.getElementById('lembrete-horario').value;
+    const horaFim = document.getElementById('lembrete-hora-fim').value;
+
+    if (!titulo) { alert('Informe o título do lembrete.'); return; }
+    if (horaFim <= horaInicio) { alert('A Hora Final deve ser posterior à Hora Inicial.'); return; }
+
+    const inputCor = document.getElementById('lembrete-cor');
+    const dadosLembrete = {
+        isLembrete: true,
+        titulo: titulo,
+        data: dataLembrete,
+        horario: horaInicio,
+        horaFim: horaFim,
+        obs: document.getElementById('lembrete-obs').value.trim(),
+        cor: inputCor ? inputCor.value : '#616161'
+    };
+
+    if (editId) {
+        const index = db.agendamentos.findIndex(a => a.id === editId);
+        if (index !== -1) {
+            db.agendamentos[index] = { ...db.agendamentos[index], ...dadosLembrete };
+        }
+    } else {
+        db.agendamentos.push({ id: gerarIdUnico(), ...dadosLembrete });
+    }
+
+    persistirDB();
+    fecharModal('modal-lembrete');
+    atualizarCalendario();
+    alert('Lembrete/Bloqueio salvo com sucesso!');
+}
+
+
+// ==========================================
+// PACIENTES (NOVA ESTRUTURA EM GRID)
+// ==========================================
 function obterUltimaConsultaPaciente(pacienteId) {
     const datas = [];
     db.agendamentos.filter(a => a.pacienteId === pacienteId && a.data).forEach(a => datas.push(a.data));
@@ -494,27 +692,19 @@ function atualizarBotaoInativos() {
 }
 
 function renderizarPacientes() {
-    const tbody = document.getElementById('tabela-pacientes-body');
-    if (!tbody) return;
+    const container = document.getElementById('lista-pacientes-container');
+    if (!container) return;
+    
     const termoBusca = (document.getElementById('busca-pacientes-tabela')?.value || '').toLowerCase().trim();
     const opcaoCategoria = document.getElementById('filtro-categoria-pacientes')?.value || 'todos';
 
-    tbody.innerHTML = '';
-
-    let total = db.pacientes.length;
-    let clinicos = 0;
-    let orto = 0;
-    let inativosCount = 0;
+    container.innerHTML = '';
+    let total = db.pacientes.length, clinicos = 0, orto = 0, inativosCount = 0;
 
     db.pacientes.forEach(p => {
-        if (p.categoria === 'Ortodontia') orto++;
-        else clinicos++;
-
-        const ultimaData = obterUltimaConsultaPaciente(p.id);
-        if (ultimaData) {
-            const dias = calcularDiasDesdeUltimaConsulta(ultimaData);
-            if (dias > 30) inativosCount++;
-        }
+        p.categoria === 'Ortodontia' ? orto++ : clinicos++;
+        const ult = obterUltimaConsultaPaciente(p.id);
+        if (ult && calcularDiasDesdeUltimaConsulta(ult) > 30) inativosCount++;
     });
 
     const kpiTotal = document.getElementById('kpi-total-pacientes');
@@ -530,59 +720,54 @@ function renderizarPacientes() {
     const listaExibicao = db.pacientes.filter(p => {
         const bateuBusca = (p.nome || '').toLowerCase().includes(termoBusca) || (p.cpf || '').includes(termoBusca);
         if (!bateuBusca) return false;
-
         if (opcaoCategoria === 'clinico' && p.categoria === 'Ortodontia') return false;
         if (opcaoCategoria === 'orto' && p.categoria !== 'Ortodontia') return false;
-
         if (exibiApenasInativos) {
-            const ultimaData = obterUltimaConsultaPaciente(p.id);
-            if (!ultimaData) return false;
-            const dias = calcularDiasDesdeUltimaConsulta(ultimaData);
-            return dias > 30;
+            const ult = obterUltimaConsultaPaciente(p.id);
+            return ult ? calcularDiasDesdeUltimaConsulta(ult) > 30 : false;
         }
-
         return true;
     });
 
     if (listaExibicao.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-400">Nenhum paciente encontrado.</td></tr>';
+        container.innerHTML = '<div class="col-span-full p-6 text-center text-slate-400 bg-white rounded-xl border border-slate-200 shadow-sm"><i class="fa-solid fa-users-slash text-3xl mb-2"></i><p>Nenhum paciente encontrado.</p></div>';
         return;
     }
 
     listaExibicao.forEach(p => {
         const badgeClass = p.categoria === 'Ortodontia' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-700';
         const venc = p.categoria === 'Ortodontia' ? (p.vencimento ? p.vencimento.split('-').reverse().join('/') : 'Não definida') : '-';
-        
         const ultimaData = obterUltimaConsultaPaciente(p.id);
         const dias = calcularDiasDesdeUltimaConsulta(ultimaData);
         
         let htmlUltimaConsulta = '-';
         if (ultimaData) {
             const dataFmt = ultimaData.split('-').reverse().join('/');
-            if (dias > 30) {
-                htmlUltimaConsulta = '<span class="text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">' + dataFmt + ' (' + dias + 'd)</span>';
-            } else {
-                htmlUltimaConsulta = '<span class="text-slate-700 font-medium">' + dataFmt + '</span>';
-            }
+            htmlUltimaConsulta = dias > 30 ? `<span class="text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">${dataFmt} (${dias}d)</span>` : `<span class="text-slate-700 font-medium">${dataFmt}</span>`;
         } else {
-            htmlUltimaConsulta = '<span class="text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded border border-rose-100">Nunca se consultou</span>';
+            htmlUltimaConsulta = '<span class="text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded border border-rose-100">Sem consultas</span>';
         }
 
-        tbody.innerHTML += '<tr class="hover:bg-slate-50 transition border-b border-slate-100">' +
-            '<td class="p-3 sm:p-4 font-medium text-slate-800">' + p.nome + '</td>' +
-            '<td class="p-3 sm:p-4">' + (p.telefone || '-') + '</td>' +
-            '<td class="p-3 sm:p-4"><span class="px-2.5 py-1 rounded-full text-xs font-semibold ' + badgeClass + '">' + p.categoria + '</span></td>' +
-            '<td class="p-3 sm:p-4">' + htmlUltimaConsulta + '</td>' +
-            '<td class="p-3 sm:p-4">' + venc + '</td>' +
-            '<td class="p-3 sm:p-4 text-right space-x-1 whitespace-nowrap">' +
-                '<button onclick="abrirModalPaciente(\'' + p.id + '\')" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg text-xs font-semibold transition" title="Editar Cadastrais">' +
-                    '<i class="fa-solid fa-pen-to-square"></i>' +
-                '</button>' +
-                '<button onclick="abrirDetalhesPaciente(\'' + p.id + '\', \'pacientes\')" class="px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg text-xs font-semibold transition">' +
-                    '<i class="fa-solid fa-eye mr-1"></i> Ficha' +
-                '</button>' +
-            '</td>' +
-        '</tr>';
+        container.innerHTML += `
+        <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-200 flex flex-col gap-3 relative hover:shadow-md transition">
+            <div class="flex justify-between items-start gap-2">
+                <h4 class="font-bold text-slate-900 text-base truncate pr-2">${p.nome}</h4>
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${badgeClass}">${p.categoria}</span>
+            </div>
+            <div class="text-sm text-slate-600 space-y-1.5 flex-grow">
+                <p class="flex items-center gap-2"><i class="fa-solid fa-phone text-slate-400 w-4 text-center"></i> <span class="truncate">${p.telefone || '-'}</span></p>
+                <p class="flex items-center gap-2"><i class="fa-solid fa-calendar-check text-slate-400 w-4 text-center"></i> ${htmlUltimaConsulta}</p>
+                ${p.categoria === 'Ortodontia' ? `<p class="flex items-center gap-2"><i class="fa-solid fa-file-invoice-dollar text-slate-400 w-4 text-center"></i> Vencimento: ${venc}</p>` : ''}
+            </div>
+            <div class="pt-3 border-t border-slate-100 flex gap-2">
+                <button onclick="abrirModalPaciente('${p.id}')" class="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg text-xs font-semibold transition flex items-center justify-center" title="Editar Cadastrais">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                </button>
+                <button onclick="abrirDetalhesPaciente('${p.id}', 'pacientes')" class="px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg text-xs font-semibold transition flex-grow flex justify-center items-center gap-2">
+                    <i class="fa-solid fa-eye"></i> Abrir Ficha
+                </button>
+            </div>
+        </div>`;
     });
 }
 
@@ -915,258 +1100,6 @@ function renderizarFinanceiro() {
             }
         });
     }
-}
-
-// ==========================================
-// MODAIS DE AGENDAMENTO E LEMBRETES/BLOQUEIOS
-// ==========================================
-
-function abrirModalDetalhesAgendamento(agendamentoId) {
-    const ag = db.agendamentos.find(item => item.id === agendamentoId);
-    if (!ag) return;
-
-    if (ag.isLembrete) {
-        document.getElementById('detalhe-ag-paciente').innerText = '📌 ' + ag.titulo;
-        document.getElementById('detalhe-ag-categoria').innerText = 'Lembrete / Bloqueio';
-        document.getElementById('detalhe-ag-datahora').innerText = (ag.data ? ag.data.split('-').reverse().join('/') : '') + ' • ' + ag.horario + ' às ' + (ag.horaFim || '?');
-        document.getElementById('detalhe-ag-tipo').innerText = 'Bloqueio de Agenda';
-        document.getElementById('detalhe-ag-obs').innerText = ag.obs || 'Nenhuma observação registrada.';
-
-        let divStatus = document.getElementById('container-status-agendamento');
-        if (divStatus) divStatus.innerHTML = ''; 
-
-        // Botões de Excluir e Editar Lembrete
-        document.getElementById('btn-excluir-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); excluirAgendamento(ag.id, null); };
-        document.getElementById('btn-editar-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); abrirModalEditarLembrete(ag.id); };
-        document.getElementById('btn-ver-ficha-ag-modal').parentElement.style.display = 'none'; 
-
-        document.getElementById('modal-detalhes-agendamento').classList.remove('hidden');
-        document.getElementById('modal-detalhes-agendamento').classList.add('flex');
-        return;
-    }
-
-    document.getElementById('btn-ver-ficha-ag-modal').parentElement.style.display = 'flex';
-    const paciente = db.pacientes.find(p => p.id === ag.pacienteId) || { nome: 'PACIENTE NÃO ENCONTRADO', categoria: 'Geral' };
-    
-    document.getElementById('detalhe-ag-paciente').innerText = paciente.nome;
-    document.getElementById('detalhe-ag-categoria').innerText = paciente.categoria;
-    document.getElementById('detalhe-ag-datahora').innerText = (ag.data ? ag.data.split('-').reverse().join('/') : '') + ' • ' + ag.horario + ' às ' + (ag.horaFim || '?');
-    document.getElementById('detalhe-ag-tipo').innerText = ag.tipo;
-    document.getElementById('detalhe-ag-obs').innerText = ag.obs || 'Nenhuma observação registrada.';
-
-    let divStatus = document.getElementById('container-status-agendamento');
-    if (!divStatus) {
-        divStatus = document.createElement('div');
-        divStatus.id = 'container-status-agendamento';
-        divStatus.className = 'grid grid-cols-3 gap-2 pt-4 mt-2 border-t border-slate-100';
-        const gridAcoes = document.getElementById('btn-excluir-ag-modal').parentElement;
-        gridAcoes.parentNode.insertBefore(divStatus, gridAcoes);
-    }
-    const statusAtual = ag.status || 'agendado';
-    divStatus.innerHTML = `
-        <button onclick="alterarStatusAgendamento('${ag.id}', 'atendido')" class="py-2 ${statusAtual === 'atendido' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'} font-semibold rounded-lg text-xs transition"><i class="fa-solid fa-check"></i> Atendido</button>
-        <button onclick="alterarStatusAgendamento('${ag.id}', 'faltou')" class="py-2 ${statusAtual === 'faltou' ? 'bg-rose-600 text-white' : 'bg-rose-50 hover:bg-rose-100 text-rose-700'} font-semibold rounded-lg text-xs transition"><i class="fa-solid fa-user-xmark"></i> Faltou</button>
-        <button onclick="alterarStatusAgendamento('${ag.id}', 'remarcou')" class="py-2 ${statusAtual === 'remarcou' ? 'bg-slate-600 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'} font-semibold rounded-lg text-xs transition"><i class="fa-solid fa-rotate"></i> Remarcou</button>
-    `;
-
-    document.getElementById('btn-excluir-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); excluirAgendamento(ag.id, ag.pacienteId); };
-    document.getElementById('btn-editar-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); abrirModalEditarAgendamento(ag.id); };
-    document.getElementById('btn-ver-ficha-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); abrirDetalhesPaciente(ag.pacienteId, 'agenda'); };
-
-    document.getElementById('modal-detalhes-agendamento').classList.remove('hidden');
-    document.getElementById('modal-detalhes-agendamento').classList.add('flex');
-}
-
-function abrirModalAgendamento(dataPreenchida, horaPreenchida) {
-    popularSelectPacientes();
-    document.getElementById('titulo-modal-agendamento').innerText = 'Novo Agendamento';
-    document.getElementById('agendamento-edit-id').value = '';
-    const filtroBusca = document.getElementById('filtro-paciente-busca');
-    if (filtroBusca) filtroBusca.value = '';
-    document.getElementById('agendamento-obs').value = '';
-
-    const btnPadrao = document.querySelector('.cor-agenda-btn[style*="#039be5"]');
-    selecionarCorAgenda('#039be5', btnPadrao);
-
-    const containerCadRapido = document.getElementById('container-cadastro-rapido');
-    const containerBuscaPac = document.getElementById('container-busca-paciente');
-    const btnToggleCad = document.getElementById('btn-toggle-cadastro-rapido');
-
-    if (containerCadRapido) containerCadRapido.classList.add('hidden');
-    if (containerBuscaPac) containerBuscaPac.classList.remove('hidden');
-    if (btnToggleCad) btnToggleCad.innerHTML = '<i class="fa-solid fa-user-plus"></i> Novo Rápido';
-    
-    document.getElementById('agendamento-data').value = dataPreenchida || obterDataLocalISO();
-    document.getElementById('agendamento-horario').value = horaPreenchida || '09:00';
-    
-    atualizarHoraFimPadrao();
-
-    const modalAg = document.getElementById('modal-agendamento');
-    modalAg.classList.remove('hidden');
-    modalAg.classList.add('flex');
-}
-
-function abrirModalEditarAgendamento(agendamentoId) {
-    const ag = db.agendamentos.find(a => a.id === agendamentoId);
-    if (!ag || ag.isLembrete) return;
-
-    popularSelectPacientes();
-    document.getElementById('titulo-modal-agendamento').innerText = 'Editar Agendamento';
-    document.getElementById('agendamento-edit-id').value = ag.id;
-    document.getElementById('agendamento-paciente').value = ag.pacienteId;
-    document.getElementById('agendamento-data').value = ag.data;
-    document.getElementById('agendamento-horario').value = ag.horario;
-    
-    if (ag.horaFim) {
-        document.getElementById('agendamento-hora-fim').value = ag.horaFim;
-    } else {
-        document.getElementById('agendamento-horario').value = ag.horario;
-        atualizarHoraFimPadrao();
-    }
-
-    document.getElementById('agendamento-tipo').value = ag.tipo;
-    document.getElementById('agendamento-obs').value = ag.obs || '';
-
-    const corSalva = ag.cor || '#039be5';
-    const btnCorSalva = document.querySelector(`.cor-agenda-btn[style*="${corSalva}"]`) || document.querySelector('.cor-agenda-btn[style*="#039be5"]');
-    selecionarCorAgenda(corSalva, btnCorSalva);
-
-    const containerCadRapido = document.getElementById('container-cadastro-rapido');
-    const containerBuscaPac = document.getElementById('container-busca-paciente');
-    if (containerCadRapido) containerCadRapido.classList.add('hidden');
-    if (containerBuscaPac) containerBuscaPac.classList.remove('hidden');
-
-    const modalAg = document.getElementById('modal-agendamento');
-    modalAg.classList.remove('hidden');
-    modalAg.classList.add('flex');
-}
-
-function salvarAgendamento(event) {
-    event.preventDefault();
-    const pacienteId = document.getElementById('agendamento-paciente').value;
-    const editId = document.getElementById('agendamento-edit-id').value;
-
-    if (!pacienteId) { alert('Selecione um paciente.'); return; }
-
-    const dataAg = document.getElementById('agendamento-data').value;
-    const horaAg = document.getElementById('agendamento-horario').value;
-    const horaFimAg = document.getElementById('agendamento-hora-fim').value;
-
-    if (horaFimAg <= horaAg) {
-        alert('A Hora Final deve ser posterior à Hora Inicial.');
-        return;
-    }
-
-    const conflito = db.agendamentos.find(a => a.data === dataAg && a.horario === horaAg && a.id !== editId);
-    if (conflito) {
-        const nomeConflito = conflito.isLembrete ? conflito.titulo : (db.pacientes.find(p => p.id === conflito.pacienteId)?.nome || 'Outro evento');
-        if (!confirm(`⚠️ Já existe agendamento/bloqueio para "${nomeConflito}" nesse horário. Agendar mesmo assim?`)) return;
-    }
-
-    const inputCor = document.getElementById('agendamento-cor');
-    const dadosAgendamento = {
-        isLembrete: false,
-        pacienteId: pacienteId,
-        data: dataAg,
-        horario: horaAg,
-        horaFim: horaFimAg,
-        tipo: document.getElementById('agendamento-tipo').value,
-        obs: document.getElementById('agendamento-obs').value.trim(),
-        cor: inputCor ? inputCor.value : '#039be5' 
-    };
-
-    if (editId) {
-        const index = db.agendamentos.findIndex(a => a.id === editId);
-        if (index !== -1) {
-            const statusAntigo = db.agendamentos[index].status;
-            db.agendamentos[index] = { ...db.agendamentos[index], ...dadosAgendamento, status: statusAntigo };
-        }
-    } else {
-        db.agendamentos.push({ id: gerarIdUnico(), status: 'agendado', ...dadosAgendamento });
-    }
-
-    persistirDB();
-    fecharModal('modal-agendamento');
-    atualizarCalendario();
-    if (!document.getElementById('tab-detalhes-paciente').classList.contains('hidden')) { 
-        abrirDetalhesPaciente(pacienteId, abaOrigem); 
-    }
-}
-
-function abrirModalLembrete(dataPreenchida, horaPreenchida) {
-    document.getElementById('titulo-modal-lembrete').innerText = 'Novo Lembrete / Bloqueio';
-    document.getElementById('lembrete-edit-id').value = '';
-    document.getElementById('lembrete-titulo').value = '';
-    document.getElementById('lembrete-obs').value = '';
-
-    const btnPadrao = document.querySelector('.cor-lembrete-btn[style*="#616161"]');
-    selecionarCorLembrete('#616161', btnPadrao);
-
-    document.getElementById('lembrete-data').value = dataPreenchida || obterDataLocalISO();
-    document.getElementById('lembrete-horario').value = horaPreenchida || '12:00';
-    atualizarHoraFimLembretePadrao();
-
-    const modal = document.getElementById('modal-lembrete');
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
-}
-
-function abrirModalEditarLembrete(lembreteId) {
-    const ag = db.agendamentos.find(a => a.id === lembreteId);
-    if (!ag || !ag.isLembrete) return;
-
-    document.getElementById('titulo-modal-lembrete').innerText = 'Editar Lembrete / Bloqueio';
-    document.getElementById('lembrete-edit-id').value = ag.id;
-    document.getElementById('lembrete-titulo').value = ag.titulo;
-    document.getElementById('lembrete-data').value = ag.data;
-    document.getElementById('lembrete-horario').value = ag.horario;
-    document.getElementById('lembrete-hora-fim').value = ag.horaFim || '';
-    document.getElementById('lembrete-obs').value = ag.obs || '';
-
-    const corSalva = ag.cor || '#616161';
-    const btnCorSalva = document.querySelector(`.cor-lembrete-btn[style*="${corSalva}"]`) || document.querySelector('.cor-lembrete-btn[style*="#616161"]');
-    selecionarCorLembrete(corSalva, btnCorSalva);
-
-    const modal = document.getElementById('modal-lembrete');
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
-}
-
-function salvarLembrete(event) {
-    event.preventDefault();
-    const editId = document.getElementById('lembrete-edit-id').value;
-    const titulo = document.getElementById('lembrete-titulo').value.trim();
-    const dataLembrete = document.getElementById('lembrete-data').value;
-    const horaInicio = document.getElementById('lembrete-horario').value;
-    const horaFim = document.getElementById('lembrete-hora-fim').value;
-
-    if (!titulo) { alert('Informe o título do lembrete.'); return; }
-    if (horaFim <= horaInicio) { alert('A Hora Final deve ser posterior à Hora Inicial.'); return; }
-
-    const inputCor = document.getElementById('lembrete-cor');
-    const dadosLembrete = {
-        isLembrete: true,
-        titulo: titulo,
-        data: dataLembrete,
-        horario: horaInicio,
-        horaFim: horaFim,
-        obs: document.getElementById('lembrete-obs').value.trim(),
-        cor: inputCor ? inputCor.value : '#616161'
-    };
-
-    if (editId) {
-        const index = db.agendamentos.findIndex(a => a.id === editId);
-        if (index !== -1) {
-            db.agendamentos[index] = { ...db.agendamentos[index], ...dadosLembrete };
-        }
-    } else {
-        db.agendamentos.push({ id: gerarIdUnico(), ...dadosLembrete });
-    }
-
-    persistirDB();
-    fecharModal('modal-lembrete');
-    atualizarCalendario();
-    alert('Lembrete/Bloqueio salvo com sucesso!');
 }
 
 // ==========================================
