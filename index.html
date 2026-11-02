@@ -138,13 +138,13 @@
                 </div>
             </div>
             
+            <!-- Barra de Data Limpa -->
             <div class="flex items-center justify-between bg-white p-3 rounded-xl shadow-sm border border-slate-200">
                 <button onclick="mudarDiaAgenda(-1)" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-semibold transition active:scale-95">
                     <i class="fa-solid fa-chevron-left"></i>
                 </button>
-                <div class="relative cursor-pointer flex-grow text-center flex flex-col items-center justify-center">
-                    <h4 id="data-agenda-display" class="font-extrabold text-blue-900 text-sm sm:text-base uppercase tracking-wide pointer-events-none">Hoje</h4>
-                    <input type="date" id="input-data-agenda" onchange="alterarDataAgendaManual(event)" class="cursor-pointer opacity-80 text-xs text-slate-500 font-semibold mt-0.5 border rounded px-2 py-0.5 bg-slate-50 hover:bg-slate-100">
+                <div class="flex-grow text-center">
+                    <h4 id="data-agenda-display" class="font-extrabold text-blue-900 text-sm sm:text-base uppercase tracking-wide">Hoje</h4>
                 </div>
                 <button onclick="mudarDiaAgenda(1)" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-semibold transition active:scale-95">
                     <i class="fa-solid fa-chevron-right"></i>
@@ -188,8 +188,9 @@
                 </div>
             </div>
 
+            <!-- Container Responsivo para Lista de Pacientes -->
             <div class="bg-slate-50/50 p-2 rounded-2xl border border-slate-200">
-                <div id="lista-pacientes-container" class="flex flex-col space-y-3 max-h-[70vh] overflow-y-auto pr-1"></div>
+                <div id="lista-pacientes-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[70vh] overflow-y-auto pr-1"></div>
             </div>
         </section>
 
@@ -330,7 +331,6 @@
                     <p id="detalhe-ag-obs" class="text-slate-700 italic mt-0.5">Nenhuma observação registrada.</p>
                 </div>
             </div>
-            <!-- Container dinâmico de botões de status (atendido/faltou/remarcou) para consultas -->
             <div id="container-status-agendamento" class="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100"></div>
             
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-3 border-t">
