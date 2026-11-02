@@ -13,7 +13,6 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     <style>
-        /* Força tamanho mínimo de 16px nos inputs em mobile para impedir zoom automático indesejado */
         @media screen and (max-width: 768px) {
             input[type="text"], input[type="email"], input[type="password"], input[type="number"], input[type="date"], input[type="time"], select, textarea {
                 font-size: 16px !important;
@@ -109,7 +108,6 @@
                     <p class="text-xs sm:text-sm text-slate-500">Expediente das 08:00 às 21:00 • Pílulas de horários livres</p>
                 </div>
                 
-                <!-- Alternadores de Visão Macro -->
                 <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-xl w-full sm:w-auto justify-center">
                     <button onclick="definirVisaoAgenda('diaria')" id="btn-visao-diaria" class="px-3 py-1.5 rounded-lg text-xs font-bold transition bg-blue-600 text-white shadow-sm">Dia</button>
                     <button onclick="definirVisaoAgenda('semanal')" id="btn-visao-semanal" class="px-3 py-1.5 rounded-lg text-xs font-bold transition bg-slate-100 text-slate-700 hover:bg-slate-200">Semana</button>
@@ -132,7 +130,7 @@
                 </div>
             </div>
 
-            <!-- Mini Calendário Recolhível com Botão Fechar/OK -->
+            <!-- Mini Calendário Recolhível -->
             <div id="mini-calendario-container" class="hidden bg-white p-3 rounded-xl shadow-sm border border-slate-200 max-w-sm mx-auto space-y-2">
                 <div id="mini-calendario-conteudo"></div>
                 <div class="flex justify-end gap-2 pt-2 border-t">
@@ -140,7 +138,6 @@
                 </div>
             </div>
             
-            <!-- Controle de Data Otimizado -->
             <div class="flex items-center justify-between bg-white p-3 rounded-xl shadow-sm border border-slate-200">
                 <button onclick="mudarDiaAgenda(-1)" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-semibold transition active:scale-95">
                     <i class="fa-solid fa-chevron-left"></i>
@@ -154,10 +151,9 @@
                 </button>
             </div>
 
-            <!-- Grade de Horários da Agenda -->
+            <!-- Grade de Horários -->
             <div id="agenda-cards-container" class="space-y-2 pb-20 sm:pb-0"></div>
 
-            <!-- BOTÃO FAB MOBILE -->
             <button onclick="abrirModalAgendamento()" id="fab-agenda-mobile" class="fixed bottom-6 right-6 w-14 h-14 bg-emerald-500 text-white rounded-full shadow-[0_4px_12px_rgba(0,0,0,0.3)] flex items-center justify-center text-2xl z-50 sm:hidden hover:scale-105 active:scale-95 transition-transform hidden">
                 <i class="fa-solid fa-plus"></i>
             </button>
@@ -185,7 +181,6 @@
                 </button>
             </div>
 
-            <!-- Barra de Pesquisa -->
             <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-200">
                 <div class="relative w-full">
                     <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
@@ -193,7 +188,6 @@
                 </div>
             </div>
 
-            <!-- Lista em Coluna Única Vertical com Scroll -->
             <div class="bg-slate-50/50 p-2 rounded-2xl border border-slate-200">
                 <div id="lista-pacientes-container" class="flex flex-col space-y-3 max-h-[70vh] overflow-y-auto pr-1"></div>
             </div>
@@ -272,7 +266,7 @@
             </div>
         </section>
 
-        <!-- ABA 4: PRONTUÁRIO / DETALHES DO PACIENTE -->
+        <!-- ABA 4: PRONTUÁRIO -->
         <section id="tab-detalhes-paciente" class="tab-content hidden space-y-4">
             <button onclick="voltarParaOrigem()" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 rounded-lg text-sm font-medium transition flex items-center gap-2 w-max">
                 <i class="fa-solid fa-arrow-left"></i> Voltar
@@ -282,7 +276,7 @@
 
     </main>
 
-    <!-- MODAIS CUSTOMIZADOS -->
+    <!-- MODAIS -->
     <div id="modal-customizado" class="fixed inset-0 bg-slate-900 bg-opacity-75 hidden items-center justify-center z-50 p-3 sm:p-4">
         <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-5 space-y-4">
             <h3 id="modal-custom-titulo" class="text-base sm:text-lg font-bold text-slate-900">Atenção</h3>
@@ -291,7 +285,6 @@
         </div>
     </div>
 
-    <!-- MODAL CAIXA DIÁRIO -->
     <div id="modal-fechamento-caixa" class="fixed inset-0 bg-slate-900 bg-opacity-75 hidden items-center justify-center z-50 p-3 sm:p-4">
         <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-5 space-y-4">
             <div class="flex justify-between items-center border-b pb-3">
@@ -337,6 +330,9 @@
                     <p id="detalhe-ag-obs" class="text-slate-700 italic mt-0.5">Nenhuma observação registrada.</p>
                 </div>
             </div>
+            <!-- Container dinâmico de botões de status (atendido/faltou/remarcou) para consultas -->
+            <div id="container-status-agendamento" class="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100"></div>
+            
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-3 border-t">
                 <button id="btn-excluir-ag-modal" class="py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 font-semibold rounded-lg text-xs transition flex items-center justify-center gap-1"><i class="fa-solid fa-trash"></i> Excluir</button>
                 <button id="btn-editar-ag-modal" class="py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-700 font-semibold rounded-lg text-xs transition flex items-center justify-center gap-1"><i class="fa-solid fa-pen-to-square"></i> Editar</button>
@@ -345,7 +341,6 @@
         </div>
     </div>
 
-    <!-- MODAL AGENDAMENTO -->
     <div id="modal-agendamento" class="fixed inset-0 bg-slate-900 bg-opacity-75 hidden items-center justify-center z-50 p-3 sm:p-4">
         <div class="bg-white rounded-2xl shadow-xl max-w-lg w-full p-4 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center border-b pb-3">
@@ -401,24 +396,6 @@
                         </select>
                     </div>
                 </div>
-                <div class="pt-2">
-                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-2">Cor do Agendamento</label>
-                    <input type="hidden" id="agendamento-cor" value="#039be5">
-                    <div class="flex flex-wrap gap-2" id="container-cores-agenda">
-                        <button type="button" onclick="selecionarCorAgenda('#d50000', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #d50000;" title="Tomate"></button>
-                        <button type="button" onclick="selecionarCorAgenda('#e67c73', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #e67c73;" title="Flamingo"></button>
-                        <button type="button" onclick="selecionarCorAgenda('#f4511e', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #f4511e;" title="Tangerina"></button>
-                        <button type="button" onclick="selecionarCorAgenda('#f6bf26', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #f6bf26;" title="Banana"></button>
-                        <button type="button" onclick="selecionarCorAgenda('#33b679', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #33b679;" title="Sálvia"></button>
-                        <button type="button" onclick="selecionarCorAgenda('#0b8043', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #0b8043;" title="Manjericão"></button>
-                        <button type="button" onclick="selecionarCorAgenda('#039be5', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #039be5;" title="Pavão"></button>
-                        <button type="button" onclick="selecionarCorAgenda('#3f51b5', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #3f51b5;" title="Mirtilo"></button>
-                        <button type="button" onclick="selecionarCorAgenda('#7986cb', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #7986cb;" title="Lavanda"></button>
-                        <button type="button" onclick="selecionarCorAgenda('#8e24aa', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #8e24aa;" title="Uva"></button>
-                        <button type="button" onclick="selecionarCorAgenda('#616161', this)" class="cor-agenda-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #616161;" title="Grafite"></button>
-                    </div>
-                </div>
-
                 <div>
                     <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Observações</label>
                     <textarea id="agendamento-obs" rows="2" class="w-full px-3 py-2 border rounded-lg text-sm"></textarea>
@@ -553,7 +530,7 @@
         </div>
     </div>
 
-    <!-- Scripts separados -->
+    <!-- Scripts -->
     <script type="module" src="firebase-config.js"></script>
     <script src="app.js"></script>
 </body>
