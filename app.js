@@ -274,13 +274,6 @@ function mudarDiaAgenda(dias) {
     renderizarAgendaCards();
 }
 
-function alterarDataAgendaManual(event) {
-    if (event.target.value) {
-        dataAgendaAtual = event.target.value;
-        renderizarAgendaCards();
-    }
-}
-
 function definirVisaoAgenda(visao) {
     visaoAgendaAtual = visao;
     ['diaria', 'semanal', 'mensal'].forEach(v => {
@@ -383,10 +376,7 @@ function gerarSlotsExpediente() {
 function renderizarAgendaCards() {
     const container = document.getElementById('agenda-cards-container');
     const displayData = document.getElementById('data-agenda-display');
-    const inputData = document.getElementById('input-data-agenda');
     if (!container || !displayData) return;
-
-    if (inputData) inputData.value = dataAgendaAtual;
 
     const dataObj = new Date(dataAgendaAtual + 'T12:00:00');
     const diasSemana = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
@@ -413,50 +403,53 @@ function renderizarAgendaCards() {
     let htmlGrade = `<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-3 space-y-2 max-h-[68vh] overflow-y-auto pr-1">`;
 
     slots.forEach(horarioSlot => {
-        const eventoNoSlot = eventosDia.find(ev => {
+        // Uso de .filter() para capturar múltiplos eventos (pacientes, lembretes, bloqueios) no mesmo horário
+        const eventosNoSlot = eventosDia.filter(ev => {
             if (ev.isBloqueio) {
                 return horarioSlot >= ev.horario && horarioSlot < ev.horaFim;
             }
             return ev.horario === horarioSlot;
         });
 
-        if (eventoNoSlot) {
-            const isLembrete = eventoNoSlot.isLembrete;
-            const isBloqueio = eventoNoSlot.isBloqueio;
+        if (eventosNoSlot.length > 0) {
+            eventosNoSlot.forEach(eventoNoSlot => {
+                const isLembrete = eventoNoSlot.isLembrete;
+                const isBloqueio = eventoNoSlot.isBloqueio;
 
-            let titulo = isLembrete ? '🔔 ' + eventoNoSlot.titulo : (isBloqueio ? '🚫 ' + eventoNoSlot.titulo : (db.pacientes.find(p => p.id === eventoNoSlot.pacienteId)?.nome || 'Paciente Não Encontrado'));
-            let subtitulo = isLembrete ? (eventoNoSlot.obs || 'Lembrete') : (isBloqueio ? (eventoNoSlot.obs || `Bloqueio: ${eventoNoSlot.horario} às ${eventoNoSlot.horaFim}`) : (eventoNoSlot.tipo + (eventoNoSlot.obs ? ' • ' + eventoNoSlot.obs : '')));
-            let corFundo = eventoNoSlot.cor || (isBloqueio ? '#e11d48' : '#039be5');
-            
-            let statusHtml = '';
-            if(!isLembrete && !isBloqueio) {
-                const statusAtual = eventoNoSlot.status || 'agendado';
-                let corStatus = 'bg-blue-100 text-blue-700';
-                if (statusAtual === 'atendido') { corStatus = 'bg-emerald-100 text-emerald-700'; corFundo = '#10b981'; }
-                if (statusAtual === 'faltou') { corStatus = 'bg-rose-100 text-rose-700'; corFundo = '#f43f5e'; }
-                if (statusAtual === 'remarcou') { corStatus = 'bg-slate-200 text-slate-700'; corFundo = '#94a3b8'; }
-                statusHtml = `<span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${corStatus}">${statusAtual}</span>`;
-            } else if (isBloqueio) {
-                statusHtml = `<span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-rose-100 text-rose-700">BLOQUEADO</span>`;
-            } else if (isLembrete) {
-                statusHtml = `<span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-200 text-slate-700">LEMBRETE</span>`;
-            }
+                let titulo = isLembrete ? '🔔 ' + eventoNoSlot.titulo : (isBloqueio ? '🚫 ' + eventoNoSlot.titulo : (db.pacientes.find(p => p.id === eventoNoSlot.pacienteId)?.nome || 'Paciente Não Encontrado'));
+                let subtitulo = isLembrete ? (eventoNoSlot.obs || 'Lembrete') : (isBloqueio ? (eventoNoSlot.obs || `Bloqueio: ${eventoNoSlot.horario} às ${eventoNoSlot.horaFim}`) : (eventoNoSlot.tipo + (eventoNoSlot.obs ? ' • ' + eventoNoSlot.obs : '')));
+                let corFundo = eventoNoSlot.cor || (isBloqueio ? '#e11d48' : '#039be5');
+                
+                let statusHtml = '';
+                if(!isLembrete && !isBloqueio) {
+                    const statusAtual = eventoNoSlot.status || 'agendado';
+                    let corStatus = 'bg-blue-100 text-blue-700';
+                    if (statusAtual === 'atendido') { corStatus = 'bg-emerald-100 text-emerald-700'; corFundo = '#10b981'; }
+                    if (statusAtual === 'faltou') { corStatus = 'bg-rose-100 text-rose-700'; corFundo = '#f43f5e'; }
+                    if (statusAtual === 'remarcou') { corStatus = 'bg-slate-200 text-slate-700'; corFundo = '#94a3b8'; }
+                    statusHtml = `<span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${corStatus}">${statusAtual}</span>`;
+                } else if (isBloqueio) {
+                    statusHtml = `<span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-rose-100 text-rose-700">BLOQUEADO</span>`;
+                } else if (isLembrete) {
+                    statusHtml = `<span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-200 text-slate-700">LEMBRETE</span>`;
+                }
 
-            htmlGrade += `
-            <div class="relative bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden flex cursor-pointer hover:shadow-md transition active:scale-[0.98]" onclick="abrirModalDetalhesAgendamento('${eventoNoSlot.id}')">
-                <div class="absolute left-0 top-0 bottom-0 w-2" style="background-color: ${corFundo};"></div>
-                <div class="p-2.5 pl-5 flex-grow flex items-center justify-between gap-2">
-                    <div>
-                        <div class="flex items-center gap-2 mb-0.5">
-                            <span class="font-extrabold text-slate-900 text-xs"><i class="fa-regular fa-clock mr-1 text-slate-400"></i> ${isBloqueio ? eventoNoSlot.horario + ' - ' + eventoNoSlot.horaFim : eventoNoSlot.horario}</span>
-                            ${statusHtml}
+                htmlGrade += `
+                <div class="relative bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden flex cursor-pointer hover:shadow-md transition active:scale-[0.98] mb-1" onclick="abrirModalDetalhesAgendamento('${eventoNoSlot.id}')">
+                    <div class="absolute left-0 top-0 bottom-0 w-2" style="background-color: ${corFundo};"></div>
+                    <div class="p-2.5 pl-5 flex-grow flex items-center justify-between gap-2">
+                        <div>
+                            <div class="flex items-center gap-2 mb-0.5">
+                                <span class="font-extrabold text-slate-900 text-xs"><i class="fa-regular fa-clock mr-1 text-slate-400"></i> ${isBloqueio ? eventoNoSlot.horario + ' - ' + eventoNoSlot.horaFim : eventoNoSlot.horario}</span>
+                                ${statusHtml}
+                            </div>
+                            <h4 class="font-bold text-slate-800 text-sm leading-tight">${titulo}</h4>
+                            <p class="text-[11px] text-slate-500 truncate max-w-xs sm:max-w-md">${subtitulo}</p>
                         </div>
-                        <h4 class="font-bold text-slate-800 text-sm leading-tight">${titulo}</h4>
-                        <p class="text-[11px] text-slate-500 truncate max-w-xs sm:max-w-md">${subtitulo}</p>
+                        <span class="text-xs text-slate-400"><i class="fa-solid fa-chevron-right"></i></span>
                     </div>
-                    <span class="text-xs text-slate-400"><i class="fa-solid fa-chevron-right"></i></span>
-                </div>
-            </div>`;
+                </div>`;
+            });
         } else {
             htmlGrade += `
             <div onclick="abrirModalAgendamento('${dataAgendaAtual}', '${horarioSlot}')" class="group border border-dashed border-slate-300 hover:border-blue-400 bg-slate-50/50 hover:bg-blue-50/30 rounded-lg p-2.5 flex items-center justify-between cursor-pointer transition">
@@ -559,7 +552,7 @@ function renderizarVisaoMensal(container) {
 }
 
 // ==========================================
-// PACIENTES
+// PACIENTES (Responsivo: Grid no PC / Cards no Mobile)
 // ==========================================
 function obterUltimaConsultaPaciente(pacienteId) {
     const datas = [];
@@ -661,15 +654,17 @@ function renderizarPacientes() {
         }
 
         container.innerHTML += `
-        <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-200 flex flex-col gap-3 relative hover:shadow-md transition">
-            <div class="flex justify-between items-start gap-2">
-                <h4 class="font-bold text-slate-900 text-base truncate pr-2">${p.nome}</h4>
-                <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${badgeClass}">${p.categoria}</span>
-            </div>
-            <div class="text-sm text-slate-600 space-y-1.5 flex-grow">
-                <p class="flex items-center gap-2"><i class="fa-solid fa-phone text-slate-400 w-4 text-center"></i> <span class="truncate">${p.telefone || '-'}</span></p>
-                <p class="flex items-center gap-2"><i class="fa-solid fa-calendar-check text-slate-400 w-4 text-center"></i> ${htmlUltimaConsulta}</p>
-                ${p.categoria === 'Ortodontia' ? `<p class="flex items-center gap-2"><i class="fa-solid fa-file-invoice-dollar text-slate-400 w-4 text-center"></i> Vencimento: ${venc}</p>` : ''}
+        <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-200 flex flex-col justify-between gap-3 relative hover:shadow-md transition">
+            <div>
+                <div class="flex justify-between items-start gap-2 mb-1">
+                    <h4 class="font-bold text-slate-900 text-sm sm:text-base truncate pr-2">${p.nome}</h4>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${badgeClass}">${p.categoria}</span>
+                </div>
+                <div class="text-xs sm:text-sm text-slate-600 space-y-1">
+                    <p class="flex items-center gap-2"><i class="fa-solid fa-phone text-slate-400 w-4 text-center"></i> <span class="truncate">${p.telefone || '-'}</span></p>
+                    <p class="flex items-center gap-2"><i class="fa-solid fa-calendar-check text-slate-400 w-4 text-center"></i> Última: ${htmlUltimaConsulta}</p>
+                    ${p.categoria === 'Ortodontia' ? `<p class="flex items-center gap-2"><i class="fa-solid fa-file-invoice-dollar text-slate-400 w-4 text-center"></i> Vencimento: ${venc}</p>` : ''}
+                </div>
             </div>
             <div class="pt-3 border-t border-slate-100 flex gap-2">
                 <button onclick="abrirModalPaciente('${p.id}')" class="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg text-xs font-semibold transition flex items-center justify-center" title="Editar Cadastrais">
@@ -1378,7 +1373,7 @@ function abrirModalDetalhesAgendamento(agendamentoId) {
         document.getElementById('detalhe-ag-tipo').innerText = 'Aviso / Nota';
         document.getElementById('detalhe-ag-obs').innerText = ag.obs || 'Nenhuma observação registrada.';
         if (divStatus) divStatus.innerHTML = '';
-        if (btnVerFicha) btnVerFicha.parentElement.style.display = 'none';
+        if (btnVerFicha && btnVerFicha.parentElement) btnVerFicha.parentElement.style.display = 'none';
 
         document.getElementById('btn-excluir-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); excluirAgendamento(ag.id, null); };
         document.getElementById('btn-editar-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); abrirModalEditarLembrete(ag.id); };
@@ -1389,12 +1384,12 @@ function abrirModalDetalhesAgendamento(agendamentoId) {
         document.getElementById('detalhe-ag-tipo').innerText = 'Bloqueio de Agenda';
         document.getElementById('detalhe-ag-obs').innerText = ag.obs || 'Nenhuma observação registrada.';
         if (divStatus) divStatus.innerHTML = '';
-        if (btnVerFicha) btnVerFicha.parentElement.style.display = 'none';
+        if (btnVerFicha && btnVerFicha.parentElement) btnVerFicha.parentElement.style.display = 'none';
 
         document.getElementById('btn-excluir-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); excluirAgendamento(ag.id, null); };
         document.getElementById('btn-editar-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); abrirModalEditarBloqueio(ag.id); };
     } else {
-        if (btnVerFicha) btnVerFicha.parentElement.style.display = 'flex';
+        if (btnVerFicha && btnVerFicha.parentElement) btnVerFicha.parentElement.style.display = 'flex';
         const paciente = db.pacientes.find(p => p.id === ag.pacienteId) || { nome: 'PACIENTE NÃO ENCONTRADO', categoria: 'Geral' };
         
         document.getElementById('detalhe-ag-paciente').innerText = paciente.nome;
@@ -1556,7 +1551,9 @@ function salvarLembrete(event) {
 
     if (editId) {
         const idx = db.agendamentos.findIndex(a => a.id === editId);
-        if (idx !== -1) db.agendamentos[idx] = { ...db.agendamentos[idx], ...dados };
+        if (idx !== -1) {
+            db.agendamentos[idx] = { ...db.agendamentos[idx], ...dados };
+        }
     } else {
         db.agendamentos.push({ id: gerarIdUnico(), ...dados });
     }
@@ -1609,17 +1606,6 @@ function salvarBloqueio(event) {
     if (!titulo) { alertCustomizado('Informe o motivo.'); return; }
     if (horaFim <= horaInicio) { alertCustomizado('A Hora Final deve ser posterior à Inicial.'); return; }
 
-    const conflito = db.agendamentos.find(a => 
-        a.data === dataBloqueio && a.id !== editId && 
-        ((horaInicio >= a.horario && horaInicio < a.horaFim) || (horaFim > a.horario && horaFim <= a.horaFim) || (horaInicio <= a.horario && horaFim >= a.horaFim))
-    );
-
-    if (conflito) {
-        const nomeConflito = conflito.isBloqueio ? conflito.titulo : (conflito.isLembrete ? conflito.titulo : (db.pacientes.find(p => p.id === conflito.pacienteId)?.nome || 'Outro evento'));
-        alertCustomizado(`❌ Conflito com "${nomeConflito}" (${conflito.horario} às ${conflito.horaFim}).`);
-        return;
-    }
-
     const dados = {
         isBloqueio: true, isLembrete: false,
         titulo: titulo, data: dataBloqueio, horario: horaInicio, horaFim: horaFim,
@@ -1629,7 +1615,9 @@ function salvarBloqueio(event) {
 
     if (editId) {
         const idx = db.agendamentos.findIndex(a => a.id === editId);
-        if (idx !== -1) db.agendamentos[idx] = { ...db.agendamentos[idx], ...dados };
+        if (idx !== -1) {
+            db.agendamentos[idx] = { ...db.agendamentos[idx], ...dados };
+        }
     } else {
         db.agendamentos.push({ id: gerarIdUnico(), ...dados });
     }
