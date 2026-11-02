@@ -10,6 +10,12 @@ let db = {
 const SENHA_EXCLUSAO = '1234';
 let ouvinteTempoReal = null;
 let visaoAgendaAtual = 'dia';
+let usuarioAtual = null;
+let abaOrigem = 'agenda';
+let subAbaAtualPaciente = 'prontuario';
+let pacienteAtualId = null;
+let exibiApenasInativos = false;
+let dataAgendaAtual = obterDataLocalISO();
 
 // ==========================================
 // UTILITÁRIOS E ASSINATURA
@@ -42,7 +48,7 @@ function formatarMesAno(dataStr) {
 }
 
 // ==========================================
-// SISTEMA DE AUDITORIA LEVE (60 DIAS)
+// AUDITORIA (60 DIAS) E MODAIS
 // ==========================================
 function registrarAuditoria(acao, detalhes) {
     const hoje = new Date();
@@ -87,9 +93,6 @@ function abrirModalAuditoria() {
     mostrarModalPersonalizado("Auditoria de Sistema (60 Dias)", html, `<button onclick="fecharModalPersonalizado()" class="px-4 py-2 bg-slate-800 text-white rounded-lg font-bold text-xs shadow">Fechar</button>`);
 }
 
-// ==========================================
-// MODAL DE ALERTAS/PROMPTS PERSONALIZADOS
-// ==========================================
 function mostrarModalPersonalizado(titulo, corpoHtml, botoesHtml) {
     const modal = document.getElementById('modal-customizado');
     document.getElementById('modal-custom-titulo').innerText = titulo;
@@ -118,13 +121,11 @@ function verificarSenhaExclusao() {
 }
 
 function alertCustomizado(mensagem) {
-    const corpo = `<p class="text-slate-700">${mensagem}</p>`;
-    const botoes = `<button onclick="fecharModalPersonalizado()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold">OK</button>`;
-    mostrarModalPersonalizado("Aviso", corpo, botoes);
+    mostrarModalPersonalizado("Aviso", `<p class="text-slate-700">${mensagem}</p>`, `<button onclick="fecharModalPersonalizado()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold">OK</button>`);
 }
 
 // ==========================================
-// PERSISTÊNCIA DE SESSÃO E REAL-TIME SYNC
+// PERSISTÊNCIA E TEMPO REAL (SYNC)
 // ==========================================
 function carregarDadosLocais() {
     try {
@@ -134,19 +135,10 @@ function carregarDadosLocais() {
         db.pagamentos = JSON.parse(localStorage.getItem('odonto_pagamentos')) || [];
         db.despesas = JSON.parse(localStorage.getItem('odonto_despesas')) || [];
         db.auditoria = JSON.parse(localStorage.getItem('odonto_auditoria')) || [];
-    } catch (e) {
-        console.error("Erro ao carregar dados locais.", e);
-    }
+    } catch (e) { console.error("Erro ao carregar dados locais.", e); }
 }
 
 carregarDadosLocais();
-
-let usuarioAtual = null;
-let abaOrigem = 'agenda';
-let subAbaAtualPaciente = 'prontuario';
-let pacienteAtualId = null;
-let exibiApenasInativos = false;
-let dataAgendaAtual = obterDataLocalISO();
 
 async function persistirDB() {
     localStorage.setItem('odonto_pacientes', JSON.stringify(db.pacientes));
@@ -159,9 +151,7 @@ async function persistirDB() {
     if (window.usaFirebase && window.firebaseDb && window.setDoc) {
         try {
             await window.setDoc(window.doc(window.firebaseDb, "clinica", "dados_compartilhados"), db);
-        } catch (e) {
-            console.warn("Aviso: Falha ao sincronizar com o Firebase.", e);
-        }
+        } catch (e) { console.warn("Falha ao sincronizar Firebase.", e); }
     }
 }
 
@@ -174,9 +164,7 @@ async function sincronizarDadosNuvem() {
                 if(!db.auditoria) db.auditoria = [];
                 persistirDB(); 
             }
-        } catch (e) {
-            console.warn("Aviso: Falha ao puxar dados da nuvem.", e);
-        }
+        } catch (e) { console.warn("Falha ao puxar nuvem.", e); }
     }
 }
 
@@ -227,20 +215,12 @@ function mascaraCPF(input) {
     input.value = v.substring(0, 14);
 }
 
-function prevenirEnterBusca(e) {
-    if (e.key === 'Enter') e.preventDefault();
-}
-
 async function fazerLoginFirebase(event) {
     event.preventDefault();
     const email = document.getElementById('login-email').value.trim();
     const senha = document.getElementById('login-senha').value;
-
-    if (!window.usaFirebase || !window.firebaseAuth) {
-        alertCustomizado("⚠️ O Firebase ainda está carregando. Tente novamente.");
-        return;
-    }
-
+    if (!window.usaFirebase || !window.firebaseAuth) return alertCustomizado("⚠️ Firebase carregando...");
+    
     try {
         await window.firebaseAuth.setPersistence(window.firebase.auth.Auth.Persistence.LOCAL);
         const userCredential = await window.signInWithEmailAndPassword(window.firebaseAuth, email, senha);
@@ -261,14 +241,9 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 async function processarUsuarioLogado(user) {
-    try {
-        const userDoc = await window.getDoc(window.doc(window.firebaseDb, "usuarios", user.email));
-        usuarioAtual = { perfil: userDoc.exists() ? userDoc.data().perfil : 'secretaria', email: user.email };
-    } catch (e) {
-        usuarioAtual = { perfil: 'secretaria', email: user.email };
-    }
-    registrarAuditoria('Login', 'Acesso ao sistema.');
+    usuarioAtual = { perfil: 'dentista', email: user.email };
     iniciarSessaoSistema();
+    registrarAuditoria('Login', 'Acesso ao sistema.');
 }
 
 async function iniciarSessaoSistema() {
@@ -294,9 +269,8 @@ function logout() {
 
 function configurarNavbar() {
     const badge = document.getElementById('header-user-badge');
-    if (badge && usuarioAtual) {
-        badge.innerText = `Logado: ${obterUsuarioAssinatura()}`;
-        badge.className = 'inline-block px-2 py-0.5 text-[10px] sm:text-xs font-medium bg-blue-100 text-blue-800 rounded-full mt-0.5';
+    if (badge) {
+        badge.innerText = `Dr. Mikeias Santos (${obterUsuarioAssinatura()})`;
     }
     const navTabs = document.getElementById('nav-tabs');
     if (navTabs) {
@@ -335,7 +309,7 @@ function inicializarSistema() {
 }
 
 // ==========================================
-// AGENDA: VISÃO ESTILO CINEMA (08h às 21h)
+// AGENDA (CINEMA 08h-21h E MACRO)
 // ==========================================
 function mudarVisaoAgenda(visao) {
     visaoAgendaAtual = visao;
@@ -375,7 +349,7 @@ function renderizarAgendaCards() {
     if (!container || !displayData) return;
 
     if (inputData) inputData.value = dataAgendaAtual;
-    container.className = "flex flex-col gap-2 overflow-y-auto max-h-[70vh] pr-2 scrollbar-thin scrollbar-thumb-slate-300";
+    container.className = "flex flex-col gap-2 overflow-y-auto max-h-[70vh] pr-2";
 
     const dataObj = new Date(dataAgendaAtual + 'T12:00:00');
     const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -424,7 +398,7 @@ function renderizarAgendaDiariaCinema(container) {
                 }
 
                 container.innerHTML += `
-                <div class="relative bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden flex cursor-pointer hover:shadow-md transition active:scale-[0.98] min-h-[65px]" onclick="abrirModalDetalhesAgendamento('${eventoEncontrado.id}')">
+                <div class="relative bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden flex cursor-pointer hover:shadow-md transition min-h-[65px]" onclick="abrirModalDetalhesAgendamento('${eventoEncontrado.id}')">
                     <div class="w-1.5 shrink-0" style="background-color: ${cor};"></div>
                     <div class="p-2.5 flex-grow flex flex-col justify-center min-w-0 pr-20">
                         <span class="font-extrabold text-slate-800 text-[11px] mb-0.5 flex items-center gap-1"><i class="fa-regular fa-clock text-slate-400"></i> ${eventoEncontrado.horario} às ${eventoEncontrado.horaFim || '?'}</span>
@@ -440,7 +414,7 @@ function renderizarAgendaDiariaCinema(container) {
                 container.innerHTML += `
                 <div class="border-2 border-dashed border-slate-200 bg-slate-50/50 p-2 rounded-lg flex justify-between items-center text-slate-400 hover:bg-blue-50/50 transition shadow-sm cursor-pointer" onclick="abrirModalAgendamento('${dataAgendaAtual}', '${horaSlot}')">
                     <span class="text-[11px] font-bold uppercase tracking-wide"><i class="fa-regular fa-clock"></i> ${horaSlot} (Livre)</span>
-                    <button class="px-2 py-1 bg-white border border-slate-200 text-blue-600 rounded text-[10px] font-bold shadow-sm hover:border-blue-400 transition flex items-center gap-1"><i class="fa-solid fa-plus"></i> Encaixar</button>
+                    <button class="px-2 py-1 bg-white border border-slate-200 text-blue-600 rounded text-[10px] font-bold shadow-sm flex items-center gap-1"><i class="fa-solid fa-plus"></i> Encaixar</button>
                 </div>`;
             }
         });
@@ -449,11 +423,11 @@ function renderizarAgendaDiariaCinema(container) {
 }
 
 function renderizarAgendaSemanal(container) {
-    container.innerHTML = `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3"><h4 class="font-bold text-slate-800 text-sm border-b pb-2">Visão Macro Semanal</h4><p class="text-xs text-slate-500">Navegue pelas setas laterais para alternar entre as semanas.</p></div>`;
+    container.innerHTML = `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3"><h4 class="font-bold text-slate-800 text-sm border-b pb-2">Visão Macro Semanal</h4><p class="text-xs text-slate-500">Utilize as setas para alternar as semanas.</p></div>`;
 }
 
 function renderizarAgendaMensal(container) {
-    container.innerHTML = `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3"><h4 class="font-bold text-slate-800 text-sm border-b pb-2">Visão Macro Mensal</h4><p class="text-xs text-slate-500">Navegue pelas setas laterais para alternar entre os meses.</p></div>`;
+    container.innerHTML = `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3"><h4 class="font-bold text-slate-800 text-sm border-b pb-2">Visão Macro Mensal</h4><p class="text-xs text-slate-500">Utilize as setas para alternar os meses.</p></div>`;
 }
 
 // ==========================================
@@ -484,18 +458,17 @@ function abrirModalDetalhesAgendamento(id) {
     const ag = db.agendamentos.find(item => item.id === id);
     if (!ag) return;
 
-    if (ag.tipoEvento === 'lembrete' || ag.tipoEvento === 'bloqueio') {
+    if (ag.tipoEvento === 'lembrete' || ag.tipoEvento === 'bloqueio' || ag.isLembrete) {
         const icone = ag.tipoEvento === 'bloqueio' ? '🔒' : '📌';
-        document.getElementById('detalhe-ag-paciente').innerText = icone + ' ' + ag.titulo;
-        document.getElementById('detalhe-ag-categoria').innerText = ag.tipoEvento.toUpperCase();
+        document.getElementById('detalhe-ag-paciente').innerText = icone + ' ' + (ag.titulo || 'Lembrete');
+        document.getElementById('detalhe-ag-categoria').innerText = 'BLOQUEIO / LEMBRETE';
         document.getElementById('detalhe-ag-datahora').innerText = (ag.data ? ag.data.split('-').reverse().join('/') : '') + ' • ' + ag.horario + ' às ' + (ag.horaFim || '?');
-        document.getElementById('detalhe-ag-tipo').innerText = 'Agendamento Fechado';
+        document.getElementById('detalhe-ag-tipo').innerText = 'Evento de Agenda';
         document.getElementById('detalhe-ag-obs').innerText = ag.obs || 'Nenhuma observação.';
         
         document.getElementById('botoes-acao-detalhe').innerHTML = `
             <div class="flex gap-2 mt-4 pt-3 border-t w-full justify-end">
-                <button onclick="fecharModal('modal-detalhes-agendamento'); abrirModalEditarLembrete('${ag.id}')" class="w-10 h-10 flex justify-center items-center rounded bg-slate-100 text-slate-700 hover:bg-slate-200" title="Editar"><i class="fa-solid fa-pen"></i></button>
-                <button onclick="fecharModal('modal-detalhes-agendamento'); excluirAgendamento('${ag.id}')" class="w-10 h-10 flex justify-center items-center rounded bg-rose-50 text-rose-600 hover:bg-rose-100" title="Excluir"><i class="fa-solid fa-trash"></i></button>
+                <button onclick="fecharModal('modal-detalhes-agendamento'); excluirAgendamento('${ag.id}')" class="px-4 py-2 bg-rose-50 text-rose-600 rounded-lg text-xs font-bold"><i class="fa-solid fa-trash"></i> Excluir</button>
             </div>`;
     } else {
         const paciente = db.pacientes.find(p => p.id === ag.pacienteId) || { nome: 'DESCONHECIDO', categoria: 'Geral' };
@@ -506,16 +479,15 @@ function abrirModalDetalhesAgendamento(id) {
         document.getElementById('detalhe-ag-obs').innerText = ag.obs || 'Nenhuma observação.';
 
         document.getElementById('botoes-acao-detalhe').innerHTML = `
-            <div class="flex gap-2 mt-4 pt-3 border-t w-full justify-between items-center">
-                <div class="flex gap-1.5">
-                    <button onclick="alterarStatusAgendamento('${ag.id}', 'atendido')" class="w-9 h-9 flex justify-center items-center rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200 shadow-sm" title="Atendido"><i class="fa-solid fa-check"></i></button>
-                    <button onclick="alterarStatusAgendamento('${ag.id}', 'faltou')" class="w-9 h-9 flex justify-center items-center rounded bg-rose-100 text-rose-700 hover:bg-rose-200 shadow-sm" title="Faltou"><i class="fa-solid fa-user-xmark"></i></button>
-                    <button onclick="alterarStatusAgendamento('${ag.id}', 'remarcou')" class="w-9 h-9 flex justify-center items-center rounded bg-amber-100 text-amber-700 hover:bg-amber-200 shadow-sm" title="Remarcou"><i class="fa-solid fa-rotate"></i></button>
+            <div class="flex flex-col gap-3 mt-4 pt-3 border-t w-full">
+                <div class="grid grid-cols-3 gap-1.5">
+                    <button onclick="alterarStatusAgendamento('${ag.id}', 'atendido')" class="py-2 bg-emerald-100 text-emerald-700 rounded text-xs font-bold"><i class="fa-solid fa-check"></i> Atendido</button>
+                    <button onclick="alterarStatusAgendamento('${ag.id}', 'faltou')" class="py-2 bg-rose-100 text-rose-700 rounded text-xs font-bold"><i class="fa-solid fa-user-xmark"></i> Faltou</button>
+                    <button onclick="alterarStatusAgendamento('${ag.id}', 'remarcou')" class="py-2 bg-amber-100 text-amber-700 rounded text-xs font-bold"><i class="fa-solid fa-rotate"></i> Remarcou</button>
                 </div>
-                <div class="flex gap-1.5">
-                    <button onclick="fecharModal('modal-detalhes-agendamento'); abrirDetalhesPaciente('${ag.pacienteId}', 'agenda')" class="w-9 h-9 flex justify-center items-center rounded bg-blue-100 text-blue-700 hover:bg-blue-200 shadow-sm" title="Ficha"><i class="fa-solid fa-eye"></i></button>
-                    <button onclick="fecharModal('modal-detalhes-agendamento'); abrirModalEditarAgendamento('${ag.id}')" class="w-9 h-9 flex justify-center items-center rounded bg-amber-50 text-amber-700 hover:bg-amber-100 shadow-sm" title="Editar"><i class="fa-solid fa-pen"></i></button>
-                    <button onclick="fecharModal('modal-detalhes-agendamento'); excluirAgendamento('${ag.id}', '${ag.pacienteId}')" class="w-9 h-9 flex justify-center items-center rounded bg-red-50 text-red-600 hover:bg-red-100 shadow-sm" title="Excluir"><i class="fa-solid fa-trash"></i></button>
+                <div class="flex justify-between items-center">
+                    <button onclick="fecharModal('modal-detalhes-agendamento'); abrirDetalhesPaciente('${ag.pacienteId}', 'agenda')" class="px-3 py-2 bg-blue-50 text-blue-600 rounded text-xs font-bold"><i class="fa-solid fa-eye"></i> Ver Ficha</button>
+                    <button onclick="fecharModal('modal-detalhes-agendamento'); excluirAgendamento('${ag.id}', '${ag.pacienteId}')" class="px-3 py-2 bg-red-50 text-red-600 rounded text-xs font-bold"><i class="fa-solid fa-trash"></i> Excluir</button>
                 </div>
             </div>`;
     }
@@ -531,21 +503,6 @@ function abrirModalAgendamento(dataPreenchida, horaPreenchida) {
         document.getElementById('agendamento-horario').value = horaPreenchida;
         atualizarHoraFimPadrao();
     }
-    document.getElementById('modal-agendamento').classList.replace('hidden', 'flex');
-}
-
-function abrirModalEditarAgendamento(agendamentoId) {
-    const ag = db.agendamentos.find(a => a.id === agendamentoId);
-    if (!ag) return;
-    popularSelectPacientes();
-    document.getElementById('titulo-modal-agendamento').innerText = 'Editar Agendamento';
-    document.getElementById('agendamento-edit-id').value = ag.id;
-    document.getElementById('agendamento-paciente').value = ag.pacienteId;
-    document.getElementById('agendamento-data').value = ag.data;
-    document.getElementById('agendamento-horario').value = ag.horario;
-    document.getElementById('agendamento-hora-fim').value = ag.horaFim || '';
-    document.getElementById('agendamento-tipo').value = ag.tipo;
-    document.getElementById('agendamento-obs').value = ag.obs || '';
     document.getElementById('modal-agendamento').classList.replace('hidden', 'flex');
 }
 
@@ -605,6 +562,7 @@ function salvarLembrete(event) {
     
     db.agendamentos.push({
         id: gerarIdUnico(),
+        isLembrete: true,
         tipoEvento: isBloqueio ? 'bloqueio' : 'lembrete',
         titulo,
         data: document.getElementById('lembrete-data').value,
@@ -635,17 +593,26 @@ function alternarFiltroInativos() {
 function renderizarPacientes() {
     const container = document.getElementById('lista-pacientes-container');
     if (!container) return;
-    container.className = "flex flex-col gap-3 overflow-y-auto max-h-[75vh] pr-2";
+    container.className = "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 max-h-[70vh] overflow-y-auto pr-1";
     container.innerHTML = '';
     
-    db.pacientes.forEach(p => {
+    const termo = (document.getElementById('busca-pacientes-tabela')?.value || '').toLowerCase();
+    const filtrados = db.pacientes.filter(p => p.nome.toLowerCase().includes(termo) || (p.cpf || '').includes(termo));
+
+    if (filtrados.length === 0) {
+        container.innerHTML = '<p class="text-slate-400 p-4">Nenhum paciente encontrado.</p>';
+        return;
+    }
+
+    filtrados.forEach(p => {
         container.innerHTML += `
-        <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-200 flex justify-between items-center">
+        <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-200 flex flex-col justify-between gap-3">
             <div>
                 <h4 class="font-bold text-slate-900 text-base">${p.nome}</h4>
-                <p class="text-xs text-slate-500">${p.telefone || '-'}</p>
+                <p class="text-xs text-slate-500"><i class="fa-solid fa-phone"></i> ${p.telefone || '-'}</p>
+                <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-bold rounded bg-blue-50 text-blue-600">${p.categoria}</span>
             </div>
-            <button onclick="abrirDetalhesPaciente('${p.id}', 'pacientes')" class="px-4 h-10 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold gap-2"><i class="fa-solid fa-eye"></i> Ficha</button>
+            <button onclick="abrirDetalhesPaciente('${p.id}', 'pacientes')" class="w-full py-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5"><i class="fa-solid fa-eye"></i> Abrir Ficha</button>
         </div>`;
     });
 }
@@ -713,11 +680,16 @@ function abrirDetalhesPaciente(pacienteId, origem) {
         <div class="bg-white p-6 rounded-xl border shadow-sm space-y-4">
             <h2 class="text-xl font-bold text-slate-900">${paciente.nome}</h2>
             <p class="text-xs text-slate-500">Telefone: ${paciente.telefone || '-'} | Categoria: ${paciente.categoria}</p>
-            <button onclick="mudarAba('${origem}')" class="px-4 py-2 bg-slate-100 rounded text-xs font-bold">Voltar</button>
+            <div class="flex gap-2 pt-2">
+                <button onclick="mudarAba('${origem}')" class="px-4 py-2 bg-slate-100 rounded text-xs font-bold">Voltar</button>
+                <button onclick="excluirPaciente('${paciente.id}')" class="px-4 py-2 bg-rose-50 text-rose-600 rounded text-xs font-bold">Excluir Paciente</button>
+            </div>
         </div>`;
     }
     mudarAba('detalhes-paciente');
 }
+
+function voltarParaOrigem() { mudarAba(abaOrigem || 'pacientes'); }
 
 // ==========================================
 // FINANCEIRO, BACKUP E PDF
@@ -776,25 +748,6 @@ function importarBackup(e) {
         alertCustomizado("Backup restaurado!");
     };
     reader.readAsText(file);
-}
-
-function gerarPDFOrcamento(pacienteId) {
-    const paciente = db.pacientes.find(p => p.id === pacienteId);
-    if (!paciente) return;
-    const janela = window.open('', '_blank');
-    janela.document.write(`
-        <html><head><title>Orçamento</title></head><body style="font-family:Arial; padding:40px;">
-            <div style="text-align:center; border-bottom:2px solid #2563eb; padding-bottom:15px;">
-                <h2 style="margin:0; color:#1e3a8a;">Dr. Mikeias Santos</h2>
-                <p style="margin:5px 0 0; font-size:14px; font-weight:bold;">Cirurgião Dentista CRO Pa 8360</p>
-                <p style="margin:5px 0 0; font-size:12px; color:#555;">Rua Assis Dória, 61 - Centro - Marituba</p>
-            </div>
-            <h3>Plano de Tratamento - ${paciente.nome}</h3>
-            <p>Data: ${new Date().toLocaleDateString('pt-BR')}</p>
-        </body></html>
-    `);
-    janela.document.close();
-    setTimeout(() => janela.print(), 400);
 }
 
 function fecharModal(id) {
