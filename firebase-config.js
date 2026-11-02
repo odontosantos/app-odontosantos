@@ -1,7 +1,4 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
-
+// firebase-config.js corrigido (Padrão Compat 9.22.0)
 const firebaseConfig = {
     apiKey: "AIzaSyCGbIFMtMxhhHf34NrbibGqt2JkDzM170k",
     authDomain: "appodontosantos.firebaseapp.com",
@@ -12,19 +9,40 @@ const firebaseConfig = {
     measurementId: "G-G8HKYD56VC"
 };
 
-// Inicializa o Firebase
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const dbFirestore = getFirestore(app);
+// Inicializa usando o SDK Compat global carregado no HTML
+firebase.initializeApp(firebaseConfig);
 
-// Expõe explicitamente de forma global
+const auth = firebase.auth();
+const dbFirestore = firebase.firestore();
+
+// Expõe globalmente para o app.js
 window.usaFirebase = true;
+window.firebase = firebase;
 window.firebaseAuth = auth;
 window.firebaseDb = dbFirestore;
-window.signInWithEmailAndPassword = signInWithEmailAndPassword;
-window.signOut = signOut;
-window.doc = doc;
-window.getDoc = getDoc;
-window.setDoc = setDoc; // <--- ADICIONADO AQUI
 
-console.log("🔥 Firebase inicializado e global!");
+window.signInWithEmailAndPassword = (authInstance, email, senha) => {
+    return authInstance.signInWithEmailAndPassword(email, senha);
+};
+
+window.signOut = (authInstance) => {
+    return authInstance.signOut();
+};
+
+window.doc = (db, collectionName, docId) => {
+    return db.collection(collectionName).doc(docId);
+};
+
+window.getDoc = async (docRef) => {
+    const snap = await docRef.get();
+    return {
+        exists: () => snap.exists,
+        data: () => snap.data()
+    };
+};
+
+window.setDoc = async (docRef, data) => {
+    return await docRef.set(data);
+};
+
+console.log("🔥 Firebase Compat 9.22.0 inicializado com sucesso!");
