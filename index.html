@@ -101,7 +101,7 @@
     <!-- CONTEÚDO PRINCIPAL -->
     <main id="main-content" class="flex-grow max-w-7xl w-full mx-auto p-3 sm:p-6 space-y-4 sm:space-y-6 hidden relative">
 
-        <!-- ABA 1: AGENDA (GRADE DE 08:00 ÀS 21:00 E VISÕES MACRO) -->
+        <!-- ABA 1: AGENDA -->
         <section id="tab-agenda" class="tab-content space-y-4 relative">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
                 <div>
@@ -123,26 +123,28 @@
                     <button onclick="abrirModalLembrete()" class="flex-1 sm:flex-none px-3.5 py-2 bg-slate-700 hover:bg-slate-800 text-white text-xs sm:text-sm font-semibold rounded-lg shadow transition flex items-center justify-center gap-1.5">
                         <i class="fa-solid fa-thumbtack"></i> + Bloqueio
                     </button>
-                    <button onclick="abrirModalAgendamento()" class="flex-1 sm:flex-none px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow transition flex items-center justify-center gap-2">
+                    <button onclick="abrirModalAgendamento()" class="flex-1 sm:flex-none px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold rounded-lg shadow transition flex items-center justify-center gap-2">
                         <i class="fa-solid fa-plus"></i> Agendar
                     </button>
                 </div>
             </div>
 
-            <!-- Mini Calendário Recolhível -->
-            <div id="mini-calendario-container" class="hidden bg-white p-3 rounded-xl shadow-sm border border-slate-200 max-w-sm mx-auto">
+            <!-- Mini Calendário Recolhível com Botão Fechar/OK -->
+            <div id="mini-calendario-container" class="hidden bg-white p-3 rounded-xl shadow-sm border border-slate-200 max-w-sm mx-auto space-y-2">
                 <div id="mini-calendario-conteudo"></div>
+                <div class="flex justify-end gap-2 pt-2 border-t">
+                    <button onclick="alternarMiniCalendario()" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition">Fechar / OK</button>
+                </div>
             </div>
             
-            <!-- Controle de Data -->
+            <!-- Controle de Data Otimizado (Compatível Desktop/Mobile) -->
             <div class="flex items-center justify-between bg-white p-3 rounded-xl shadow-sm border border-slate-200">
                 <button onclick="mudarDiaAgenda(-1)" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-semibold transition active:scale-95">
                     <i class="fa-solid fa-chevron-left"></i>
                 </button>
-                <div class="relative group cursor-pointer flex-grow text-center">
-                    <h4 id="data-agenda-display" class="font-extrabold text-blue-900 text-sm sm:text-base uppercase tracking-wide">Hoje</h4>
-                    <input type="date" id="input-data-agenda" onchange="alterarDataAgendaManual(event)" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full">
-                    <p class="text-[10px] text-slate-400 font-semibold mt-0.5">Tocar para escolher data</p>
+                <div class="relative cursor-pointer flex-grow text-center flex flex-col items-center justify-center">
+                    <h4 id="data-agenda-display" class="font-extrabold text-blue-900 text-sm sm:text-base uppercase tracking-wide pointer-events-none">Hoje</h4>
+                    <input type="date" id="input-data-agenda" onchange="alterarDataAgendaManual(event)" class="cursor-pointer opacity-80 text-xs text-slate-500 font-semibold mt-0.5 border rounded px-2 py-0.5 bg-slate-50 hover:bg-slate-100">
                 </div>
                 <button onclick="mudarDiaAgenda(1)" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-semibold transition active:scale-95">
                     <i class="fa-solid fa-chevron-right"></i>
@@ -158,7 +160,7 @@
             </button>
         </section>
 
-        <!-- ABA 2: PACIENTES EM COLUNA ÚNICA VERTICAL -->
+        <!-- ABA 2: PACIENTES -->
         <section id="tab-pacientes" class="tab-content hidden space-y-4">
             <div class="bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap items-center justify-between gap-3">
                 <div class="flex flex-wrap items-center gap-2">
