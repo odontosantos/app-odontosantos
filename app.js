@@ -8,14 +8,40 @@ let db = {
 
 const SENHA_EXCLUSAO = '1234';
 
+// ==========================================
+// MODAL DE ALERTAS/PROMPTS PERSONALIZADOS (MOBILE)
+// ==========================================
+function mostrarModalPersonalizado(titulo, corpoHtml, botoesHtml) {
+    const modal = document.getElementById('modal-customizado');
+    document.getElementById('modal-custom-titulo').innerText = titulo;
+    document.getElementById('modal-custom-corpo').innerHTML = corpoHtml;
+    document.getElementById('modal-custom-botoes').innerHTML = botoesHtml;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function fecharModalPersonalizado() {
+    fecharModal('modal-customizado');
+}
+
 function verificarSenhaExclusao() {
-    const senhaDigitada = prompt('🔒 Ação restrita. Digite a senha de exclusão para confirmar:');
-    if (senhaDigitada === null) return false;
-    if (senhaDigitada !== SENHA_EXCLUSAO) {
-        alert('❌ Senha incorreta! A ação foi cancelada.');
-        return false;
-    }
-    return true;
+    return new Promise((resolve) => {
+        const corpo = `<p class="text-slate-600">Ação restrita. Digite a senha de exclusão:</p>
+                       <input type="password" id="input-senha-exclusao-modal" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Senha">`;
+        const botoes = `<button onclick="fecharModalPersonalizado(); window._senhaResolvida(false)" class="px-3 py-2 border rounded-lg text-xs">Cancelar</button>
+                        <button onclick="const s = document.getElementById('input-senha-exclusao-modal').value; fecharModalPersonalizado(); window._senhaResolvida(s === '${SENHA_EXCLUSAO}');" class="px-3 py-2 bg-rose-600 text-white rounded-lg text-xs font-semibold">Confirmar</button>`;
+        window._senhaResolvida = (val) => {
+            if (!val) alertCustomizado("❌ Senha incorreta ou ação cancelada.");
+            resolve(val);
+        };
+        mostrarModalPersonalizado("🔒 Confirmação de Segurança", corpo, botoes);
+    });
+}
+
+function alertCustomizado(mensagem) {
+    const corpo = `<p class="text-slate-700">${mensagem}</p>`;
+    const botoes = `<button onclick="fecharModalPersonalizado()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold">OK</button>`;
+    mostrarModalPersonalizado("Aviso", corpo, botoes);
 }
 
 function carregarDadosLocais() {
@@ -37,14 +63,14 @@ let abaOrigem = 'agenda';
 let subAbaAtualPaciente = 'prontuario';
 let pacienteAtualId = null;
 let exibiApenasInativos = false;
-let dataAgendaAtual = obterDataLocalISO(); // Variável para controlar o dia da agenda
+let dataAgendaAtual = obterDataLocalISO();
 
 function gerarIdUnico() {
     return Date.now().toString() + '-' + Math.floor(Math.random() * 10000);
 }
 
 // ==========================================
-// SINCRONIZAÇÃO
+// SINCRONIZAÇÃO E PERSISTÊNCIA DE SESSÃO
 // ==========================================
 async function persistirDB() {
     localStorage.setItem('odonto_pacientes', JSON.stringify(db.pacientes));
@@ -114,7 +140,7 @@ function formatarMesAno(dataStr) {
 }
 
 // ==========================================
-// AUTENTICAÇÃO
+// AUTENTICAÇÃO E PERSISTÊNCIA DE SESSÃO
 // ==========================================
 async function fazerLoginFirebase(event) {
     event.preventDefault();
@@ -122,25 +148,47 @@ async function fazerLoginFirebase(event) {
     const senha = document.getElementById('login-senha').value;
 
     if (!window.usaFirebase || !window.firebaseAuth) {
-        alert("⚠️ O Firebase ainda está carregando. Aguarde um segundo e tente novamente.");
+        alertCustomizado("⚠️ O Firebase ainda está carregando. Aguarde um segundo e tente novamente.");
         return;
     }
 
     try {
+        // Define persistência local para não exigir novo login ao atualizar a página
+        await window.firebaseAuth.setPersistence(window.firebase.auth.Auth.Persistence.LOCAL);
         const userCredential = await window.signInWithEmailAndPassword(window.firebaseAuth, email, senha);
-        const user = userCredential.user;
-        const docRef = window.doc(window.firebaseDb, "usuarios", user.email);
-        const userDoc = await window.getDoc(docRef);
-
-        let perfilEncontrado = userDoc.exists() ? userDoc.data().perfil : 'secretaria';
-        usuarioAtual = { perfil: perfilEncontrado, email: user.email };
-        iniciarSessaoSistema();
+        processarUsuarioLogado(userCredential.user);
     } catch (error) {
         let mensagemErro = error.message;
         if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-email') {
             mensagemErro = "E-mail ou senha incorretos.";
         }
-        alert("❌ Erro no login: " + mensagemErro);
+        alertCustomizado("❌ Erro no login: " + mensagemErro);
+    }
+}
+
+// Monitora o estado de autenticação para persistir sessão ao atualizar
+window.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+        if (window.usaFirebase && window.firebaseAuth) {
+            window.firebaseAuth.onAuthStateChanged(async (user) => {
+                if (user) {
+                    processarUsuarioLogado(user);
+                }
+            });
+        }
+    }, 1000);
+});
+
+async function processarUsuarioLogado(user) {
+    try {
+        const docRef = window.doc(window.firebaseDb, "usuarios", user.email);
+        const userDoc = await window.getDoc(docRef);
+        let perfilEncontrado = userDoc.exists() ? userDoc.data().perfil : 'secretaria';
+        usuarioAtual = { perfil: perfilEncontrado, email: user.email };
+        iniciarSessaoSistema();
+    } catch (e) {
+        usuarioAtual = { perfil: 'secretaria', email: user.email };
+        iniciarSessaoSistema();
     }
 }
 
@@ -221,7 +269,7 @@ function inicializarSistema() {
 }
 
 // ==========================================
-// AGENDA (NOVA ESTRUTURA EM CARDS)
+// AGENDA
 // ==========================================
 function inicializarCalendario() {
     renderizarAgendaCards();
@@ -257,7 +305,6 @@ function renderizarAgendaCards() {
     const diasSemana = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
     const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
     
-    // Se for hoje, exibe "Hoje, Dia de Mês"
     const hojeIso = obterDataLocalISO();
     if (dataAgendaAtual === hojeIso) {
         displayData.innerText = `Hoje, ${String(dataObj.getDate()).padStart(2,'0')} de ${meses[dataObj.getMonth()]}`;
@@ -322,7 +369,7 @@ function alterarStatusAgendamento(id, status) {
 }
 
 // ==========================================
-// MODAIS DE AGENDAMENTO E LEMBRETES/BLOQUEIOS
+// MODAIS DE AGENDAMENTO E LEMBRETES
 // ==========================================
 function atualizarHoraFimPadrao() {
     const inputInicio = document.getElementById('agendamento-horario');
@@ -384,16 +431,23 @@ function selecionarCorLembrete(corHex, elementoBtn) {
     }
 }
 
-function excluirAgendamento(id, pacienteId) {
-    if (!verificarSenhaExclusao()) return;
-    if (!confirm('Deseja realmente excluir este item da agenda?')) return;
-    db.agendamentos = db.agendamentos.filter(ag => ag.id !== id);
-    persistirDB();
-    atualizarCalendario();
-    if (pacienteId && !document.getElementById('tab-detalhes-paciente').classList.contains('hidden')) {
-        abrirDetalhesPaciente(pacienteId, abaOrigem);
-    }
-    alert('Item excluído com sucesso!');
+async function excluirAgendamento(id, pacienteId) {
+    if (!(await verificarSenhaExclusao())) return;
+    const corpo = `<p class="text-slate-600">Deseja realmente excluir este item da agenda?</p>`;
+    const botoes = `<button onclick="fecharModalPersonalizado(); window._confirmaExcluirAg(false)" class="px-3 py-2 border rounded-lg text-xs">Cancelar</button>
+                    <button onclick="fecharModalPersonalizado(); window._confirmaExcluirAg(true)" class="px-3 py-2 bg-rose-600 text-white rounded-lg text-xs font-semibold">Excluir</button>`;
+    window._confirmaExcluirAg = (conf) => {
+        if (conf) {
+            db.agendamentos = db.agendamentos.filter(ag => ag.id !== id);
+            persistirDB();
+            atualizarCalendario();
+            if (pacienteId && !document.getElementById('tab-detalhes-paciente').classList.contains('hidden')) {
+                abrirDetalhesPaciente(pacienteId, abaOrigem);
+            }
+            alertCustomizado('Item excluído com sucesso!');
+        }
+    };
+    mostrarModalPersonalizado("Confirmar Exclusão", corpo, botoes);
 }
 
 function abrirModalDetalhesAgendamento(agendamentoId) {
@@ -520,14 +574,14 @@ function salvarAgendamento(event) {
     const pacienteId = document.getElementById('agendamento-paciente').value;
     const editId = document.getElementById('agendamento-edit-id').value;
 
-    if (!pacienteId) { alert('Selecione um paciente.'); return; }
+    if (!pacienteId) { alertCustomizado('Selecione um paciente.'); return; }
 
     const dataAg = document.getElementById('agendamento-data').value;
     const horaAg = document.getElementById('agendamento-horario').value;
     const horaFimAg = document.getElementById('agendamento-hora-fim').value;
 
     if (horaFimAg <= horaAg) {
-        alert('A Hora Final deve ser posterior à Hora Inicial.');
+        alertCustomizado('A Hora Final deve ser posterior à Hora Inicial.');
         return;
     }
 
@@ -614,8 +668,8 @@ function salvarLembrete(event) {
     const horaInicio = document.getElementById('lembrete-horario').value;
     const horaFim = document.getElementById('lembrete-hora-fim').value;
 
-    if (!titulo) { alert('Informe o título do lembrete.'); return; }
-    if (horaFim <= horaInicio) { alert('A Hora Final deve ser posterior à Hora Inicial.'); return; }
+    if (!titulo) { alertCustomizado('Informe o título do lembrete.'); return; }
+    if (horaFim <= horaInicio) { alertCustomizado('A Hora Final deve ser posterior à Hora Inicial.'); return; }
 
     const inputCor = document.getElementById('lembrete-cor');
     const dadosLembrete = {
@@ -640,12 +694,11 @@ function salvarLembrete(event) {
     persistirDB();
     fecharModal('modal-lembrete');
     atualizarCalendario();
-    alert('Lembrete/Bloqueio salvo com sucesso!');
+    alertCustomizado('Lembrete/Bloqueio salvo com sucesso!');
 }
 
-
 // ==========================================
-// PACIENTES (NOVA ESTRUTURA EM GRID)
+// PACIENTES (COM FILTROS EM TAGS E SCROLL)
 // ==========================================
 function obterUltimaConsultaPaciente(pacienteId) {
     const datas = [];
@@ -666,29 +719,38 @@ function calcularDiasDesdeUltimaConsulta(dataIso) {
 }
 
 function definirFiltroCategoria(categoria) {
-    const selectCat = document.getElementById('filtro-categoria-pacientes');
-    if (selectCat) selectCat.value = categoria;
     exibiApenasInativos = false;
-    atualizarBotaoInativos();
+    window._categoriaSelecionada = categoria;
+    
+    // Atualiza classes visuais das tags
+    ['todos', 'clinico', 'orto'].forEach(cat => {
+        const btn = document.getElementById('tag-filtro-' + cat);
+        if (btn) {
+            if (cat === categoria) {
+                btn.className = 'px-3.5 py-1.5 rounded-full text-xs font-bold transition bg-blue-600 text-white shadow-sm';
+            } else {
+                btn.className = 'px-3.5 py-1.5 rounded-full text-xs font-bold transition bg-slate-100 text-slate-700 hover:bg-slate-200';
+            }
+        }
+    });
+    
+    const btnInativos = document.getElementById('btn-filtro-inativos');
+    if (btnInativos) btnInativos.className = 'px-3.5 py-1.5 rounded-full text-xs font-bold transition bg-amber-50 text-amber-800 border border-amber-200';
+
     renderizarPacientes();
 }
 
 function alternarFiltroInativos() {
     exibiApenasInativos = !exibiApenasInativos;
-    atualizarBotaoInativos();
-    renderizarPacientes();
-}
-
-function atualizarBotaoInativos() {
-    const btn = document.getElementById('btn-filtro-inativos');
-    if (!btn) return;
-    if (exibiApenasInativos) {
-        btn.className = 'px-3 py-2 bg-amber-600 text-white text-xs sm:text-sm font-semibold rounded-lg shadow transition flex items-center justify-center gap-1.5 whitespace-nowrap';
-        btn.innerHTML = '<i class="fa-solid fa-xmark"></i> Removendo Inativos (> 30d)';
-    } else {
-        btn.className = 'px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs sm:text-sm font-semibold rounded-lg border border-amber-200 transition flex items-center justify-center gap-1.5 whitespace-nowrap';
-        btn.innerHTML = '<i class="fa-solid fa-filter"></i> Mostrar Inativos (> 30 dias)';
+    const btnInativos = document.getElementById('btn-filtro-inativos');
+    if (btnInativos) {
+        if (exibiApenasInativos) {
+            btnInativos.className = 'px-3.5 py-1.5 rounded-full text-xs font-bold transition bg-amber-600 text-white shadow-sm';
+        } else {
+            btnInativos.className = 'px-3.5 py-1.5 rounded-full text-xs font-bold transition bg-amber-50 text-amber-800 border border-amber-200';
+        }
     }
+    renderizarPacientes();
 }
 
 function renderizarPacientes() {
@@ -696,7 +758,7 @@ function renderizarPacientes() {
     if (!container) return;
     
     const termoBusca = (document.getElementById('busca-pacientes-tabela')?.value || '').toLowerCase().trim();
-    const opcaoCategoria = document.getElementById('filtro-categoria-pacientes')?.value || 'todos';
+    const opcaoCategoria = window._categoriaSelecionada || 'todos';
 
     container.innerHTML = '';
     let total = db.pacientes.length, clinicos = 0, orto = 0, inativosCount = 0;
@@ -771,55 +833,63 @@ function renderizarPacientes() {
     });
 }
 
-function excluirPaciente(pacienteId) {
+async function excluirPaciente(pacienteId) {
     const paciente = db.pacientes.find(p => p.id === pacienteId);
     if (!paciente) return;
 
-    if (!verificarSenhaExclusao()) return;
-    if (confirm(`⚠️ Tem certeza que deseja EXCLUIR permanentemente o paciente "${paciente.nome}"?`)) {
-        db.pacientes = db.pacientes.filter(p => p.id !== pacienteId);
-        db.agendamentos = db.agendamentos.filter(a => a.pacienteId !== pacienteId);
-        db.prontuarios = db.prontuarios.filter(pr => pr.pacienteId !== pacienteId);
+    if (!(await verificarSenhaExclusao())) return;
+    
+    const corpo = `<p class="text-slate-600">Tem certeza que deseja EXCLUIR permanentemente o paciente "${paciente.nome}"?</p>`;
+    const botoes = `<button onclick="fecharModalPersonalizado(); window._confirmaExcluirPac(false)" class="px-3 py-2 border rounded-lg text-xs">Cancelar</button>
+                    <button onclick="fecharModalPersonalizado(); window._confirmaExcluirPac(true)" class="px-3 py-2 bg-rose-600 text-white rounded-lg text-xs font-semibold">Excluir</button>`;
+    window._confirmaExcluirPac = (conf) => {
+        if (conf) {
+            db.pacientes = db.pacientes.filter(p => p.id !== pacienteId);
+            db.agendamentos = db.agendamentos.filter(a => a.pacienteId !== pacienteId);
+            db.prontuarios = db.prontuarios.filter(pr => pr.pacienteId !== pacienteId);
 
-        db.pagamentos.forEach(pg => {
-            if (pg.pacienteId === pacienteId) {
-                pg.pacienteId = null; 
-                pg.descricao = `[Paciente Excluído: ${paciente.nome}] ` + pg.descricao;
-            }
-        });
+            db.pagamentos.forEach(pg => {
+                if (pg.pacienteId === pacienteId) {
+                    pg.pacienteId = null; 
+                    pg.descricao = `[Paciente Excluído: ${paciente.nome}] ` + pg.descricao;
+                }
+            });
 
-        persistirDB();
-        atualizarCalendario();
-        renderizarPacientes();
-        alert('Paciente excluído com sucesso! (O histórico financeiro foi mantido no caixa).');
-        voltarParaOrigem();
-    }
+            persistirDB();
+            atualizarCalendario();
+            renderizarPacientes();
+            alertCustomizado('Paciente excluído com sucesso! (O histórico financeiro foi mantido no caixa).');
+            voltarParaOrigem();
+        }
+    };
+    mostrarModalPersonalizado("Excluir Paciente", corpo, botoes);
 }
 
-function excluirProntuario(prontuarioId, pacienteId) {
-    if (!verificarSenhaExclusao()) return;
-    if (!confirm('Deseja realmente remover esta evolução do prontuário?')) return;
+async function excluirProntuario(prontuarioId, pacienteId) {
+    if (!(await verificarSenhaExclusao())) return;
     db.prontuarios = db.prontuarios.filter(pr => pr.id !== prontuarioId);
     persistirDB();
     abrirDetalhesPaciente(pacienteId, abaOrigem);
 }
 
 // ==========================================
-// FINANCEIRO & CAIXA
+// FINANCEIRO & CAIXA (COM MODAIS CUSTOMIZADOS)
 // ==========================================
-
 function estornarPagamento(pagamentoId, pacienteId) {
     const pagamentoOriginal = db.pagamentos.find(pg => pg.id === pagamentoId);
     if (!pagamentoOriginal) return;
 
-    const motivo = prompt('🔄 Motivo do estorno do pagamento (Obrigatório):');
-    if (!motivo || motivo.trim() === '') {
-        alert('O estorno foi cancelado porque o motivo é obrigatório.');
-        return;
-    }
+    const corpo = `<p class="text-slate-600">Digite o motivo do estorno do pagamento (Obrigatório):</p>
+                   <input type="text" id="input-motivo-estorno" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Ex: Cobrança indevida, desistência...">`;
+    const botoes = `<button onclick="fecharModalPersonalizado()" class="px-3 py-2 border rounded-lg text-xs">Cancelar</button>
+                    <button onclick="const m = document.getElementById('input-motivo-estorno').value; if(!m) { alert('Motivo obrigatório'); return; } fecharModalPersonalizado(); executarEstorno('${pagamentoId}', '${pacienteId}', '${m}')" class="px-3 py-2 bg-amber-600 text-white rounded-lg text-xs font-semibold">Avançar</button>`;
+    mostrarModalPersonalizado("Motivo do Estorno", corpo, botoes);
+}
 
-    if (!verificarSenhaExclusao()) return;
-    if (!confirm(`Deseja confirmar o estorno de R$ ${Number(pagamentoOriginal.valor).toFixed(2)}?`)) return;
+async function executarEstorno(pagamentoId, pacienteId, motivo) {
+    const pagamentoOriginal = db.pagamentos.find(pg => pg.id === pagamentoId);
+    if (!pagamentoOriginal) return;
+    if (!(await verificarSenhaExclusao())) return;
 
     db.pagamentos.push({
         id: gerarIdUnico(),
@@ -831,7 +901,7 @@ function estornarPagamento(pagamentoId, pacienteId) {
     });
 
     persistirDB();
-    alert('Estorno realizado com sucesso!');
+    alertCustomizado('Estorno realizado com sucesso!');
     if (pacienteId) {
         abrirDetalhesPaciente(pacienteId, abaOrigem);
     } else {
@@ -868,7 +938,7 @@ function salvarLancamentoCaixaManual(event, pacienteId) {
     }
 
     persistirDB();
-    alert('Lançamento salvo e status atualizado com sucesso!');
+    alertCustomizado('Lançamento salvo e status atualizado com sucesso!');
     abrirDetalhesPaciente(pacienteId, abaOrigem);
 }
 
@@ -888,64 +958,81 @@ function removerPendenciaManual(pacienteId) {
 }
 
 function lancarDespesa() {
-    const desc = prompt('Descrição da despesa:');
-    if (!desc) return;
-    let valorStr = prompt('Valor da despesa (R$):');
-    if (!valorStr) return;
-    valorStr = valorStr.replace(',', '.');
-    const valor = parseFloat(valorStr);
-    if (isNaN(valor) || valor <= 0) { alert('Valor inválido.'); return; }
+    const corpo = `<div class="space-y-3">
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Descrição</label><input type="text" id="desp-desc" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Ex: Material de consumo"></div>
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Valor (R$)</label><input type="number" step="0.01" id="desp-valor" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="0.00"></div>
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Categoria</label><input type="text" id="desp-cat" class="w-full px-3 py-2 border rounded-lg text-sm" value="Operacional"></div>
+    </div>`;
+    const botoes = `<button onclick="fecharModalPersonalizado()" class="px-3 py-2 border rounded-lg text-xs">Cancelar</button>
+                    <button onclick="salvarDespesaCustom()" class="px-3 py-2 bg-rose-600 text-white rounded-lg text-xs font-semibold">Salvar Despesa</button>`;
+    mostrarModalPersonalizado("Lançar Despesa", corpo, botoes);
+}
 
-    const categoria = prompt('Categoria:', 'Operacional');
+function salvarDespesaCustom() {
+    const desc = document.getElementById('desp-desc').value.trim();
+    let valorStr = document.getElementById('desp-valor').value.replace(',', '.');
+    const valor = parseFloat(valorStr);
+    const cat = document.getElementById('desp-cat').value.trim() || 'Operacional';
+
+    if (!desc || isNaN(valor) || valor <= 0) {
+        alertCustomizado("Preencha a descrição e um valor válido.");
+        return;
+    }
 
     db.despesas.push({
         id: gerarIdUnico(),
         data: obterDataLocalISO(),
         descricao: desc,
         valor: valor,
-        categoria: categoria || 'Operacional'
+        categoria: cat
     });
 
     persistirDB();
-    alert('Despesa lançada!');
+    fecharModalPersonalizado();
     renderizarFinanceiro();
+    alertCustomizado('Despesa lançada com sucesso!');
 }
 
-function excluirDespesa(id) {
-    if (!verificarSenhaExclusao()) return;
-    if (!confirm('Deseja realmente excluir esta despesa?')) return;
+async function excluirDespesa(id) {
+    if (!(await verificarSenhaExclusao())) return;
     db.despesas = db.despesas.filter(d => d.id !== id);
     persistirDB();
     renderizarFinanceiro();
-    alert('Despesa excluída!');
+    alertCustomizado('Despesa excluída!');
 }
 
-function fecharCaixaDiario() {
-    const hoje = obterDataLocalISO();
-    const pagamentosHoje = db.pagamentos.filter(pg => pg.data === hoje);
-    const despesasHoje = db.despesas.filter(d => d.data === hoje);
+function abrirModalCaixaDiario() {
+    const inputData = document.getElementById('input-data-caixa-diario');
+    if (inputData) inputData.value = obterDataLocalISO();
+    carregarFechamentoCaixaData();
+    const modal = document.getElementById('modal-fechamento-caixa');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function carregarFechamentoCaixaData() {
+    const inputData = document.getElementById('input-data-caixa-diario');
+    const dataSelecionada = inputData ? inputData.value : obterDataLocalISO();
+    
+    const pagamentosDia = db.pagamentos.filter(pg => pg.data === dataSelecionada);
+    const despesasDia = db.despesas.filter(d => d.data === dataSelecionada);
 
     let totalEntradas = 0;
-    pagamentosHoje.forEach(pg => totalEntradas += parseFloat(pg.valor || 0));
+    pagamentosDia.forEach(pg => totalEntradas += parseFloat(pg.valor || 0));
 
     let totalSaidas = 0;
-    despesasHoje.forEach(d => totalSaidas += parseFloat(d.valor || 0));
+    despesasDia.forEach(d => totalSaidas += parseFloat(d.valor || 0));
 
     let saldoDia = totalEntradas - totalSaidas;
 
     const porForma = {};
-    pagamentosHoje.forEach(pg => {
+    pagamentosDia.forEach(pg => {
         if(pg.valor > 0){
            porForma[pg.forma] = (porForma[pg.forma] || 0) + parseFloat(pg.valor || 0);
         }
     });
 
-    let html = `<div class="bg-blue-50 p-4 rounded-xl border border-blue-100 text-center mb-4">
-                    <p class="text-xs font-bold text-blue-800 uppercase tracking-wider">Data do Fechamento</p>
-                    <h4 class="text-lg font-extrabold text-blue-900">${hoje.split('-').reverse().join('/')}</h4>
-                </div>`;
-
-    html += `<div class="space-y-2 mb-4">
+    let html = `<div class="space-y-2 mb-4">
                 <div class="flex justify-between items-center p-3 bg-slate-50 border rounded-lg">
                     <span class="font-semibold text-slate-600"><i class="fa-solid fa-arrow-down text-emerald-500 mr-2"></i>Entradas/Movimentos</span>
                     <span class="font-bold text-emerald-600">R$ ${totalEntradas.toFixed(2)}</span>
@@ -961,7 +1048,7 @@ function fecharCaixaDiario() {
              </div>`;
 
     if (Object.keys(porForma).length > 0) {
-        html += `<h4 class="font-bold text-slate-800 mb-2 border-b pb-1">Resumo por Forma de Pagamento</h4><div class="space-y-1">`;
+        html += `<h4 class="font-bold text-slate-800 mb-2 border-b pb-1 text-xs uppercase">Resumo por Forma de Pagamento</h4><div class="space-y-1">`;
         for (let forma in porForma) {
             html += `<div class="flex justify-between text-sm p-2 bg-slate-50 rounded border">
                         <span class="text-slate-700 font-medium">${forma}</span>
@@ -970,28 +1057,47 @@ function fecharCaixaDiario() {
         }
         html += `</div>`;
     } else {
-        html += `<p class="text-sm text-slate-500 italic text-center">Nenhuma entrada registrada hoje.</p>`;
+        html += `<p class="text-sm text-slate-500 italic text-center">Nenhuma entrada registrada nesta data.</p>`;
     }
 
     document.getElementById('conteudo-fechamento-caixa').innerHTML = html;
-    
-    const modal = document.getElementById('modal-fechamento-caixa');
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
 }
 
 function abrirModalPagamentoAvulso() {
-    const valorStr = prompt('Digite o valor do pagamento (R$):');
-    if (!valorStr) return;
-    const valor = parseFloat(valorStr.replace(',', '.'));
-    if (isNaN(valor) || valor <= 0) { alert('Valor inválido.'); return; }
+    const corpo = `<div class="space-y-3">
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Valor (R$)</label><input type="number" step="0.01" id="avulso-valor" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="0.00"></div>
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Descrição</label><input type="text" id="avulso-desc" class="w-full px-3 py-2 border rounded-lg text-sm" value="Consulta / Procedimento"></div>
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Forma de Pagamento</label><select id="avulso-forma" class="w-full px-3 py-2 border rounded-lg text-sm bg-white"><option value="Pix">Pix</option><option value="Cartão de Crédito">Cartão de Crédito</option><option value="Cartão de Débito">Cartão de Débito</option><option value="Dinheiro">Dinheiro</option></select></div>
+    </div>`;
+    const botoes = `<button onclick="fecharModalPersonalizado()" class="px-3 py-2 border rounded-lg text-xs">Cancelar</button>
+                    <button onclick="salvarPagamentoAvulsoCustom()" class="px-3 py-2 bg-emerald-600 text-white rounded-lg text-xs font-semibold">Salvar</button>`;
+    mostrarModalPersonalizado("Pagamento Avulso", corpo, botoes);
+}
+
+function salvarPagamentoAvulsoCustom() {
+    let valorStr = document.getElementById('avulso-valor').value.replace(',', '.');
+    const valor = parseFloat(valorStr);
+    const desc = document.getElementById('avulso-desc').value.trim() || 'Pagamento Avulso';
+    const forma = document.getElementById('avulso-forma').value;
+
+    if (isNaN(valor) || valor <= 0) {
+        alertCustomizado("Informe um valor válido.");
+        return;
+    }
+
+    db.pagamentos.push({ 
+        id: gerarIdUnico(), 
+        pacienteId: null, 
+        data: obterDataLocalISO(), 
+        valor: valor, 
+        forma: forma, 
+        descricao: desc 
+    });
     
-    const descricao = prompt('Digite a descrição:', 'Consulta / Procedimento');
-    const forma = prompt('Forma de pagamento (Dinheiro, Pix, Cartão):', 'Pix');
-    db.pagamentos.push({ id: gerarIdUnico(), pacienteId: null, data: obterDataLocalISO(), valor: valor, forma: forma || 'Pix', descricao: descricao || 'Pagamento Avulso' });
     persistirDB();
-    alert('Pagamento lançado!');
+    fecharModalPersonalizado();
     renderizarFinanceiro();
+    alertCustomizado('Pagamento lançado com sucesso!');
 }
 
 function alternarFiltroPersonalizadoFinanceiro() {
@@ -1103,21 +1209,10 @@ function renderizarFinanceiro() {
 }
 
 // ==========================================
-// OUTRAS FUNÇÕES DE APOIO
+// FICHA DO PACIENTE (ABAS DIRETAS NO TOPO & SCROLL)
 // ==========================================
-
 function voltarParaOrigem() { mudarAba(abaOrigem || 'pacientes'); }
 function alternarAccordion(id) { const el = document.getElementById(id); if (el) el.classList.toggle('hidden'); }
-function alternarSecaoMobile(secaoId) {
-    const el = document.getElementById(secaoId);
-    if (!el) return;
-    const estaOculto = el.classList.contains('hidden');
-    document.querySelectorAll('.secao-clinica-mobile').forEach(s => s.classList.add('hidden'));
-    if (estaOculto) {
-        el.classList.remove('hidden');
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-}
 
 function abrirSubAbaPaciente(subAba) {
     subAbaAtualPaciente = subAba;
@@ -1211,7 +1306,7 @@ function salvarProcedimentoDentista(event, pacienteId) {
         proximaConsulta: proximaConsulta
     });
     persistirDB();
-    alert('Evolução do Prontuário salva!');
+    alertCustomizado('Evolução do Prontuário salva!');
     abrirDetalhesPaciente(pacienteId, abaOrigem);
 }
 
@@ -1225,7 +1320,7 @@ function adicionarEtapaPlanejamento(event, pacienteId) {
     const desc = descInput ? descInput.value.trim() : '';
     const valor = valorInput ? (parseFloat(valorInput.value) || 0) : 0;
 
-    if (!desc) { alert('Informe a descrição.'); return; }
+    if (!desc) { alertCustomizado('Informe a descrição.'); return; }
 
     const paciente = db.pacientes.find(p => p.id === pacienteId);
     if (paciente) {
@@ -1248,8 +1343,8 @@ function alternarStatusEtapa(pacienteId, etapaId) {
     }
 }
 
-function excluirEtapaPlanejamento(pacienteId, etapaId) {
-    if (!verificarSenhaExclusao()) return;
+async function excluirEtapaPlanejamento(pacienteId, etapaId) {
+    if (!(await verificarSenhaExclusao())) return;
     const paciente = db.pacientes.find(p => p.id === pacienteId);
     if (paciente && Array.isArray(paciente.planejamentoEtapas)) {
         paciente.planejamentoEtapas = paciente.planejamentoEtapas.filter(e => e.id !== etapaId);
@@ -1281,13 +1376,13 @@ function importarBackup(event) {
                     persistirDB();
                     atualizarCalendario();
                     renderizarPacientes();
-                    alert('Backup restaurado com sucesso!');
+                    alertCustomizado('Backup restaurado com sucesso!');
                 }
             } else {
-                alert('Arquivo de backup inválido.');
+                alertCustomizado('Arquivo de backup inválido.');
             }
         } catch (err) {
-            alert('Erro ao ler o arquivo JSON: ' + err.message);
+            alertCustomizado('Erro ao ler o arquivo JSON: ' + err.message);
         }
     };
     reader.readAsText(file);
@@ -1378,7 +1473,7 @@ function cadastrarPacienteRapido() {
     const telefone = document.getElementById('rapido-telefone').value.trim();
     const categoria = document.getElementById('rapido-categoria').value;
 
-    if (!nome) { alert('Informe o nome.'); return; }
+    if (!nome) { alertCustomizado('Informe o nome.'); return; }
 
     const novoId = gerarIdUnico();
     db.pacientes.push({ id: novoId, nome: nome, telefone: telefone, nascimento: '', cpf: '', categoria: categoria, vencimento: '', planejamentoEtapas: [] });
@@ -1389,7 +1484,7 @@ function cadastrarPacienteRapido() {
     const selectAg = document.getElementById('agendamento-paciente');
     if (selectAg) selectAg.value = novoId;
     toggleFormCadastroRapido();
-    alert('Paciente cadastrado!');
+    alertCustomizado('Paciente cadastrado!');
 }
 
 function filtrarPacientesSelect() {
@@ -1416,7 +1511,7 @@ function salvarPaciente(event) {
     const nomeCaixaAlta = document.getElementById('paciente-nome').value.trim().toUpperCase();
     const editId = document.getElementById('paciente-edit-id').value;
 
-    if (!nomeCaixaAlta) { alert('O nome do paciente é obrigatório.'); return; }
+    if (!nomeCaixaAlta) { alertCustomizado('O nome do paciente é obrigatório.'); return; }
 
     const dadosPaciente = {
         nome: nomeCaixaAlta,
@@ -1445,7 +1540,7 @@ function salvarPaciente(event) {
     if (editId && !document.getElementById('tab-detalhes-paciente').classList.contains('hidden')) {
         abrirDetalhesPaciente(editId, abaOrigem);
     }
-    alert('Dados do paciente salvos!');
+    alertCustomizado('Dados do paciente salvos!');
 }
 
 function abrirDetalhesPaciente(pacienteId, origem) {
@@ -1466,16 +1561,16 @@ function abrirDetalhesPaciente(pacienteId, origem) {
 
     let badgePendencia = '';
     if (paciente.possuiPendenciaManual) {
-        badgePendencia = '<div class="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-2">' +
+        badgePendencia = '<div class="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1.5">' +
             '<div class="flex items-center justify-between">' +
-                '<span class="text-xs uppercase font-bold text-amber-600 tracking-wider"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Pendência Financeira</span>' +
+                '<span class="text-[10px] uppercase font-bold text-amber-600 tracking-wider"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Pendência Financeira</span>' +
             '</div>' +
-            '<p class="text-sm font-medium text-amber-900">' + (paciente.obsFinanceiraManual || 'Paciente marcado com pendência/débito.') + '</p>' +
-            '<button onclick="removerPendenciaManual(\'' + paciente.id + '\')" class="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow transition flex items-center justify-center gap-1"><i class="fa-solid fa-check"></i> Dar Baixa na Pendência</button>' +
+            '<p class="text-xs font-medium text-amber-900">' + (paciente.obsFinanceiraManual || 'Paciente marcado com pendência/débito.') + '</p>' +
+            '<button onclick="removerPendenciaManual(\'' + paciente.id + '\')" class="w-full py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow transition flex items-center justify-center gap-1"><i class="fa-solid fa-check"></i> Dar Baixa</button>' +
         '</div>';
     } else {
-        badgePendencia = '<div class="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">' +
-            '<div><span class="text-xs uppercase font-bold text-emerald-600 block">Financeiro</span><span class="text-xs font-semibold text-emerald-800">Sem pendências registradas</span></div>' +
+        badgePendencia = '<div class="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">' +
+            '<div><span class="text-[10px] uppercase font-bold text-emerald-600">Financeiro: </span><span class="text-xs font-semibold text-emerald-800">Sem pendências</span></div>' +
         '</div>';
     }
 
@@ -1515,18 +1610,13 @@ function abrirDetalhesPaciente(pacienteId, origem) {
             '<div class="sm:col-span-2"><button type="submit" class="w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg text-xs shadow flex items-center justify-center gap-1"><i class="fa-solid fa-plus"></i> Add</button></div></form>';
     }
 
-    let htmlPlanejamentoTratamento = '<div id="sec-plano-tratamento" class="secao-clinica-mobile hidden md:block border border-indigo-200 rounded-xl overflow-hidden bg-indigo-50/30 shadow-sm">' +
-        '<div class="px-4 py-3 font-bold text-indigo-900 flex justify-between items-center bg-indigo-100/50 text-sm">' +
-            '<span class="flex items-center gap-2"><i class="fa-solid fa-clipboard-list text-indigo-600"></i> Plano de Tratamento (' + etapas.length + ' itens)</span>' +
-            '<div class="flex items-center gap-2">' +
-                '<span class="text-xs font-bold text-indigo-800 bg-indigo-100 px-2 py-0.5 rounded-full">Total: R$ ' + valorTotalPlano.toFixed(2) + '</span>' +
-                '<span class="text-xs font-semibold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">' + concluidasCount + ' / ' + etapas.length + '</span>' +
-            '</div></div>' +
-        '<div class="p-4 space-y-3 bg-indigo-50/20"><div class="space-y-2 max-h-60 overflow-y-auto pr-1">' + htmlItensEtapas + '</div>' + htmlFormAdicionarEtapa + '</div></div>';
+    let htmlPlanoTratamento = '<div class="space-y-3 bg-indigo-50/20 p-3 rounded-xl border border-indigo-100">' +
+        '<div class="flex justify-between items-center text-xs font-bold text-indigo-900"><span>Itens do Plano</span><span>Total: R$ ' + valorTotalPlano.toFixed(2) + '</span></div>' +
+        '<div class="space-y-2 max-h-[50vh] overflow-y-auto pr-1">' + htmlItensEtapas + '</div>' + htmlFormAdicionarEtapa + '</div>';
 
-    let htmlFormDentista = '';
+    let htmlFormProntuario = '';
     if (usuarioAtual && usuarioAtual.perfil === 'dentista') {
-        htmlFormDentista = '<div id="sec-evolucao-prontuario" class="secao-clinica-mobile hidden md:block bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3 shadow-sm">' +
+        htmlFormProntuario = '<div class="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3 shadow-sm mb-4">' +
             '<h4 class="font-bold text-blue-900 text-sm flex items-center gap-2"><i class="fa-solid fa-stethoscope text-blue-600"></i> Registrar Evolução do Prontuário</h4>' +
             '<form onsubmit="salvarProcedimentoDentista(event, \'' + paciente.id + '\')" class="space-y-3">' +
                 '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Procedimento Realizado *</label><input type="text" id="proc-desc" required placeholder="Ex: Restauração Resina Dente 16" class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"></div>' +
@@ -1534,7 +1624,7 @@ function abrirDetalhesPaciente(pacienteId, origem) {
                 '<button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg text-xs shadow transition">Salvar Prontuário</button></form></div>';
     }
 
-    let htmlFormCaixa = '<div id="sec-lancar-caixa" class="secao-clinica-mobile hidden md:block bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-3 shadow-sm">' +
+    let htmlFormCaixa = '<div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-3 shadow-sm mb-4">' +
         '<h4 class="font-bold text-emerald-900 text-sm flex items-center gap-2"><i class="fa-solid fa-cash-register text-emerald-600"></i> Lançamento & Observação Financeira</h4>' +
         '<form onsubmit="salvarLancamentoCaixaManual(event, \'' + paciente.id + '\')" class="space-y-3">' +
             '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Descrição do Procedimento *</label><input type="text" id="caixa-proc-desc" required placeholder="Ex: Manutenção Orto, Clareamento..." class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"></div>' +
@@ -1545,11 +1635,11 @@ function abrirDetalhesPaciente(pacienteId, origem) {
             '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Observação (Pendências ou Créditos)</label><input type="text" id="caixa-obs-manual" placeholder="Ex: Acerto combinado, valor pendente, crédito..." value="' + (paciente.obsFinanceiraManual || '') + '" class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"></div>' +
             '<div class="flex items-center gap-2 pt-1">' +
                 '<input type="checkbox" id="caixa-marca-pendencia" class="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500" ' + (paciente.possuiPendenciaManual ? 'checked' : '') + '>' +
-                '<label for="caixa-marca-pendencia" class="text-xs font-semibold text-slate-700 cursor-pointer">Marcar paciente com pendência/débito financeiro (Exibir na aba Financeiro)</label>' +
+                '<label for="caixa-marca-pendencia" class="text-xs font-semibold text-slate-700 cursor-pointer">Marcar paciente com pendência/débito financeiro</label>' +
             '</div>' +
             '<button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg text-xs shadow transition">Salvar Lançamento</button></form></div>';
 
-    let htmlAgendamentos = agendamentosPaciente.length === 0 ? '<p class="text-sm text-slate-400 p-2">Nenhum agendamento futuro.</p>' : '';
+    let htmlAgendamentos = agendamentosPaciente.length === 0 ? '<p class="text-sm text-slate-400 p-2">Nenhum agendamento registrado.</p>' : '';
     agendamentosPaciente.forEach(ag => {
         const obsHtml = ag.obs ? '<p class="text-xs text-slate-500 mt-0.5">Obs: ' + ag.obs + '</p>' : '';
         htmlAgendamentos += '<div class="p-3 bg-white rounded-lg border border-slate-200 text-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 shadow-sm">' +
@@ -1599,39 +1689,37 @@ function abrirDetalhesPaciente(pacienteId, origem) {
         });
     }
 
-    const hubMobile = '<div class="grid grid-cols-2 gap-2.5 md:hidden mb-4">' +
-        '<button onclick="alternarSecaoMobile(\'sec-plano-tratamento\')" class="p-3 bg-indigo-600 text-white rounded-xl shadow font-semibold text-xs flex flex-col items-center justify-center text-center gap-1.5 active:scale-95 transition"><i class="fa-solid fa-clipboard-list text-lg"></i> Plano Tratamento</button>' +
-        (usuarioAtual && usuarioAtual.perfil === 'dentista' ? '<button onclick="alternarSecaoMobile(\'sec-evolucao-prontuario\')" class="p-3 bg-blue-600 text-white rounded-xl shadow font-semibold text-xs flex flex-col items-center justify-center text-center gap-1.5 active:scale-95 transition"><i class="fa-solid fa-stethoscope text-lg"></i> Evoluir Prontuário</button>' : '') +
-        '<button onclick="alternarSecaoMobile(\'sec-lancar-caixa\')" class="p-3 bg-emerald-600 text-white rounded-xl shadow font-semibold text-xs flex flex-col items-center justify-center text-center gap-1.5 active:scale-95 transition"><i class="fa-solid fa-cash-register text-lg"></i> Lançar Caixa</button>' +
-        '<button onclick="alternarSecaoMobile(\'sec-historico-abas\')" class="p-3 bg-slate-800 text-white rounded-xl shadow font-semibold text-xs flex flex-col items-center justify-center text-center gap-1.5 active:scale-95 transition"><i class="fa-solid fa-clock-rotate-left text-lg"></i> Históricos</button></div>';
-
+    // Estrutura limpa com Perfil compacto à esquerda e Abas Diretas à direita
     container.innerHTML = '<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">' +
         '<div class="lg:col-span-1 space-y-4">' +
-            '<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-4">' +
-                '<div class="flex items-center space-x-3 border-b pb-4"><div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-lg">' + paciente.nome.charAt(0) + '</div><div><h3 class="font-bold text-slate-900 text-lg leading-tight">' + paciente.nome + '</h3><span class="inline-block text-xs font-semibold px-2 py-0.5 rounded-full ' + (paciente.categoria === 'Ortodontia' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-700') + ' mt-1">' + paciente.categoria + '</span></div></div>' +
-                '<div class="space-y-2 text-sm">' +
-                    '<div><span class="text-xs uppercase font-semibold text-slate-400 block">Telefone</span><span class="font-medium text-slate-800">' + (paciente.telefone || '-') + '</span>' + btnWhatsapp + '</div>' +
-                    '<div><span class="text-xs uppercase font-semibold text-slate-400 block">CPF</span><span class="font-medium text-slate-800">' + (paciente.cpf || '-') + '</span></div>' +
-                    '<div><span class="text-xs uppercase font-semibold text-slate-400 block">Nascimento</span><span class="font-medium text-slate-800">' + (paciente.nascimento ? paciente.nascimento.split('-').reverse().join('/') : '-') + '</span></div>' +
-                    (paciente.categoria === 'Ortodontia' ? '<div><span class="text-xs uppercase font-semibold text-slate-400 block">Vencimento Mensalidade</span><span class="font-medium text-slate-800">' + (paciente.vencimento ? paciente.vencimento.split('-').reverse().join('/') : 'Não definida') + '</span></div>' : '') +
+            '<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3">' +
+                '<div class="flex items-center space-x-3 border-b pb-3"><div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-base">' + paciente.nome.charAt(0) + '</div><div><h3 class="font-bold text-slate-900 text-base leading-tight">' + paciente.nome + '</h3><span class="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full ' + (paciente.categoria === 'Ortodontia' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-700') + ' mt-0.5">' + paciente.categoria + '</span></div></div>' +
+                '<div class="space-y-1.5 text-xs">' +
+                    '<div><span class="font-semibold text-slate-400">Telefone:</span> <span class="font-medium text-slate-800">' + (paciente.telefone || '-') + '</span>' + btnWhatsapp + '</div>' +
+                    '<div><span class="font-semibold text-slate-400">CPF:</span> <span class="font-medium text-slate-800">' + (paciente.cpf || '-') + '</span></div>' +
+                    '<div><span class="font-semibold text-slate-400">Nascimento:</span> <span class="font-medium text-slate-800">' + (paciente.nascimento ? paciente.nascimento.split('-').reverse().join('/') : '-') + '</span></div>' +
+                    (paciente.categoria === 'Ortodontia' ? '<div><span class="font-semibold text-slate-400">Vencimento:</span> <span class="font-medium text-slate-800">' + (paciente.vencimento ? paciente.vencimento.split('-').reverse().join('/') : 'Não definida') + '</span></div>' : '') +
                 '</div>' + badgePendencia +
-                '<div class="pt-2 border-t flex flex-col gap-2">' +
-                    '<button onclick="abrirModalPaciente(\'' + paciente.id + '\')" class="w-full py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5"><i class="fa-solid fa-user-pen"></i> Editar Dados Cadastrais</button>' +
-                    '<button onclick="excluirPaciente(\'' + paciente.id + '\')" class="w-full py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5"><i class="fa-solid fa-user-xmark"></i> Excluir Paciente</button>' +
+                '<div class="pt-2 border-t flex gap-2">' +
+                    '<button onclick="abrirModalPaciente(\'' + paciente.id + '\')" class="flex-1 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1"><i class="fa-solid fa-user-pen"></i> Editar</button>' +
+                    '<button onclick="excluirPaciente(\'' + paciente.id + '\')" class="flex-1 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1"><i class="fa-solid fa-user-xmark"></i> Excluir</button>' +
                 '</div></div></div>' +
-        '<div class="lg:col-span-2 space-y-4">' + hubMobile + htmlPlanejamentoTratamento + htmlFormDentista + htmlFormCaixa +
-            '<div id="sec-historico-abas" class="secao-clinica-mobile bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-4 md:block">' +
+        '<div class="lg:col-span-2 space-y-4">' +
+            '<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-4">' +
                 '<div class="border-b border-slate-200 flex space-x-4 text-xs sm:text-sm font-semibold overflow-x-auto scrollbar-none">' +
-                    '<button onclick="abrirSubAbaPaciente(\'prontuario\')" id="btn-subtab-prontuario" class="subtab-btn pb-2 border-b-2 border-blue-600 text-blue-600 flex items-center gap-2 whitespace-nowrap"><i class="fa-solid fa-notes-medical"></i> Prontuário & Evolução</button>' +
-                    '<button onclick="abrirSubAbaPaciente(\'pagamentos\')" id="btn-subtab-pagamentos" class="subtab-btn pb-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 flex items-center gap-2 whitespace-nowrap"><i class="fa-solid fa-wallet"></i> Histórico do Caixa</button>' +
-                    '<button onclick="abrirSubAbaPaciente(\'agendamentos\')" id="btn-subtab-agendamentos" class="subtab-btn pb-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 flex items-center gap-2 whitespace-nowrap"><i class="fa-solid fa-calendar-check"></i> Agendamentos Futuros</button>' +
+                    '<button onclick="abrirSubAbaPaciente(\'prontuario\')" id="btn-subtab-prontuario" class="subtab-btn pb-2 border-b-2 border-blue-600 text-blue-600 flex items-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-notes-medical"></i> Prontuário</button>' +
+                    '<button onclick="abrirSubAbaPaciente(\'plano\')" id="btn-subtab-plano" class="subtab-btn pb-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 flex items-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-clipboard-list"></i> Plano de Tratamento</button>' +
+                    '<button onclick="abrirSubAbaPaciente(\'caixa\')" id="btn-subtab-caixa" class="subtab-btn pb-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 flex items-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-cash-register"></i> Caixa & Pagamentos</button>' +
+                    '<button onclick="abrirSubAbaPaciente(\'agendamentos\')" id="btn-subtab-agendamentos" class="subtab-btn pb-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 flex items-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-calendar-check"></i> Agendamentos</button>' +
                 '</div>' +
                 '<div id="subtab-content-prontuario" class="subtab-content space-y-4">' +
+                    htmlFormProntuario +
                     '<input type="text" id="busca-prontuario-input" oninput="filtrarProntuarioLinhaTempo(\'' + paciente.id + '\')" placeholder="🔍 Pesquisar no histórico..." class="w-full px-3 py-2 border rounded-lg text-xs sm:text-sm bg-slate-50">' +
-                    '<div id="container-prontuario-timeline" class="space-y-3"></div>' +
+                    '<div id="container-prontuario-timeline" class="space-y-3 max-h-[50vh] overflow-y-auto pr-1"></div>' +
                 '</div>' +
-                '<div id="subtab-content-pagamentos" class="subtab-content hidden space-y-3">' + htmlPagamentosTimeline + '</div>' +
-                '<div id="subtab-content-agendamentos" class="subtab-content hidden space-y-3">' + htmlAgendamentos + '</div>' +
+                '<div id="subtab-content-plano" class="subtab-content hidden space-y-3">' + htmlPlanoTratamento + '</div>' +
+                '<div id="subtab-content-caixa" class="subtab-content hidden space-y-3 max-h-[60vh] overflow-y-auto pr-1">' + htmlFormCaixa + '<div class="space-y-2">' + htmlPagamentosTimeline + '</div></div>' +
+                '<div id="subtab-content-agendamentos" class="subtab-content hidden space-y-3 max-h-[60vh] overflow-y-auto pr-1">' + htmlAgendamentos + '</div>' +
             '</div></div></div>';
 
     mudarAba('detalhes-paciente');
