@@ -430,9 +430,6 @@ function renderizarAgendaMensal(container) {
     container.innerHTML = `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3"><h4 class="font-bold text-slate-800 text-sm border-b pb-2">Visão Macro Mensal</h4><p class="text-xs text-slate-500">Utilize as setas para alternar os meses.</p></div>`;
 }
 
-// ==========================================
-// MODAIS DE AGENDAMENTO E DETALHES
-// ==========================================
 function alterarStatusAgendamento(id, status) {
     const ag = db.agendamentos.find(a => a.id === id);
     if (ag) {
@@ -671,22 +668,96 @@ async function excluirPaciente(pacienteId) {
 function abrirDetalhesPaciente(pacienteId, origem) {
     abaOrigem = origem;
     pacienteAtualId = pacienteId;
-    const paciente = db.pacientes.find(p => p.id === pacienteId);
-    if (!paciente) return;
-    
+    const p = db.pacientes.find(x => x.id === pacienteId);
+    if(!p) return;
+
     const container = document.getElementById('detalhes-paciente-container');
     if(container) {
+        let etapas = p.planejamentoEtapas || [];
+        let htmlEtapas = etapas.length === 0 ? '<p class="text-xs text-slate-400">Nenhuma etapa no plano.</p>' : etapas.map(e => `
+            <div class="flex justify-between items-center p-2 bg-slate-50 rounded border text-xs">
+                <span>Dente <strong>${e.dente}</strong>: ${e.procedimento} (R$ ${e.valor}) - <strong>${e.concluido ? 'Concluído' : 'Pendente'}</strong></span>
+                <button onclick="alternarStatusEtapa('${p.id}', '${e.id}')" class="px-2 py-1 bg-blue-600 text-white rounded">${e.concluido ? 'Reabrir' : 'Concluir'}</button>
+            </div>`).join('');
+
         container.innerHTML = `
         <div class="bg-white p-6 rounded-xl border shadow-sm space-y-4">
-            <h2 class="text-xl font-bold text-slate-900">${paciente.nome}</h2>
-            <p class="text-xs text-slate-500">Telefone: ${paciente.telefone || '-'} | Categoria: ${paciente.categoria}</p>
-            <div class="flex gap-2 pt-2">
-                <button onclick="mudarAba('${origem}')" class="px-4 py-2 bg-slate-100 rounded text-xs font-bold">Voltar</button>
-                <button onclick="excluirPaciente('${paciente.id}')" class="px-4 py-2 bg-rose-50 text-rose-600 rounded text-xs font-bold">Excluir Paciente</button>
+            <div class="flex justify-between items-center border-b pb-3">
+                <div>
+                    <h2 class="text-xl font-bold text-slate-900">${p.nome}</h2>
+                    <p class="text-xs text-slate-500">Tel: ${p.telefone || '-'} | CPF: ${p.cpf || '-'} | Categoria: ${p.categoria}</p>
+                </div>
+                <button onclick="excluirPaciente('${p.id}')" class="px-3 py-1.5 bg-rose-50 text-rose-600 rounded-lg text-xs font-bold"><i class="fa-solid fa-trash"></i> Excluir Paciente</button>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="space-y-3 bg-slate-50 p-4 rounded-xl border">
+                    <h4 class="font-bold text-slate-800 text-sm"><i class="fa-solid fa-notes-medical text-blue-600 mr-1"></i> Prontuário / Evolução</h4>
+                    <form onsubmit="salvarProntuarioPaciente(event, '${p.id}')" class="space-y-2">
+                        <input type="text" id="prontuario-desc" required placeholder="Descrição do procedimento..." class="w-full p-2 border rounded text-xs bg-white">
+                        <button type="submit" class="w-full py-2 bg-blue-600 text-white text-xs font-semibold rounded shadow">Adicionar ao Prontuário</button>
+                    </form>
+                    <div id="lista-prontuario-paciente" class="space-y-2 max-h-40 overflow-y-auto">
+                        ${db.prontuarios.filter(pr => pr.pacienteId === p.id).map(pr => `<div class="p-2 bg-white rounded border text-xs"><strong>${pr.data}</strong>: ${pr.procedimento}</div>`).join('') || '<p class="text-xs text-slate-400">Nenhum prontuário.</p>'}
+                    </div>
+                </div>
+
+                <div class="space-y-3 bg-indigo-50/40 p-4 rounded-xl border border-indigo-100">
+                    <h4 class="font-bold text-slate-800 text-sm"><i class="fa-solid fa-clipboard-list text-indigo-600 mr-1"></i> Plano de Tratamento</h4>
+                    <form onsubmit="adicionarEtapaPlanejamento(event, '${p.id}')" class="grid grid-cols-3 gap-1">
+                        <input type="text" id="plan-dente" placeholder="Dente" class="p-1.5 border rounded text-xs bg-white">
+                        <input type="text" id="plan-desc" placeholder="Procedimento" class="p-1.5 border rounded text-xs bg-white">
+                        <input type="number" id="plan-valor" placeholder="R$" class="p-1.5 border rounded text-xs bg-white">
+                        <button type="submit" class="col-span-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded shadow mt-1">Adicionar Etapa</button>
+                    </form>
+                    <div class="space-y-1.5 max-h-40 overflow-y-auto">${htmlEtapas}</div>
+                </div>
             </div>
         </div>`;
     }
     mudarAba('detalhes-paciente');
+}
+
+function salvarProntuarioPaciente(event, pacienteId) {
+    event.preventDefault();
+    const desc = document.getElementById('prontuario-desc').value.trim();
+    if(!desc) return;
+    db.prontuarios.push({
+        id: gerarIdUnico(),
+        pacienteId: pacienteId,
+        data: obterDataLocalISO(),
+        procedimento: desc
+    });
+    persistirDB();
+    abrirDetalhesPaciente(pacienteId, abaOrigem);
+}
+
+function adicionarEtapaPlanejamento(event, pacienteId) {
+    event.preventDefault();
+    const dente = document.getElementById('plan-dente').value.trim() || 'Geral';
+    const desc = document.getElementById('plan-desc').value.trim();
+    const valor = parseFloat(document.getElementById('plan-valor').value) || 0;
+    if(!desc) return;
+
+    const p = db.pacientes.find(x => x.id === pacienteId);
+    if(p) {
+        if(!p.planejamentoEtapas) p.planejamentoEtapas = [];
+        p.planejamentoEtapas.push({ id: gerarIdUnico(), dente, procedimento: desc, valor, concluido: false });
+        persistirDB();
+        abrirDetalhesPaciente(pacienteId, abaOrigem);
+    }
+}
+
+function alternarStatusEtapa(pacienteId, etapaId) {
+    const p = db.pacientes.find(x => x.id === pacienteId);
+    if(p && p.planejamentoEtapas) {
+        const e = p.planejamentoEtapas.find(x => x.id === etapaId);
+        if(e) {
+            e.concluido = !e.concluido;
+            persistirDB();
+            abrirDetalhesPaciente(pacienteId, abaOrigem);
+        }
+    }
 }
 
 function voltarParaOrigem() { mudarAba(abaOrigem || 'pacientes'); }
