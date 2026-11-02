@@ -268,7 +268,7 @@ function inicializarSistema() {
 }
 
 // ==========================================
-// AGENDA (GRADE DE 08:00 ÀS 21:00 DE 30 EM 30 MIN) & MINI CALENDÁRIO
+// AGENDA & MINI CALENDÁRIO
 // ==========================================
 function inicializarCalendario() {
     renderizarAgendaCards();
@@ -309,7 +309,12 @@ function definirVisaoAgenda(visao) {
 
 function alternarMiniCalendario() {
     const cont = document.getElementById('mini-calendario-container');
-    if (cont) cont.classList.toggle('hidden');
+    if (cont) {
+        cont.classList.toggle('hidden');
+        if (!cont.classList.contains('hidden')) {
+            renderizarMiniCalendario();
+        }
+    }
 }
 
 function renderizarMiniCalendario() {
@@ -370,6 +375,7 @@ function mudarMesMini(direcao) {
     const d = new Date(dataAgendaAtual + 'T12:00:00');
     d.setMonth(d.getMonth() + direcao);
     dataAgendaAtual = d.toISOString().split('T')[0];
+    renderizarMiniCalendario();
     renderizarAgendaCards();
 }
 
@@ -403,12 +409,14 @@ function renderizarAgendaCards() {
     
     const hojeIso = obterDataLocalISO();
     if (dataAgendaAtual === hojeIso) {
-        displayData.innerText = `Hoje, ${String(dataObj.getDate()).padStart(2,'0')} de ${meses[dataObj.getMonth()]}`;
+        displayData.innerText = `Hoje, ${String(dataObj.getDate()).padStart(2,'0')} de ${meses[dataObj.getMonth()]} (${diasSemana[dataObj.getDay()]})`;
     } else {
         displayData.innerText = `${diasSemana[dataObj.getDay()]}, ${String(dataObj.getDate()).padStart(2,'0')} de ${meses[dataObj.getMonth()]}`;
     }
 
-    renderizarMiniCalendario();
+    if (!document.getElementById('mini-calendario-container').classList.contains('hidden')) {
+        renderizarMiniCalendario();
+    }
     container.innerHTML = '';
 
     if (visaoAgendaAtual === 'semanal') {
@@ -420,14 +428,13 @@ function renderizarAgendaCards() {
         return;
     }
 
-    // Visão Diária com Grade de 08:00 às 21:00 (Pílulas de Horários Livres & Cards Ocupados)
+    // Visão Diária
     const eventosDia = db.agendamentos.filter(a => a.data === dataAgendaAtual);
     const slots = gerarSlotsExpediente();
 
     let htmlGrade = `<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-3 space-y-2 max-h-[68vh] overflow-y-auto pr-1">`;
 
     slots.forEach(horarioSlot => {
-        // Verifica se há evento neste horário
         const eventoNoSlot = eventosDia.find(ev => ev.horario === horarioSlot);
 
         if (eventoNoSlot) {
@@ -462,7 +469,6 @@ function renderizarAgendaCards() {
                 </div>
             </div>`;
         } else {
-            // Horário Livre (Pílula Estilo Calendly com botão de encaixe rápido)
             htmlGrade += `
             <div onclick="abrirModalAgendamento('${dataAgendaAtual}', '${horarioSlot}')" class="group border border-dashed border-slate-300 hover:border-blue-400 bg-slate-50/50 hover:bg-blue-50/30 rounded-lg p-2.5 flex items-center justify-between cursor-pointer transition">
                 <span class="font-bold text-slate-400 group-hover:text-blue-600 text-xs">${horarioSlot}</span>
@@ -493,7 +499,8 @@ function renderizarVisaoSemanal(container) {
         const evs = db.agendamentos.filter(a => a.data === iso);
         const diasNomes = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
-        html += `<div class="bg-slate-50 border rounded-lg p-2.5 space-y-2">
+        // Ao clicar no dia na visão semanal, abre a visão diária daquele dia (igual visão mensal)
+        html += `<div class="bg-slate-50 border rounded-lg p-2.5 space-y-2 cursor-pointer hover:border-blue-400 transition" onclick="dataAgendaAtual='${iso}'; definirVisaoAgenda('diaria');">
                     <div class="text-center border-b pb-1">
                         <span class="text-[10px] font-bold text-slate-400 uppercase block">${diasNomes[i]}</span>
                         <span class="font-extrabold text-xs text-slate-800">${d.getDate()}/${d.getMonth()+1}</span>
@@ -506,7 +513,7 @@ function renderizarVisaoSemanal(container) {
             evs.sort((a,b) => a.horario.localeCompare(b.horario));
             evs.forEach(ev => {
                 const titulo = ev.isLembrete ? '📌 ' + ev.titulo : (db.pacientes.find(p => p.id === ev.pacienteId)?.nome || 'Paciente');
-                html += `<div onclick="dataAgendaAtual='${iso}'; visaoAgendaAtual='diaria'; renderizarAgendaCards();" class="p-1.5 bg-white border rounded text-[11px] shadow-sm cursor-pointer hover:border-blue-400">
+                html += `<div onclick="event.stopPropagation(); dataAgendaAtual='${iso}'; definirVisaoAgenda('diaria');" class="p-1.5 bg-white border rounded text-[11px] shadow-sm hover:border-blue-400">
                             <span class="font-bold text-blue-900 block">${ev.horario}</span>
                             <span class="text-slate-700 truncate block">${titulo}</span>
                          </div>`;
@@ -551,7 +558,7 @@ function renderizarVisaoMensal(container) {
         const iso = `${ano}-${mesStr}-${diaStr}`;
         const evs = db.agendamentos.filter(a => a.data === iso);
 
-        html += `<div onclick="dataAgendaAtual='${iso}'; visaoAgendaAtual='diaria'; renderizarAgendaCards();" class="border rounded-lg p-2 min-h-[75px] bg-slate-50 cursor-pointer hover:bg-blue-50/50 transition">
+        html += `<div onclick="dataAgendaAtual='${iso}'; definirVisaoAgenda('diaria');" class="border rounded-lg p-2 min-h-[75px] bg-slate-50 cursor-pointer hover:bg-blue-50/50 transition">
                     <span class="font-bold text-xs text-slate-700">${dia}</span>
                     <div class="mt-1 space-y-0.5">`;
 
@@ -571,7 +578,7 @@ function renderizarVisaoMensal(container) {
 }
 
 // ==========================================
-// PACIENTES (COM FILTROS EM TAGS E SCROLL)
+// PACIENTES
 // ==========================================
 function obterUltimaConsultaPaciente(pacienteId) {
     const datas = [];
