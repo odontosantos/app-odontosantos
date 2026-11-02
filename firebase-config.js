@@ -45,4 +45,14 @@ window.setDoc = async (docRef, data) => {
     return await docRef.set(data);
 };
 
+// 🔥 ADICIONADO: Expõe o onSnapshot globalmente para suporte ao tempo real via Compat
+window.onSnapshot = (docRef, callback) => {
+    return docRef.onSnapshot((snap) => {
+        callback({
+            exists: () => snap.exists,
+            data: () => snap.data()
+        });
+    });
+};
+
 console.log("🔥 Firebase Compat 9.22.0 inicializado com sucesso!");
