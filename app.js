@@ -248,10 +248,13 @@ async function processarUsuarioLogado(user) {
     }
 }
 
+let ouvinteTempoReal = null; // Guarda o listener para não duplicar
+
 async function iniciarSessaoSistema() {
     const telaLogin = document.getElementById('login-screen');
     if (telaLogin) telaLogin.classList.replace('flex', 'hidden');
 
+    // Faz a primeira carga manual
     await sincronizarDadosNuvem();
 
     document.getElementById('main-header').classList.remove('hidden');
@@ -261,6 +264,67 @@ async function iniciarSessaoSistema() {
     
     configurarNavbar();
     inicializarSistema();
+    
+    // ATIVA O MODO TEMPO REAL APÓS O LOGIN
+    ativarSincronizacaoEmTempoReal();
+}
+
+// NOVA FUNÇÃO: Mantém as telas atualizadas sozinhas
+function ativarSincronizacaoEmTempoReal() {
+    if (window.usaFirebase && window.firebaseDb) {
+        if (ouvinteTempoReal) return; // Evita abrir múltiplos ouvintes
+        
+        // Fica escutando qualquer mudança no documento da clínica
+        ouvinteTempoReal = window.firebaseDb.collection("clinica").doc("dados_compartilhados")
+            .onSnapshot((doc) => {
+                if (doc.exists) {
+                    // 1. Atualiza a memória local com o que veio da nuvem
+                    const dadosNuvem = doc.data();
+                    db = Object.assign(db, dadosNuvem);
+                    if (!db.auditoria) db.auditoria = [];
+                    
+                    // 2. Salva em background no navegador
+                    localStorage.setItem('odonto_pacientes', JSON.stringify(db.pacientes));
+                    localStorage.setItem('odonto_agendamentos', JSON.stringify(db.agendamentos));
+                    localStorage.setItem('odonto_prontuarios', JSON.stringify(db.prontuarios));
+                    localStorage.setItem('odonto_pagamentos', JSON.stringify(db.pagamentos));
+                    localStorage.setItem('odonto_despesas', JSON.stringify(db.despesas));
+                    localStorage.setItem('odonto_auditoria', JSON.stringify(db.auditoria));
+
+                    // 3. Atualiza a tela que estiver aberta no momento para o usuário ver a mudança
+                    if (document.getElementById('tab-agenda') && !document.getElementById('tab-agenda').classList.contains('hidden')) {
+                        renderizarAgendaCards();
+                    }
+                    if (document.getElementById('tab-pacientes') && !document.getElementById('tab-pacientes').classList.contains('hidden')) {
+                        renderizarPacientes();
+                    }
+                    if (document.getElementById('tab-financeiro') && !document.getElementById('tab-financeiro').classList.contains('hidden')) {
+                        renderizarFinanceiro();
+                    }
+                    if (document.getElementById('tab-detalhes-paciente') && !document.getElementById('tab-detalhes-paciente').classList.contains('hidden') && pacienteAtualId) {
+                        abrirDetalhesPaciente(pacienteAtualId, abaOrigem);
+                    }
+                }
+            }, (error) => {
+                console.warn("Aviso: Falha na escuta em tempo real.", error);
+            });
+    }
+}
+
+// ADICIONE ISTO NA FUNÇÃO LOGOUT: Limpa o listener ao sair
+function logout() {
+    if (ouvinteTempoReal) {
+        ouvinteTempoReal(); // Desliga a escuta de tempo real
+        ouvinteTempoReal = null;
+    }
+    if (window.usaFirebase && window.signOut) {
+        window.signOut(window.firebaseAuth);
+    }
+    usuarioAtual = null;
+    document.getElementById('login-screen').classList.replace('hidden', 'flex');
+    document.getElementById('main-header').classList.add('hidden');
+    document.getElementById('main-nav').classList.add('hidden');
+    document.getElementById('main-content').classList.add('hidden');
 }
 
 function logout() {
