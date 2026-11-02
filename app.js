@@ -435,22 +435,31 @@ function renderizarAgendaCards() {
     let htmlGrade = `<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-3 space-y-2 max-h-[68vh] overflow-y-auto pr-1">`;
 
     slots.forEach(horarioSlot => {
-        const eventoNoSlot = eventosDia.find(ev => ev.horario === horarioSlot);
+        const eventoNoSlot = eventosDia.find(ev => {
+            if (ev.isBloqueio) {
+                return horarioSlot >= ev.horario && horarioSlot < ev.horaFim;
+            }
+            return ev.horario === horarioSlot;
+        });
 
         if (eventoNoSlot) {
             const isLembrete = eventoNoSlot.isLembrete;
-            let titulo = isLembrete ? '📌 ' + eventoNoSlot.titulo : (db.pacientes.find(p => p.id === eventoNoSlot.pacienteId)?.nome || 'Paciente Não Encontrado');
-            let subtitulo = isLembrete ? (eventoNoSlot.obs || 'Bloqueio') : (eventoNoSlot.tipo + (eventoNoSlot.obs ? ' • ' + eventoNoSlot.obs : ''));
-            let corFundo = eventoNoSlot.cor || '#039be5';
+            const isBloqueio = eventoNoSlot.isBloqueio;
+
+            let titulo = isLembrete ? '🔔 ' + eventoNoSlot.titulo : (isBloqueio ? '🚫 ' + eventoNoSlot.titulo : (db.pacientes.find(p => p.id === eventoNoSlot.pacienteId)?.nome || 'Paciente Não Encontrado'));
+            let subtitulo = isLembrete ? (eventoNoSlot.obs || 'Lembrete') : (isBloqueio ? (eventoNoSlot.obs || `Bloqueio: ${eventoNoSlot.horario} às ${eventoNoSlot.horaFim}`) : (eventoNoSlot.tipo + (eventoNoSlot.obs ? ' • ' + eventoNoSlot.obs : '')));
+            let corFundo = eventoNoSlot.cor || (isBloqueio ? '#e11d48' : '#039be5');
             
             let statusHtml = '';
-            if(!isLembrete) {
+            if(!isLembrete && !isBloqueio) {
                 const statusAtual = eventoNoSlot.status || 'agendado';
                 let corStatus = 'bg-blue-100 text-blue-700';
                 if (statusAtual === 'atendido') { corStatus = 'bg-emerald-100 text-emerald-700'; corFundo = '#10b981'; }
                 if (statusAtual === 'faltou') { corStatus = 'bg-rose-100 text-rose-700'; corFundo = '#f43f5e'; }
                 if (statusAtual === 'remarcou') { corStatus = 'bg-slate-200 text-slate-700'; corFundo = '#94a3b8'; }
                 statusHtml = `<span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${corStatus}">${statusAtual}</span>`;
+            } else if (isBloqueio) {
+                statusHtml = `<span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-rose-100 text-rose-700">BLOQUEADO</span>`;
             }
 
             htmlGrade += `
@@ -459,7 +468,7 @@ function renderizarAgendaCards() {
                 <div class="p-2.5 pl-5 flex-grow flex items-center justify-between gap-2">
                     <div>
                         <div class="flex items-center gap-2 mb-0.5">
-                            <span class="font-extrabold text-slate-900 text-xs"><i class="fa-regular fa-clock mr-1 text-slate-400"></i> ${eventoNoSlot.horario} - ${eventoNoSlot.horaFim || '?'}</span>
+                            <span class="font-extrabold text-slate-900 text-xs"><i class="fa-regular fa-clock mr-1 text-slate-400"></i> ${isBloqueio ? eventoNoSlot.horario + ' - ' + eventoNoSlot.horaFim : eventoNoSlot.horario}</span>
                             ${statusHtml}
                         </div>
                         <h4 class="font-bold text-slate-800 text-sm leading-tight">${titulo}</h4>
@@ -499,7 +508,6 @@ function renderizarVisaoSemanal(container) {
         const evs = db.agendamentos.filter(a => a.data === iso);
         const diasNomes = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
-        // Ao clicar no dia na visão semanal, abre a visão diária daquele dia (igual visão mensal)
         html += `<div class="bg-slate-50 border rounded-lg p-2.5 space-y-2 cursor-pointer hover:border-blue-400 transition" onclick="dataAgendaAtual='${iso}'; definirVisaoAgenda('diaria');">
                     <div class="text-center border-b pb-1">
                         <span class="text-[10px] font-bold text-slate-400 uppercase block">${diasNomes[i]}</span>
@@ -512,7 +520,7 @@ function renderizarVisaoSemanal(container) {
         } else {
             evs.sort((a,b) => a.horario.localeCompare(b.horario));
             evs.forEach(ev => {
-                const titulo = ev.isLembrete ? '📌 ' + ev.titulo : (db.pacientes.find(p => p.id === ev.pacienteId)?.nome || 'Paciente');
+                const titulo = ev.isLembrete ? '🔔 ' + ev.titulo : (ev.isBloqueio ? '🚫 ' + ev.titulo : (db.pacientes.find(p => p.id === ev.pacienteId)?.nome || 'Paciente'));
                 html += `<div onclick="event.stopPropagation(); dataAgendaAtual='${iso}'; definirVisaoAgenda('diaria');" class="p-1.5 bg-white border rounded text-[11px] shadow-sm hover:border-blue-400">
                             <span class="font-bold text-blue-900 block">${ev.horario}</span>
                             <span class="text-slate-700 truncate block">${titulo}</span>
@@ -563,7 +571,7 @@ function renderizarVisaoMensal(container) {
                     <div class="mt-1 space-y-0.5">`;
 
         evs.slice(0, 2).forEach(ev => {
-            const titulo = ev.isLembrete ? '📌 Lembrete' : (db.pacientes.find(p => p.id === ev.pacienteId)?.nome || 'Paciente');
+            const titulo = ev.isLembrete ? '🔔 Lembrete' : (ev.isBloqueio ? '🚫 Bloqueio' : (db.pacientes.find(p => p.id === ev.pacienteId)?.nome || 'Paciente'));
             html += `<div class="text-[9px] bg-blue-100 text-blue-800 px-1 py-0.5 rounded truncate font-medium">${ev.horario} ${titulo}</div>`;
         });
         if (evs.length > 2) {
@@ -1428,7 +1436,7 @@ function abrirDetalhesPaciente(pacienteId, origem) {
     const paciente = db.pacientes.find(p => p.id === pacienteId);
     if (!paciente) return;
 
-    const agendamentosPaciente = db.agendamentos.filter(ag => !ag.isLembrete && ag.pacienteId === pacienteId);
+    const agendamentosPaciente = db.agendamentos.filter(ag => !ag.isLembrete && !ag.isBloqueio && ag.pacienteId === pacienteId);
     const prontuariosPaciente = db.prontuarios.filter(pr => pr.pacienteId === pacienteId);
     const pagamentosPaciente = db.pagamentos.filter(pg => pg.pacienteId === pacienteId);
     
@@ -1621,50 +1629,6 @@ function atualizarHoraFimPadrao() {
     }
 }
 
-function atualizarHoraFimLembretePadrao() {
-    const inputInicio = document.getElementById('lembrete-horario');
-    const inputFim = document.getElementById('lembrete-hora-fim');
-    if (!inputInicio || !inputFim) return;
-
-    const horaInicio = inputInicio.value;
-    if (horaInicio) {
-        const partes = horaInicio.split(':');
-        let h = parseInt(partes[0], 10);
-        let m = parseInt(partes[1], 10) + 30;
-        h += Math.floor(m / 60);
-        m = m % 60;
-        inputFim.value = String(h % 24).padStart(2, '0') + ':' + String(m).padStart(2, '0');
-    }
-}
-
-function selecionarCorAgenda(corHex, elementoBtn) {
-    const inputCor = document.getElementById('agendamento-cor');
-    if (inputCor) inputCor.value = corHex;
-
-    document.querySelectorAll('.cor-agenda-btn').forEach(btn => {
-        btn.innerHTML = '';
-        btn.classList.remove('ring-2', 'ring-offset-2', 'ring-slate-400');
-    });
-    if (elementoBtn) {
-        elementoBtn.innerHTML = '<i class="fa-solid fa-check text-white text-[10px]"></i>';
-        elementoBtn.classList.add('ring-2', 'ring-offset-2', 'ring-slate-400');
-    }
-}
-
-function selecionarCorLembrete(corHex, elementoBtn) {
-    const inputCor = document.getElementById('lembrete-cor');
-    if (inputCor) inputCor.value = corHex;
-
-    document.querySelectorAll('.cor-lembrete-btn').forEach(btn => {
-        btn.innerHTML = '';
-        btn.classList.remove('ring-2', 'ring-offset-2', 'ring-slate-400');
-    });
-    if (elementoBtn) {
-        elementoBtn.innerHTML = '<i class="fa-solid fa-check text-white text-[10px]"></i>';
-        elementoBtn.classList.add('ring-2', 'ring-offset-2', 'ring-slate-400');
-    }
-}
-
 async function excluirAgendamento(id, pacienteId) {
     if (!(await verificarSenhaExclusao())) return;
     const corpo = `<p class="text-slate-600">Deseja realmente excluir este item da agenda?</p>`;
@@ -1689,8 +1653,27 @@ function abrirModalDetalhesAgendamento(agendamentoId) {
     if (!ag) return;
 
     if (ag.isLembrete) {
-        document.getElementById('detalhe-ag-paciente').innerText = '📌 ' + ag.titulo;
-        document.getElementById('detalhe-ag-categoria').innerText = 'Lembrete / Bloqueio';
+        document.getElementById('detalhe-ag-paciente').innerText = '🔔 ' + ag.titulo;
+        document.getElementById('detalhe-ag-categoria').innerText = 'Lembrete';
+        document.getElementById('detalhe-ag-datahora').innerText = (ag.data ? ag.data.split('-').reverse().join('/') : '') + ' • ' + ag.horario;
+        document.getElementById('detalhe-ag-tipo').innerText = 'Aviso / Nota';
+        document.getElementById('detalhe-ag-obs').innerText = ag.obs || 'Nenhuma observação registrada.';
+
+        let divStatus = document.getElementById('container-status-agendamento');
+        if (divStatus) divStatus.innerHTML = ''; 
+
+        document.getElementById('btn-excluir-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); excluirAgendamento(ag.id, null); };
+        document.getElementById('btn-editar-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); abrirModalEditarLembrete(ag.id); };
+        document.getElementById('btn-ver-ficha-ag-modal').parentElement.style.display = 'none'; 
+
+        document.getElementById('modal-detalhes-agendamento').classList.remove('hidden');
+        document.getElementById('modal-detalhes-agendamento').classList.add('flex');
+        return;
+    }
+
+    if (ag.isBloqueio) {
+        document.getElementById('detalhe-ag-paciente').innerText = '🚫 ' + ag.titulo;
+        document.getElementById('detalhe-ag-categoria').innerText = 'Bloqueio de Horário';
         document.getElementById('detalhe-ag-datahora').innerText = (ag.data ? ag.data.split('-').reverse().join('/') : '') + ' • ' + ag.horario + ' às ' + (ag.horaFim || '?');
         document.getElementById('detalhe-ag-tipo').innerText = 'Bloqueio de Agenda';
         document.getElementById('detalhe-ag-obs').innerText = ag.obs || 'Nenhuma observação registrada.';
@@ -1699,7 +1682,7 @@ function abrirModalDetalhesAgendamento(agendamentoId) {
         if (divStatus) divStatus.innerHTML = ''; 
 
         document.getElementById('btn-excluir-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); excluirAgendamento(ag.id, null); };
-        document.getElementById('btn-editar-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); abrirModalEditarLembrete(ag.id); };
+        document.getElementById('btn-editar-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); abrirModalEditarBloqueio(ag.id); };
         document.getElementById('btn-ver-ficha-ag-modal').parentElement.style.display = 'none'; 
 
         document.getElementById('modal-detalhes-agendamento').classList.remove('hidden');
@@ -1741,7 +1724,7 @@ function abrirModalDetalhesAgendamento(agendamentoId) {
 
 function alterarStatusAgendamento(id, status) {
     const ag = db.agendamentos.find(a => a.id === id);
-    if (ag && !ag.isLembrete) {
+    if (ag && !ag.isLembrete && !ag.isBloqueio) {
         if (ag.status === status) ag.status = 'agendado';
         else ag.status = status;
         
@@ -1758,17 +1741,6 @@ function abrirModalAgendamento(dataPreenchida, horaPreenchida) {
     const filtroBusca = document.getElementById('filtro-paciente-busca');
     if (filtroBusca) filtroBusca.value = '';
     document.getElementById('agendamento-obs').value = '';
-
-    const btnPadrao = document.querySelector('.cor-agenda-btn[style*="#039be5"]');
-    selecionarCorAgenda('#039be5', btnPadrao);
-
-    const containerCadRapido = document.getElementById('container-cadastro-rapido');
-    const containerBuscaPac = document.getElementById('container-busca-paciente');
-    const btnToggleCad = document.getElementById('btn-toggle-cadastro-rapido');
-
-    if (containerCadRapido) containerCadRapido.classList.add('hidden');
-    if (containerBuscaPac) containerBuscaPac.classList.remove('hidden');
-    if (btnToggleCad) btnToggleCad.innerHTML = '<i class="fa-solid fa-user-plus"></i> Novo Rápido';
     
     document.getElementById('agendamento-data').value = dataPreenchida || dataAgendaAtual || obterDataLocalISO();
     document.getElementById('agendamento-horario').value = horaPreenchida || '09:00';
@@ -1782,7 +1754,7 @@ function abrirModalAgendamento(dataPreenchida, horaPreenchida) {
 
 function abrirModalEditarAgendamento(agendamentoId) {
     const ag = db.agendamentos.find(a => a.id === agendamentoId);
-    if (!ag || ag.isLembrete) return;
+    if (!ag || ag.isLembrete || ag.isBloqueio) return;
 
     popularSelectPacientes();
     document.getElementById('titulo-modal-agendamento').innerText = 'Editar Agendamento';
@@ -1800,15 +1772,6 @@ function abrirModalEditarAgendamento(agendamentoId) {
 
     document.getElementById('agendamento-tipo').value = ag.tipo;
     document.getElementById('agendamento-obs').value = ag.obs || '';
-
-    const corSalva = ag.cor || '#039be5';
-    const btnCorSalva = document.querySelector(`.cor-agenda-btn[style*="${corSalva}"]`) || document.querySelector('.cor-agenda-btn[style*="#039be5"]');
-    selecionarCorAgenda(corSalva, btnCorSalva);
-
-    const containerCadRapido = document.getElementById('container-cadastro-rapido');
-    const containerBuscaPac = document.getElementById('container-busca-paciente');
-    if (containerCadRapido) containerCadRapido.classList.add('hidden');
-    if (containerBuscaPac) containerBuscaPac.classList.remove('hidden');
 
     const modalAg = document.getElementById('modal-agendamento');
     modalAg.classList.remove('hidden');
@@ -1831,22 +1794,29 @@ function salvarAgendamento(event) {
         return;
     }
 
-    const conflito = db.agendamentos.find(a => a.data === dataAg && a.horario === horaAg && a.id !== editId);
+    // Validação de conflito considerando agendamentos e bloqueios reais
+    const conflito = db.agendamentos.find(a => 
+        a.data === dataAg && 
+        a.id !== editId && 
+        ((horaAg >= a.horario && horaAg < a.horaFim) || (horaFimAg > a.horario && horaFimAg <= a.horaFim) || (horaAg <= a.horario && horaFimAg >= a.horaFim))
+    );
+
     if (conflito) {
-        const nomeConflito = conflito.isLembrete ? conflito.titulo : (db.pacientes.find(p => p.id === conflito.pacienteId)?.nome || 'Outro evento');
-        if (!confirm(`⚠️ Já existe agendamento/bloqueio para "${nomeConflito}" nesse horário. Agendar mesmo assim?`)) return;
+        const nomeConflito = conflito.isBloqueio ? `Bloqueio: ${conflito.titulo}` : (conflito.isLembrete ? conflito.titulo : (db.pacientes.find(p => p.id === conflito.pacienteId)?.nome || 'Outro evento'));
+        alertCustomizado(`❌ Conflito de horário! O horário selecionado colide com "${nomeConflito}" (${conflito.horario} às ${conflito.horaFim}).`);
+        return;
     }
 
-    const inputCor = document.getElementById('agendamento-cor');
     const dadosAgendamento = {
         isLembrete: false,
+        isBloqueio: false,
         pacienteId: pacienteId,
         data: dataAg,
         horario: horaAg,
         horaFim: horaFimAg,
         tipo: document.getElementById('agendamento-tipo').value,
         obs: document.getElementById('agendamento-obs').value.trim(),
-        cor: inputCor ? inputCor.value : '#039be5' 
+        cor: '#039be5' 
     };
 
     if (editId) {
@@ -1867,18 +1837,17 @@ function salvarAgendamento(event) {
     }
 }
 
+// ==========================================
+// GERENCIAMENTO DE LEMBRETES
+// ==========================================
 function abrirModalLembrete(dataPreenchida, horaPreenchida) {
-    document.getElementById('titulo-modal-lembrete').innerText = 'Novo Lembrete / Bloqueio';
+    document.getElementById('titulo-modal-lembrete').innerText = 'Novo Lembrete';
     document.getElementById('lembrete-edit-id').value = '';
     document.getElementById('lembrete-titulo').value = '';
     document.getElementById('lembrete-obs').value = '';
 
-    const btnPadrao = document.querySelector('.cor-lembrete-btn[style*="#616161"]');
-    selecionarCorLembrete('#616161', btnPadrao);
-
     document.getElementById('lembrete-data').value = dataPreenchida || dataAgendaAtual || obterDataLocalISO();
     document.getElementById('lembrete-horario').value = horaPreenchida || '12:00';
-    atualizarHoraFimLembretePadrao();
 
     const modal = document.getElementById('modal-lembrete');
     modal.classList.remove('hidden');
@@ -1889,17 +1858,12 @@ function abrirModalEditarLembrete(lembreteId) {
     const ag = db.agendamentos.find(a => a.id === lembreteId);
     if (!ag || !ag.isLembrete) return;
 
-    document.getElementById('titulo-modal-lembrete').innerText = 'Editar Lembrete / Bloqueio';
+    document.getElementById('titulo-modal-lembrete').innerText = 'Editar Lembrete';
     document.getElementById('lembrete-edit-id').value = ag.id;
     document.getElementById('lembrete-titulo').value = ag.titulo;
     document.getElementById('lembrete-data').value = ag.data;
     document.getElementById('lembrete-horario').value = ag.horario;
-    document.getElementById('lembrete-hora-fim').value = ag.horaFim || '';
     document.getElementById('lembrete-obs').value = ag.obs || '';
-
-    const corSalva = ag.cor || '#616161';
-    const btnCorSalva = document.querySelector(`.cor-lembrete-btn[style*="${corSalva}"]`) || document.querySelector('.cor-lembrete-btn[style*="#616161"]');
-    selecionarCorLembrete(corSalva, btnCorSalva);
 
     const modal = document.getElementById('modal-lembrete');
     modal.classList.remove('hidden');
@@ -1911,21 +1875,19 @@ function salvarLembrete(event) {
     const editId = document.getElementById('lembrete-edit-id').value;
     const titulo = document.getElementById('lembrete-titulo').value.trim();
     const dataLembrete = document.getElementById('lembrete-data').value;
-    const horaInicio = document.getElementById('lembrete-horario').value;
-    const horaFim = document.getElementById('lembrete-hora-fim').value;
+    const horario = document.getElementById('lembrete-horario').value;
 
     if (!titulo) { alertCustomizado('Informe o título do lembrete.'); return; }
-    if (horaFim <= horaInicio) { alertCustomizado('A Hora Final deve ser posterior à Hora Inicial.'); return; }
 
-    const inputCor = document.getElementById('lembrete-cor');
     const dadosLembrete = {
         isLembrete: true,
+        isBloqueio: false,
         titulo: titulo,
         data: dataLembrete,
-        horario: horaInicio,
-        horaFim: horaFim,
+        horario: horario,
+        horaFim: horario, // Lembrete pontual
         obs: document.getElementById('lembrete-obs').value.trim(),
-        cor: inputCor ? inputCor.value : '#616161'
+        cor: '#616161'
     };
 
     if (editId) {
@@ -1940,7 +1902,96 @@ function salvarLembrete(event) {
     persistirDB();
     fecharModal('modal-lembrete');
     atualizarCalendario();
-    alertCustomizado('Lembrete/Bloqueio salvo com sucesso!');
+    alertCustomizado('Lembrete salvo com sucesso!');
+}
+
+// ==========================================
+// GERENCIAMENTO DE BLOQUEIOS DE HORÁRIO
+// ==========================================
+function abrirModalBloqueio(dataPreenchida, horaPreenchida) {
+    document.getElementById('titulo-modal-bloqueio').innerText = 'Novo Bloqueio de Horário';
+    document.getElementById('bloqueio-edit-id').value = '';
+    document.getElementById('bloqueio-titulo').value = '';
+    document.getElementById('bloqueio-obs').value = '';
+
+    document.getElementById('bloqueio-data').value = dataPreenchida || dataAgendaAtual || obterDataLocalISO();
+    document.getElementById('bloqueio-horario').value = horaPreenchida || '12:00';
+    
+    // Define 1 hora padrão de bloqueio
+    const [h, m] = (horaPreenchida || '12:00').split(':');
+    const horaFimPadrao = String(parseInt(h) + 1).padStart(2, '0') + ':' + m;
+    document.getElementById('bloqueio-hora-fim').value = horaFimPadrao;
+
+    const modal = document.getElementById('modal-bloqueio');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function abrirModalEditarBloqueio(bloqueioId) {
+    const bg = db.agendamentos.find(a => a.id === bloqueioId);
+    if (!bg || !bg.isBloqueio) return;
+
+    document.getElementById('titulo-modal-bloqueio').innerText = 'Editar Bloqueio de Horário';
+    document.getElementById('bloqueio-edit-id').value = bg.id;
+    document.getElementById('bloqueio-titulo').value = bg.titulo;
+    document.getElementById('bloqueio-data').value = bg.data;
+    document.getElementById('bloqueio-horario').value = bg.horario;
+    document.getElementById('bloqueio-hora-fim').value = bg.horaFim || '';
+    document.getElementById('bloqueio-obs').value = bg.obs || '';
+
+    const modal = document.getElementById('modal-bloqueio');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function salvarBloqueio(event) {
+    event.preventDefault();
+    const editId = document.getElementById('bloqueio-edit-id').value;
+    const titulo = document.getElementById('bloqueio-titulo').value.trim();
+    const dataBloqueio = document.getElementById('bloqueio-data').value;
+    const horaInicio = document.getElementById('bloqueio-horario').value;
+    const horaFim = document.getElementById('bloqueio-hora-fim').value;
+
+    if (!titulo) { alertCustomizado('Informe o motivo do bloqueio.'); return; }
+    if (horaFim <= horaInicio) { alertCustomizado('A Hora Final deve ser posterior à Hora Inicial.'); return; }
+
+    // Validação estrita de conflito para bloqueios reais
+    const conflito = db.agendamentos.find(a => 
+        a.data === dataBloqueio && 
+        a.id !== editId && 
+        ((horaInicio >= a.horario && horaInicio < a.horaFim) || (horaFim > a.horario && horaFim <= a.horaFim) || (horaInicio <= a.horario && horaFim >= a.horaFim))
+    );
+
+    if (conflito) {
+        const nomeConflito = conflito.isBloqueio ? conflito.titulo : (conflito.isLembrete ? conflito.titulo : (db.pacientes.find(p => p.id === conflito.pacienteId)?.nome || 'Outro evento'));
+        alertCustomizado(`❌ Conflito de horário! Já existe um evento ("${nomeConflito}") neste intervalo (${conflito.horario} às ${conflito.horaFim}).`);
+        return;
+    }
+
+    const dadosBloqueio = {
+        isBloqueio: true,
+        isLembrete: false,
+        titulo: titulo,
+        data: dataBloqueio,
+        horario: horaInicio,
+        horaFim: horaFim,
+        obs: document.getElementById('bloqueio-obs').value.trim(),
+        cor: '#e11d48' // Vermelho escuro para destacar bloqueios reais na grade
+    };
+
+    if (editId) {
+        const index = db.agendamentos.findIndex(a => a.id === editId);
+        if (index !== -1) {
+            db.agendamentos[index] = { ...db.agendamentos[index], ...dadosBloqueio };
+        }
+    } else {
+        db.agendamentos.push({ id: gerarIdUnico(), ...dadosBloqueio });
+    }
+
+    persistirDB();
+    fecharModal('modal-bloqueio');
+    atualizarCalendario();
+    alertCustomizado('Bloqueio de horário aplicado com sucesso!');
 }
 
 // ==========================================
@@ -1948,7 +1999,6 @@ function salvarLembrete(event) {
 // ==========================================
 function ativarSincronizacaoEmTempoReal() {
     if (window.usaFirebase && window.firebaseDb) {
-        // Obtém o método onSnapshot dinamicamente do Firebase (compat) ou do escopo global
         const onSnapshotFunc = window.onSnapshot || (window.firebase && window.firebase.firestore && window.firebase.firestore.onSnapshot);
         const docFunc = window.doc || (window.firebase && window.firebase.firestore && window.firebase.firestore.doc);
 
@@ -1959,17 +2009,14 @@ function ativarSincronizacaoEmTempoReal() {
                 if (docSnap.exists()) {
                     const dadosNuvem = docSnap.data();
                     
-                    // Atualiza o objeto local com os dados mais recentes da nuvem
                     db = Object.assign(db, dadosNuvem);
                     
-                    // Salva no localStorage para manter consistência offline
                     localStorage.setItem('odonto_pacientes', JSON.stringify(db.pacientes));
                     localStorage.setItem('odonto_agendamentos', JSON.stringify(db.agendamentos));
                     localStorage.setItem('odonto_prontuarios', JSON.stringify(db.prontuarios));
                     localStorage.setItem('odonto_pagamentos', JSON.stringify(db.pagamentos));
                     localStorage.setItem('odonto_despesas', JSON.stringify(db.despesas));
 
-                    // Atualiza a tela ativa no momento (Agenda, Pacientes ou Financeiro)
                     if (!document.getElementById('tab-agenda').classList.contains('hidden')) {
                         renderizarAgendaCards();
                     } else if (!document.getElementById('tab-pacientes').classList.contains('hidden')) {
