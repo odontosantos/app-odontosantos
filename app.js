@@ -1943,34 +1943,42 @@ function salvarLembrete(event) {
     alertCustomizado('Lembrete/Bloqueio salvo com sucesso!');
 }
 
-// --- ADICIONE ESTE BLOCO NO FINAL DO SEU app.js ---
+// ==========================================
+// SINCRONIZAÇÃO EM TEMPO REAL CORRIGIDA
+// ==========================================
 function ativarSincronizacaoEmTempoReal() {
-    if (window.usaFirebase && window.firebaseDb && window.onSnapshot && window.doc) {
-        const docRef = window.doc(window.firebaseDb, "clinica", "dados_compartilhados");
-        
-        window.onSnapshot(docRef, (docSnap) => {
-            if (docSnap.exists()) {
-                const dadosNuvem = docSnap.data();
-                
-                // Atualiza o objeto local com os dados mais recentes da nuvem
-                db = Object.assign(db, dadosNuvem);
-                
-                // Salva no localStorage para manter consistência offline
-                localStorage.setItem('odonto_pacientes', JSON.stringify(db.pacientes));
-                localStorage.setItem('odonto_agendamentos', JSON.stringify(db.agendamentos));
-                localStorage.setItem('odonto_prontuarios', JSON.stringify(db.prontuarios));
-                localStorage.setItem('odonto_pagamentos', JSON.stringify(db.pagamentos));
-                localStorage.setItem('odonto_despesas', JSON.stringify(db.despesas));
+    if (window.usaFirebase && window.firebaseDb) {
+        // Obtém o método onSnapshot dinamicamente do Firebase (compat) ou do escopo global
+        const onSnapshotFunc = window.onSnapshot || (window.firebase && window.firebase.firestore && window.firebase.firestore.onSnapshot);
+        const docFunc = window.doc || (window.firebase && window.firebase.firestore && window.firebase.firestore.doc);
 
-                // Atualiza a tela ativa no momento (Agenda, Pacientes ou Financeiro)
-                if (!document.getElementById('tab-agenda').classList.contains('hidden')) {
-                    renderizarAgendaCards();
-                } else if (!document.getElementById('tab-pacientes').classList.contains('hidden')) {
-                    renderizarPacientes();
-                } else if (!document.getElementById('tab-financeiro').classList.contains('hidden')) {
-                    renderizarFinanceiro();
+        if (onSnapshotFunc && docFunc) {
+            const docRef = docFunc(window.firebaseDb, "clinica", "dados_compartilhados");
+            
+            onSnapshotFunc(docRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const dadosNuvem = docSnap.data();
+                    
+                    // Atualiza o objeto local com os dados mais recentes da nuvem
+                    db = Object.assign(db, dadosNuvem);
+                    
+                    // Salva no localStorage para manter consistência offline
+                    localStorage.setItem('odonto_pacientes', JSON.stringify(db.pacientes));
+                    localStorage.setItem('odonto_agendamentos', JSON.stringify(db.agendamentos));
+                    localStorage.setItem('odonto_prontuarios', JSON.stringify(db.prontuarios));
+                    localStorage.setItem('odonto_pagamentos', JSON.stringify(db.pagamentos));
+                    localStorage.setItem('odonto_despesas', JSON.stringify(db.despesas));
+
+                    // Atualiza a tela ativa no momento (Agenda, Pacientes ou Financeiro)
+                    if (!document.getElementById('tab-agenda').classList.contains('hidden')) {
+                        renderizarAgendaCards();
+                    } else if (!document.getElementById('tab-pacientes').classList.contains('hidden')) {
+                        renderizarPacientes();
+                    } else if (!document.getElementById('tab-financeiro').classList.contains('hidden')) {
+                        renderizarFinanceiro();
+                    }
                 }
-            }
-        });
+            });
+        }
     }
 }
