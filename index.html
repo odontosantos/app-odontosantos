@@ -13,6 +13,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     <style>
+        /* Força tamanho mínimo de 16px nos inputs em mobile para impedir zoom indesejado */
         @media screen and (max-width: 768px) {
             input[type="text"], input[type="email"], input[type="password"], input[type="number"], input[type="date"], input[type="time"], select, textarea {
                 font-size: 16px !important;
@@ -94,25 +95,22 @@
     <!-- CONTEÚDO PRINCIPAL -->
     <main id="main-content" class="flex-grow max-w-7xl w-full mx-auto p-3 sm:p-6 space-y-4 sm:space-y-6 hidden relative">
 
-        <!-- ABA 1: AGENDA EM CARDS COMPACTOS -->
+        <!-- ABA 1: AGENDA -->
         <section id="tab-agenda" class="tab-content space-y-4 relative">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
                 <div>
                     <h3 class="text-lg sm:text-xl font-bold text-slate-900">Agenda do Consultório</h3>
                 </div>
                 <div class="flex items-center gap-2 w-full sm:w-auto">
-                    <!-- Botão Suspenso / Menor para Lembretes & Bloqueios -->
                     <button onclick="abrirModalLembrete()" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg transition shadow-sm border border-slate-200" title="Inserir Lembrete ou Bloqueio">
                         <i class="fa-solid fa-calendar-xmark text-slate-500"></i>
                     </button>
-                    <!-- Botão Principal de Agendamento -->
                     <button onclick="abrirModalAgendamento()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow transition flex items-center justify-center gap-2 flex-grow sm:flex-none">
                         <i class="fa-solid fa-plus"></i> Novo Agendamento
                     </button>
                 </div>
             </div>
             
-            <!-- Controle de Data e Visão Macro -->
             <div class="flex items-center justify-between bg-white p-3 rounded-xl shadow-sm border border-slate-200">
                 <button onclick="mudarDiaAgenda(-1)" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-semibold transition active:scale-95"><i class="fa-solid fa-chevron-left"></i></button>
                 <div class="flex-grow flex flex-col sm:flex-row justify-center items-center gap-2 sm:gap-6">
@@ -121,7 +119,6 @@
                         <input type="date" id="input-data-agenda" onchange="alterarDataAgendaManual(event)" class="absolute inset-0 opacity-0 cursor-pointer w-0 h-0">
                         <p class="text-[10px] text-slate-400 font-semibold sm:hidden mt-0.5">Tocar para escolher data</p>
                     </div>
-                    <!-- Mini-toggle de visão (Visual) -->
                     <div class="hidden sm:flex bg-slate-100 rounded-lg p-1 gap-1 border border-slate-200">
                         <button class="px-3 py-1 bg-white text-blue-600 shadow-sm rounded text-xs font-bold border border-slate-200">Dia</button>
                         <button class="px-3 py-1 text-slate-500 hover:bg-slate-200 rounded text-xs font-bold transition">Semana</button>
@@ -131,7 +128,6 @@
                 <button onclick="mudarDiaAgenda(1)" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-semibold transition active:scale-95"><i class="fa-solid fa-chevron-right"></i></button>
             </div>
 
-            <!-- Lista de Cartões da Agenda -->
             <div id="agenda-cards-container"></div>
         </section>
 
@@ -212,7 +208,7 @@
             </div>
         </section>
 
-        <!-- ABA 4: FICHA DO PACIENTE (Com botão de PDF) -->
+        <!-- ABA 4: FICHA DO PACIENTE -->
         <section id="tab-detalhes-paciente" class="tab-content hidden space-y-4">
             <div class="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
                 <button onclick="voltarParaOrigem()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-bold transition flex items-center gap-2 w-max">
@@ -254,7 +250,7 @@
         </div>
     </div>
 
-    <!-- MODAL DETALHES DO AGENDAMENTO (Refinado) -->
+    <!-- MODAL DETALHES DO AGENDAMENTO (Botões Limpos) -->
     <div id="modal-detalhes-agendamento" class="fixed inset-0 bg-slate-900 bg-opacity-75 hidden items-center justify-center z-50 p-3 sm:p-4">
         <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5 space-y-4">
             <div class="flex justify-between items-center border-b pb-3">
@@ -282,12 +278,12 @@
                     <p id="detalhe-ag-obs" class="text-xs text-slate-700 italic mt-0.5">Nenhuma observação.</p>
                 </div>
             </div>
-            <!-- O JS injetará os botões de ícone puro aqui -->
+            <!-- Container onde o JS irá injetar os botões puros (apenas ícones) -->
             <div id="botoes-acao-detalhe" class="w-full"></div>
         </div>
     </div>
 
-    <!-- MODAL AGENDAMENTO (Pílulas Inteligentes) -->
+    <!-- MODAL AGENDAMENTO (Com Pílulas Inteligentes) -->
     <div id="modal-agendamento" class="fixed inset-0 bg-slate-900 bg-opacity-75 hidden items-center justify-center z-50 p-3 sm:p-4">
         <div class="bg-white rounded-2xl shadow-xl max-w-lg w-full p-4 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center border-b pb-3">
@@ -324,14 +320,14 @@
                         <input type="date" id="agendamento-data" required class="w-full px-3 py-2 border rounded-lg text-sm">
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Horário Final</label>
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Horário Final Estimado</label>
                         <input type="time" id="agendamento-hora-fim" required class="w-full px-3 py-2 border rounded-lg text-sm bg-white">
                     </div>
                 </div>
 
-                <!-- Agendamento por Pílulas (Substituindo input de hora inicial) -->
+                <!-- Pílulas Inteligentes de Horário -->
                 <div>
-                    <label class="block text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">Horário de Início (Clique para selecionar)</label>
+                    <label class="block text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">Horário de Início (Selecione na lista)</label>
                     <input type="hidden" id="agendamento-horario" required>
                     <div id="grid-pilulas-horario" class="flex flex-wrap gap-2 p-1.5 bg-slate-50 border border-slate-200 rounded-lg max-h-32 overflow-y-auto scrollbar-thin"></div>
                 </div>
@@ -358,7 +354,7 @@
         </div>
     </div>
 
-    <!-- MODAL LEMBRETE / BLOQUEIO (Com Checkbox de Bloqueio Real) -->
+    <!-- MODAL LEMBRETE / BLOQUEIO -->
     <div id="modal-lembrete" class="fixed inset-0 bg-slate-900 bg-opacity-75 hidden items-center justify-center z-50 p-3 sm:p-4">
         <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5 space-y-4 max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center border-b pb-3">
@@ -373,10 +369,10 @@
                     <input type="text" id="lembrete-titulo" required placeholder="Ex: Almoço, Reunião, Curso..." class="w-full px-3 py-2 border rounded-lg text-sm">
                 </div>
 
-                <!-- Checkbox de Bloqueio de Agenda -->
+                <!-- Checkbox do Bloqueio de Agenda Real -->
                 <div class="flex items-center gap-2 p-3 bg-rose-50 border border-rose-200 rounded-lg">
                     <input type="checkbox" id="lembrete-is-bloqueio" class="w-4 h-4 text-rose-600 border-slate-300 rounded focus:ring-rose-500 cursor-pointer">
-                    <label for="lembrete-is-bloqueio" class="text-xs font-bold text-rose-800 cursor-pointer">Bloquear Agenda (Impede encaixes neste horário)</label>
+                    <label for="lembrete-is-bloqueio" class="text-xs font-bold text-rose-800 cursor-pointer">Bloquear Agenda (Impede encaixes nesse horário)</label>
                 </div>
 
                 <div class="grid grid-cols-2 gap-3">
@@ -395,12 +391,12 @@
                 </div>
 
                 <div>
-                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Observações Adicionais</label>
+                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Observações</label>
                     <textarea id="lembrete-obs" rows="2" class="w-full px-3 py-2 border rounded-lg text-sm"></textarea>
                 </div>
                 <div class="flex justify-end space-x-3 pt-3 border-t">
                     <button type="button" onclick="fecharModal('modal-lembrete')" class="px-4 py-2 border rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-100">Cancelar</button>
-                    <button type="submit" class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-sm font-bold rounded-lg shadow">Salvar Lembrete</button>
+                    <button type="submit" class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-sm font-bold rounded-lg shadow">Salvar</button>
                 </div>
             </form>
         </div>
@@ -450,14 +446,14 @@
         </div>
     </div>
 
-    <!-- Script Inline para Geração Dinâmica das Pílulas de Horário -->
+    <!-- Script de Geração das Pílulas de Horário -->
     <script>
         function inicializarPilulasHorario() {
             const container = document.getElementById('grid-pilulas-horario');
             if(!container) return;
             container.innerHTML = '';
             let html = '';
-            for(let h = 8; h <= 18; h++) { // Horários da clínica
+            for(let h = 8; h <= 18; h++) {
                 ['00', '30'].forEach(m => {
                     let hora = String(h).padStart(2,'0') + ':' + m;
                     html += `<button type="button" onclick="
@@ -475,7 +471,7 @@
         window.addEventListener('DOMContentLoaded', inicializarPilulasHorario);
     </script>
 
-    <!-- Scripts separados -->
+    <!-- Scripts externos -->
     <script type="module" src="firebase-config.js"></script>
     <script src="app.js"></script>
 </body>
