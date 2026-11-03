@@ -2,353 +2,315 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sistema Odontológico - Consultório</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OdontoSantos - Sistema de Gestão Odontológica</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- FontAwesome -->
+    <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Firebase SDK (Compat v9) -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        @media screen and (max-width: 768px) {
-            input[type="text"], input[type="email"], input[type="password"], input[type="number"], input[type="date"], input[type="time"], select, textarea {
-                font-size: 16px !important;
-            }
-        }
+        body { font-family: 'Inter', sans-serif; }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col">
+<body class="bg-slate-100 text-slate-800 antialiased min-h-screen pb-20 md:pb-0">
 
-    <!-- TELA DE LOGIN -->
-    <div id="login-screen" class="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-50 p-4">
-        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-8 border border-slate-100">
-            <div class="text-center mb-6 sm:mb-8">
-                <div class="inline-flex items-center justify-center w-16 h-16 bg-blue-100 text-blue-600 rounded-full mb-4 text-2xl">
-                    <i class="fa-solid fa-tooth"></i>
-                </div>
-                <h1 class="text-xl sm:text-2xl font-bold text-slate-900">Consultório Odontológico</h1>
-                <p class="text-sm text-slate-500 mt-1">Entre com sua conta do Firebase</p>
+    <!-- MODAL CUSTOMIZADO (ALERTA / PROMPT / CONFIRMAÇÃO) -->
+    <div id="modal-customizado" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border border-slate-100 animate-in fade-in zoom-in duration-200">
+            <div class="p-5 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                <h3 id="modal-custom-titulo" class="font-bold text-slate-800 text-base">Aviso</h3>
+                <button onclick="fecharModalPersonalizado()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
             </div>
-            <form onsubmit="fazerLoginFirebase(event)" class="space-y-4">
-                <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">E-mail de Acesso</label>
-                    <input type="email" id="login-email" required placeholder="seu@email.com" class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Senha</label>
-                    <input type="password" id="login-senha" required placeholder="••••••••" class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm">
-                </div>
-                <button type="submit" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md transition duration-200 text-sm">
-                    Entrar no Sistema
-                </button>
-            </form>
+            <div id="modal-custom-corpo" class="p-6 text-sm text-slate-600 space-y-4"></div>
+            <div id="modal-custom-botoes" class="p-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2"></div>
         </div>
     </div>
 
-    <!-- CABEÇALHO DO SISTEMA -->
-    <header id="main-header" class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm hidden">
-        <div class="max-w-7xl mx-auto px-4 py-3 flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-0">
-            <div class="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-start">
-                <div class="flex items-center space-x-3">
-                    <div class="w-9 h-9 sm:w-10 sm:h-10 bg-blue-600 text-white rounded-lg flex items-center justify-center text-base sm:text-lg">
-                        <i class="fa-solid fa-tooth"></i>
-                    </div>
-                    <div>
-                        <h2 class="font-bold text-slate-900 leading-tight text-sm sm:text-base">Clínica Odontológica</h2>
-                        <span id="header-user-badge" class="inline-block px-2 py-0.5 text-[10px] sm:text-xs font-medium bg-blue-100 text-blue-700 rounded-full mt-0.5">Perfil: Carregando...</span>
-                    </div>
+    <!-- NAVEGAÇÃO SUPERIOR / HEADER -->
+    <header class="bg-indigo-900 text-white shadow-md sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <div class="bg-indigo-700 p-2 rounded-xl">
+                    <i class="fa-solid fa-tooth text-2xl text-indigo-200"></i>
                 </div>
-                <div class="flex items-center space-x-2 sm:hidden">
-                    <button onclick="exportarBackup()" class="text-xs text-slate-600 hover:text-blue-600 font-medium px-2 py-1 border rounded bg-slate-50 flex items-center gap-1" title="Baixar Backup">
-                        <i class="fa-solid fa-download"></i>
-                    </button>
-                    <button onclick="document.getElementById('input-importar-backup').click()" class="text-xs text-slate-600 hover:text-blue-600 font-medium px-2 py-1 border rounded bg-slate-50 flex items-center gap-1" title="Restaurar Backup">
-                        <i class="fa-solid fa-upload"></i>
-                    </button>
-                    <button onclick="logout()" class="text-sm text-slate-600 hover:text-red-600 font-medium p-1 transition">
-                        <i class="fa-solid fa-right-from-bracket"></i>
-                    </button>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight">OdontoSantos</h1>
+                    <p class="text-xs text-indigo-300">Gestão Clínica Odontológica</p>
                 </div>
             </div>
-            <div class="hidden sm:flex items-center space-x-4">
-                <input type="file" id="input-importar-backup" accept=".json" class="hidden" onchange="importarBackup(event)">
-                <button onclick="exportarBackup()" class="text-xs text-slate-600 hover:text-blue-600 font-semibold flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 transition">
-                    <i class="fa-solid fa-download text-blue-600"></i>
-                    <span>Baixar Backup</span>
-                </button>
-                <button onclick="document.getElementById('input-importar-backup').click()" class="text-xs text-slate-600 hover:text-blue-600 font-semibold flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 transition">
-                    <i class="fa-solid fa-upload text-blue-600"></i>
-                    <span>Restaurar Backup</span>
-                </button>
-                <div class="h-5 w-px bg-slate-200"></div>
-                <button onclick="logout()" class="text-sm text-slate-600 hover:text-red-600 font-medium flex items-center space-x-1 transition">
-                    <i class="fa-solid fa-right-from-bracket"></i>
-                    <span>Sair</span>
+            
+            <div class="flex items-center space-x-3">
+                <span id="label-usuario-logado" class="text-xs bg-indigo-800 px-3 py-1.5 rounded-full font-medium border border-indigo-700 hidden sm:inline-block">
+                    <i class="fa-solid fa-user-doctor mr-1"></i> Usuário
+                </span>
+                <button onclick="fazerLogout()" class="text-xs bg-rose-600 hover:bg-rose-700 px-3 py-1.5 rounded-lg font-semibold transition flex items-center gap-1">
+                    <i class="fa-solid fa-right-from-bracket"></i> Sair
                 </button>
             </div>
         </div>
     </header>
 
-    <!-- MENU DE NAVEGAÇÃO -->
-    <nav id="main-nav" class="bg-slate-900 text-white shadow-inner hidden">
-        <div class="max-w-7xl mx-auto px-2 sm:px-4 flex space-x-1 overflow-x-auto scrollbar-none" id="nav-tabs"></div>
+    <!-- NAVEGAÇÃO PRINCIPAL (SUB-MENU) -->
+    <nav class="bg-white border-b border-slate-200 shadow-sm sticky top-[61px] z-20">
+        <div class="max-w-7xl mx-auto px-4 flex overflow-x-auto space-x-1 py-2 no-scrollbar">
+            <button onclick="trocarAba('agenda')" id="btn-aba-agenda" class="aba-btn flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-semibold whitespace-nowrap bg-indigo-50 text-indigo-700 border border-indigo-100">
+                <i class="fa-solid fa-calendar-days"></i><span>Agenda</span>
+            </button>
+            <button onclick="trocarAba('pacientes')" id="btn-aba-pacientes" class="aba-btn flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-semibold whitespace-nowrap text-slate-600 hover:bg-slate-100">
+                <i class="fa-solid fa-users"></i><span>Pacientes</span>
+            </button>
+            <button onclick="trocarAba('financeiro')" id="btn-aba-financeiro" class="aba-btn flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-semibold whitespace-nowrap text-slate-600 hover:bg-slate-100">
+                <i class="fa-solid fa-wallet"></i><span>Caixa & Financeiro</span>
+            </button>
+        </div>
     </nav>
 
-    <!-- CONTEÚDO PRINCIPAL -->
-    <main id="main-content" class="flex-grow max-w-7xl w-full mx-auto p-3 sm:p-6 space-y-4 sm:space-y-6 hidden relative">
+    <!-- CONTEÚDO PRINCIPAL CONTAINER -->
+    <main class="max-w-7xl mx-auto px-4 py-6">
 
-        <!-- ABA 1: PACIENTES -->
-        <section id="tab-pacientes" class="tab-content hidden space-y-4">
-            <div class="bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap items-center justify-between gap-3">
-                <div class="flex flex-wrap items-center gap-2">
-                    <button onclick="definirFiltroCategoria('todos')" id="tag-filtro-todos" class="px-3.5 py-1.5 rounded-full text-xs font-bold transition bg-blue-600 text-white shadow-sm">
-                        Todos (<span id="kpi-total-pacientes">0</span>)
-                    </button>
-                    <button onclick="definirFiltroCategoria('clinico')" id="tag-filtro-clinico" class="px-3.5 py-1.5 rounded-full text-xs font-bold transition bg-slate-100 text-slate-700 hover:bg-slate-200">
-                        Clínico Geral (<span id="kpi-clinico-pacientes">0</span>)
-                    </button>
-                    <button onclick="definirFiltroCategoria('orto')" id="tag-filtro-orto" class="px-3.5 py-1.5 rounded-full text-xs font-bold transition bg-slate-100 text-slate-700 hover:bg-slate-200">
-                        Ortodontia (<span id="kpi-orto-pacientes">0</span>)
-                    </button>
-                    <button onclick="alternarFiltroInativos()" id="btn-filtro-inativos" class="px-3.5 py-1.5 rounded-full text-xs font-bold transition bg-amber-50 text-amber-800 border border-amber-200">
-                        Inativos >30d (<span id="kpi-inativos-pacientes">0</span>)
+        <!-- ABA 1: AGENDA -->
+        <section id="aba-agenda" class="space-y-4">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-800">Agenda da Clínica</h2>
+                    <p class="text-xs text-slate-500">Visualize e gerencie as consultas agendadas</p>
+                </div>
+                <button onclick="abrirModalAgendamento()" class="w-full sm:w-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl text-xs shadow transition flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-plus"></i> Novo Agendamento
+                </button>
+            </div>
+
+            <!-- Filtros de Data e Busca na Agenda -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                    <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Filtrar Data</label>
+                    <input type="date" id="filtro-agenda-data" onchange="renderizarAgenda()" class="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Buscar Paciente</label>
+                    <input type="text" id="filtro-agenda-busca" oninput="renderizarAgenda()" placeholder="Nome do paciente..." class="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div class="flex items-end">
+                    <button onclick="limparFiltrosAgenda()" class="w-full py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold rounded-lg text-xs border border-slate-200 transition">
+                        Limpar Filtros
                     </button>
                 </div>
-                <button onclick="abrirModalPaciente()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow transition flex items-center justify-center gap-2 whitespace-nowrap">
+            </div>
+
+            <!-- Lista de Agendamentos -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div id="lista-agendamentos" class="divide-y divide-slate-100"></div>
+            </div>
+        </section>
+
+        <!-- ABA 2: PACIENTES -->
+        <section id="aba-pacientes" class="space-y-4 hidden">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-800">Cadastro de Pacientes</h2>
+                    <p class="text-xs text-slate-500">Lista geral de pacientes e prontuários</p>
+                </div>
+                <button onclick="abrirModalPaciente()" class="w-full sm:w-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl text-xs shadow transition flex items-center justify-center gap-2">
                     <i class="fa-solid fa-user-plus"></i> Novo Paciente
                 </button>
             </div>
 
-            <!-- Barra de Pesquisa -->
-            <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-200">
-                <div class="relative w-full">
-                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
-                    <input type="text" id="busca-pacientes-tabela" oninput="renderizarPacientes()" placeholder="Pesquisar por nome ou CPF..." class="w-full pl-9 pr-4 py-2 border rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition">
-                </div>
+            <!-- Busca de Pacientes -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                <input type="text" id="filtro-pacientes-busca" oninput="renderizarPacientes()" placeholder="Pesquisar paciente por nome, CPF ou telefone..." class="w-full px-4 py-2 border border-slate-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
 
-            <!-- Lista em Coluna Única Vertical com Scroll -->
-            <div class="bg-slate-50/50 p-2 rounded-2xl border border-slate-200">
-                <div id="lista-pacientes-container" class="flex flex-col space-y-3 max-h-[70vh] overflow-y-auto pr-1"></div>
-            </div>
+            <!-- Lista de Pacientes -->
+            <div id="lista-pacientes" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
         </section>
 
-        <!-- ABA 2: FINANCEIRO E CAIXA -->
-        <section id="tab-financeiro" class="tab-content hidden space-y-4">
-            <!-- KPI / Resumo -->
-            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4">
-                <div class="flex items-center gap-3 w-full sm:w-auto">
-                    <div class="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center text-lg shrink-0"><i class="fa-solid fa-wallet"></i></div>
-                    <div>
-                        <p class="text-[10px] font-bold uppercase text-slate-400">Resumo Financeiro (Período)</p>
-                        <h4 id="kpi-saldo-liquido" class="text-lg sm:text-xl font-extrabold text-blue-900">R$ 0,00</h4>
-                    </div>
-                </div>
-                <div class="flex flex-wrap items-center gap-4 sm:gap-6 text-xs sm:text-sm border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100 w-full sm:w-auto justify-around">
-                    <div>
-                        <span class="text-slate-400 block text-[10px] uppercase font-bold">Faturamento</span>
-                        <span id="kpi-faturamento" class="font-extrabold text-emerald-600">R$ 0,00</span>
-                    </div>
-                    <div class="h-8 w-px bg-slate-200 hidden sm:block"></div>
-                    <div>
-                        <span class="text-slate-400 block text-[10px] uppercase font-bold">Despesas</span>
-                        <span id="kpi-despesas" class="font-extrabold text-rose-600">R$ 0,00</span>
-                    </div>
-                    <div class="h-8 w-px bg-slate-200 hidden sm:block"></div>
-                    <div>
-                        <span class="text-slate-400 block text-[10px] uppercase font-bold">Pendências</span>
-                        <span id="kpi-receber" class="font-extrabold text-amber-600">0 Pacientes</span>
-                    </div>
-                </div>
+        <!-- ABA 3: DETALHES DO PACIENTE (PRONTUÁRIO INTEGRAL) -->
+        <section id="aba-detalhes-paciente" class="space-y-4 hidden">
+            <div class="flex justify-between items-center">
+                <button onclick="voltarParaOrigem()" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold rounded-lg transition flex items-center gap-1">
+                    <i class="fa-solid fa-arrow-left"></i> Voltar
+                </button>
             </div>
-
-            <!-- FORMULÁRIO DE LANÇAMENTO DE CAIXA RÁPIDO -->
-            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
-                <h4 class="font-bold text-slate-800 text-sm sm:text-base flex items-center gap-2">
-                    <i class="fa-solid fa-cash-register text-emerald-600"></i> Novo Lançamento de Caixa
-                </h4>
-                <form onsubmit="salvarLancamentoCaixaAbaFinanceiro(event)" class="space-y-3">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Selecionar Paciente *</label>
-                            <input type="text" id="filtro-caixa-paciente-busca" oninput="filtrarPacientesCaixaSelect()" placeholder="🔍 Pesquisar por nome ou CPF..." class="w-full px-3 py-1.5 border rounded-lg text-xs bg-slate-50 mb-1.5 outline-none focus:ring-2 focus:ring-blue-500">
-                            <select id="caixa-financeiro-paciente" required class="w-full px-3 py-2 border rounded-lg text-sm bg-white font-medium outline-none focus:ring-2 focus:ring-blue-500"></select>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Descrição / Procedimento *</label>
-                            <input type="text" id="caixa-fin-desc" required placeholder="Ex: Consulta, Restauração, Manutenção..." class="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div>
-                            <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Valor (R$)</label>
-                            <input type="number" step="0.01" id="caixa-fin-valor" placeholder="0.00" class="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Forma de Pagamento</label>
-                            <select id="caixa-fin-forma" class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500">
-                                <option value="Pix">Pix</option>
-                                <option value="Cartão de Crédito">Cartão de Crédito</option>
-                                <option value="Cartão de Débito">Cartão de Débito</option>
-                                <option value="Dinheiro">Dinheiro</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Observação / Pendência</label>
-                            <input type="text" id="caixa-fin-obs" placeholder="Ex: Valor parcial, crédito..." class="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
-                        </div>
-                    </div>
-                    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-2 border-t border-slate-100">
-                        <div class="flex items-center gap-2">
-                            <input type="checkbox" id="caixa-fin-marca-pendencia" class="w-4 h-4 text-amber-600 border-slate-300 rounded focus:ring-amber-500">
-                            <label for="caixa-fin-marca-pendencia" class="text-xs font-semibold text-amber-900 cursor-pointer">Marcar paciente com pendência/débito</label>
-                        </div>
-                        <div class="w-full sm:w-auto flex justify-end">
-                            <button type="submit" class="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-semibold rounded-lg shadow transition flex items-center justify-center gap-2">
-                                <i class="fa-solid fa-check"></i> Registrar No Caixa
-                            </button>
-                        </div>
-                    </div>
-                </form>
-            </div>
-
-            <!-- Filtros de Período e Ações Adicionais -->
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full md:w-auto">
-                    <label class="text-xs font-semibold text-slate-500 uppercase shrink-0">Filtrar Período:</label>
-                    <select id="filtro-periodo-financeiro" onchange="alternarFiltroPersonalizadoFinanceiro()" class="px-3 py-2 border rounded-lg text-sm bg-slate-50 font-medium outline-none">
-                        <option value="mes">Mês Atual</option>
-                        <option value="hoje">Hoje</option>
-                        <option value="personalizado">Período Personalizado...</option>
-                        <option value="todos">Todo o Histórico</option>
-                    </select>
-                    
-                    <div id="container-datas-personalizadas" class="hidden items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
-                        <input type="date" id="data-inicio-fin" onchange="renderizarFinanceiro()" class="px-2.5 py-1.5 border rounded-lg text-sm outline-none bg-slate-50 flex-1 sm:flex-none">
-                        <span class="text-xs font-bold text-slate-400">Até</span>
-                        <input type="date" id="data-fim-fin" onchange="renderizarFinanceiro()" class="px-2.5 py-1.5 border rounded-lg text-sm outline-none bg-slate-50 flex-1 sm:flex-none">
-                    </div>
-                </div>
-
-                <div class="flex flex-wrap gap-2 w-full md:w-auto">
-                    <button onclick="lancarDespesa()" class="flex-1 sm:flex-none px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs sm:text-sm font-semibold rounded-lg shadow transition flex items-center justify-center gap-1.5">
-                        <i class="fa-solid fa-minus"></i> Lançar Despesa
-                    </button>
-                    <button onclick="abrirModalPagamentoAvulso()" class="flex-1 sm:flex-none px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-semibold rounded-lg shadow transition flex items-center justify-center gap-1.5">
-                        <i class="fa-solid fa-cash-register"></i> Pgto Avulso
-                    </button>
-                    <button onclick="abrirModalCaixaDiario()" class="w-full sm:w-auto px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs sm:text-sm font-semibold rounded-lg shadow transition flex items-center justify-center gap-1.5">
-                        <i class="fa-solid fa-calculator"></i> Caixa Diário
-                    </button>
-                </div>
-            </div>
-
-            <!-- Listagens Financeiras -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3">
-                    <h4 class="font-bold text-slate-800 border-b pb-2 text-sm sm:text-base"><i class="fa-solid fa-scale-unbalanced text-blue-600 mr-2"></i> Pendências & Créditos de Pacientes</h4>
-                    <div id="lista-pendencias-financeiras" class="space-y-2 max-h-[60vh] overflow-y-auto pr-1"></div>
-                </div>
-
-                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3">
-                    <div class="flex justify-between items-center border-b pb-2">
-                        <h4 class="font-bold text-slate-800 text-sm sm:text-base"><i class="fa-solid fa-right-left text-emerald-600 mr-2"></i> Histórico de Movimentações</h4>
-                    </div>
-                    <div id="lista-pagamentos-realizados" class="space-y-2 max-h-[60vh] overflow-y-auto pr-1"></div>
-                </div>
-            </div>
-        </section>
-
-        <!-- ABA 3: PRONTUÁRIO / DETALHES DO PACIENTE -->
-        <section id="tab-detalhes-paciente" class="tab-content hidden space-y-4">
-            <button onclick="voltarParaOrigem()" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 rounded-lg text-sm font-medium transition flex items-center gap-2 w-max">
-                <i class="fa-solid fa-arrow-left"></i> Voltar
-            </button>
             <div id="detalhes-paciente-container" class="space-y-4"></div>
+        </section>
+
+        <!-- ABA 4: CAIXA & FINANCEIRO -->
+        <section id="aba-financeiro" class="space-y-4 hidden">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-800">Caixa & Fluxo Financeiro</h2>
+                    <p class="text-xs text-slate-500">Controle de receitas, recebimentos e despesas operacionais</p>
+                </div>
+                <div class="flex flex-wrap gap-2 w-full sm:w-auto">
+                    <button onclick="abrirModalPagamento()" class="flex-1 sm:flex-none px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-xs shadow transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-cash-register"></i> Registrar Pagamento
+                    </button>
+                    <!-- APENAS UM BOTÃO DE LANÇAR DESPESA -->
+                    <button onclick="abrirModalDespesa()" class="flex-1 sm:flex-none px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl text-xs shadow transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-minus-circle"></i> Lançar Despesa
+                    </button>
+                </div>
+            </div>
+
+            <!-- Summary / Balanço -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                    <span class="text-xs font-bold uppercase text-slate-400">Total Recebido</span>
+                    <h3 id="financeiro-total-recebido" class="text-xl font-bold text-emerald-600 mt-1">R$ 0,00</h3>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                    <span class="text-xs font-bold uppercase text-slate-400">Total Despesas</span>
+                    <h3 id="financeiro-total-despesas" class="text-xl font-bold text-rose-600 mt-1">R$ 0,00</h3>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                    <span class="text-xs font-bold uppercase text-slate-400">Saldo Final</span>
+                    <h3 id="financeiro-saldo-liquidado" class="text-xl font-bold text-indigo-600 mt-1">R$ 0,00</h3>
+                </div>
+            </div>
+
+            <!-- Tabelas de Histórico -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
+                    <h3 class="font-bold text-slate-800 text-sm border-b pb-2"><i class="fa-solid fa-arrow-down-long text-emerald-600 mr-2"></i> Recebimentos de Pacientes</h3>
+                    <div id="lista-recebimentos-caixa" class="space-y-2 max-h-[50vh] overflow-y-auto"></div>
+                </div>
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
+                    <h3 class="font-bold text-slate-800 text-sm border-b pb-2"><i class="fa-solid fa-arrow-up-long text-rose-600 mr-2"></i> Saídas / Despesas da Clínica</h3>
+                    <div id="lista-despesas-caixa" class="space-y-2 max-h-[50vh] overflow-y-auto"></div>
+                </div>
+            </div>
         </section>
 
     </main>
 
-    <!-- MODAIS CUSTOMIZADOS -->
-    <div id="modal-customizado" class="fixed inset-0 bg-slate-900 bg-opacity-75 hidden items-center justify-center z-50 p-3 sm:p-4">
-        <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-5 space-y-4">
-            <h3 id="modal-custom-titulo" class="text-base sm:text-lg font-bold text-slate-900">Atenção</h3>
-            <div id="modal-custom-corpo" class="text-sm space-y-3"></div>
-            <div id="modal-custom-botoes" class="flex justify-end gap-2 pt-2 border-t"></div>
-        </div>
-    </div>
-
-    <!-- MODAL CAIXA DIÁRIO -->
-    <div id="modal-fechamento-caixa" class="fixed inset-0 bg-slate-900 bg-opacity-75 hidden items-center justify-center z-50 p-3 sm:p-4">
-        <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-5 space-y-4">
-            <div class="flex justify-between items-center border-b pb-3">
-                <h3 class="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2"><i class="fa-solid fa-calculator text-blue-600"></i> Caixa Diário</h3>
-                <button onclick="fecharModal('modal-fechamento-caixa')" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark text-lg"></i></button>
+    <!-- MODAIS DE REGISTRO / CADASTRO -->
+    
+    <!-- Modal Paciente -->
+    <div id="modal-paciente" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden border border-slate-100">
+            <div class="p-4 border-b bg-slate-50 flex justify-between items-center">
+                <h3 id="titulo-modal-paciente" class="font-bold text-slate-800 text-sm">Novo Paciente</h3>
+                <button onclick="fecharModal('modal-paciente')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            <div class="flex items-center gap-2 bg-slate-50 p-3 rounded-xl border">
-                <label class="text-xs font-bold uppercase text-slate-600 shrink-0">Data:</label>
-                <input type="date" id="input-data-caixa-diario" onchange="carregarFechamentoCaixaData()" class="w-full px-3 py-1.5 border rounded-lg text-sm bg-white font-semibold outline-none">
-            </div>
-            <div id="conteudo-fechamento-caixa" class="text-sm max-h-[50vh] overflow-y-auto pr-1 space-y-3"></div>
-            <div class="pt-2 border-t text-right">
-                <button onclick="fecharModal('modal-fechamento-caixa')" class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow transition">Fechar</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL PACIENTE -->
-    <div id="modal-paciente" class="fixed inset-0 bg-slate-900 bg-opacity-75 hidden items-center justify-center z-50 p-3 sm:p-4">
-        <div class="bg-white rounded-2xl shadow-xl max-w-lg w-full p-4 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div class="flex justify-between items-center border-b pb-3">
-                <h3 id="titulo-modal-paciente" class="text-base sm:text-lg font-bold text-slate-900">Cadastrar Novo Paciente</h3>
-                <button onclick="fecharModal('modal-paciente')" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark text-lg"></i></button>
-            </div>
-            <form id="form-paciente" onsubmit="salvarPaciente(event)" class="space-y-4">
-                <input type="hidden" id="paciente-edit-id" value="">
+            <form onsubmit="salvarPaciente(event)" class="p-5 space-y-3">
+                <input type="hidden" id="paciente-id">
                 <div>
-                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Nome Completo * (Caixa Alta)</label>
-                    <input type="text" id="paciente-nome" required class="w-full px-3 py-2 border rounded-lg text-sm uppercase">
+                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Nome Completo *</label>
+                    <input type="text" id="paciente-nome" required class="w-full px-3 py-2 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500">
                 </div>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Telefone</label>
-                        <input type="text" id="paciente-telefone" oninput="mascaraTelefone(this)" placeholder="(00) 00000-0000" class="w-full px-3 py-2 border rounded-lg text-sm">
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Telefone / WhatsApp</label>
+                        <input type="text" id="paciente-telefone" placeholder="(91) 98888-8888" class="w-full px-3 py-2 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500">
                     </div>
-                    <div>
-                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Data Nascimento</label>
-                        <input type="date" id="paciente-nascimento" class="w-full px-3 py-2 border rounded-lg text-sm">
-                    </div>
-                </div>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     <div>
                         <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">CPF</label>
-                        <input type="text" id="paciente-cpf" oninput="mascaraCPF(this)" placeholder="000.000.000-00" class="w-full px-3 py-2 border rounded-lg text-sm">
+                        <input type="text" id="paciente-cpf" placeholder="000.000.000-00" class="w-full px-3 py-2 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Data Nascimento</label>
+                        <input type="date" id="paciente-nascimento" class="w-full px-3 py-2 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500">
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Categoria</label>
-                        <select id="paciente-categoria" onchange="toggleVencimentoOrto()" class="w-full px-3 py-2 border rounded-lg text-sm bg-white">
-                            <option value="Clínico">Clínico</option>
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Categoria / Ramo</label>
+                        <select id="paciente-categoria" class="w-full px-3 py-2 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500">
+                            <option value="Clínica Geral">Clínica Geral</option>
                             <option value="Ortodontia">Ortodontia</option>
+                            <option value="Implantodontia">Implantodontia</option>
+                            <option value="Endodontia">Endodontia</option>
+                            <option value="Estética">Estética</option>
                         </select>
                     </div>
                 </div>
-                <div id="grupo-vencimento-orto" class="hidden">
-                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Data de Vencimento Mensal (Orto)</label>
-                    <input type="date" id="paciente-vencimento" class="w-full px-3 py-2 border rounded-lg text-sm">
-                </div>
-                <div class="flex justify-end space-x-3 pt-4 border-t">
-                    <button type="button" onclick="fecharModal('modal-paciente')" class="px-4 py-2 border rounded-lg text-sm text-slate-600 hover:bg-slate-100">Cancelar</button>
-                    <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow">Salvar Paciente</button>
+                <div class="pt-3 flex justify-end gap-2">
+                    <button type="button" onclick="fecharModal('modal-paciente')" class="px-4 py-2 border rounded-lg text-xs font-semibold text-slate-600">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold shadow hover:bg-indigo-700">Salvar Paciente</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Scripts separados -->
-    <script type="module" src="firebase-config.js"></script>
+    <!-- Modal Pagamento no Caixa (COM BUSCA DE PACIENTE FUNCIONAL) -->
+    <div id="modal-pagamento" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border border-slate-100">
+            <div class="p-4 border-b bg-emerald-50 flex justify-between items-center">
+                <h3 class="font-bold text-emerald-900 text-sm"><i class="fa-solid fa-cash-register mr-1"></i> Registrar Recebimento</h3>
+                <button onclick="fecharModal('modal-pagamento')" class="text-emerald-700 hover:text-emerald-900"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form onsubmit="salvarPagamentoCaixa(event)" class="p-5 space-y-3">
+                <!-- PESQUISA DE PACIENTE NO CAIXA -->
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Buscar / Selecionar Paciente *</label>
+                    <input type="text" id="caixa-busca-paciente" oninput="filtrarPacientesCaixa()" placeholder="Digite o nome para buscar..." class="w-full px-3 py-2 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-emerald-500 mb-1">
+                    <select id="pagamento-paciente-id" required size="4" class="w-full px-3 py-2 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-emerald-500 bg-white"></select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Descrição / Referência *</label>
+                    <input type="text" id="pagamento-descricao" placeholder="Ex: Manutenção mensal ortodontia" required class="w-full px-3 py-2 border rounded-lg text-xs outline-none">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Valor (R$) *</label>
+                        <input type="number" step="0.01" id="pagamento-valor" required placeholder="0.00" class="w-full px-3 py-2 border rounded-lg text-xs outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Forma de Pagamento</label>
+                        <select id="pagamento-forma" class="w-full px-3 py-2 border rounded-lg text-xs outline-none">
+                            <option value="Pix">Pix</option>
+                            <option value="Cartão de Crédito">Cartão de Crédito</option>
+                            <option value="Cartão de Débito">Cartão de Débito</option>
+                            <option value="Dinheiro">Dinheiro</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="pt-3 flex justify-end gap-2">
+                    <button type="button" onclick="fecharModal('modal-pagamento')" class="px-4 py-2 border rounded-lg text-xs font-semibold text-slate-600">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-semibold shadow hover:bg-emerald-700">Confirmar Recebimento</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Despesa -->
+    <div id="modal-despesa" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border border-slate-100">
+            <div class="p-4 border-b bg-rose-50 flex justify-between items-center">
+                <h3 class="font-bold text-rose-900 text-sm"><i class="fa-solid fa-minus-circle mr-1"></i> Lançar Despesa da Clínica</h3>
+                <button onclick="fecharModal('modal-despesa')" class="text-rose-700 hover:text-rose-900"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form onsubmit="salvarDespesaCaixa(event)" class="p-5 space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Descrição da Despesa *</label>
+                    <input type="text" id="despesa-descricao" placeholder="Ex: Material Dental, Aluguel, Luz" required class="w-full px-3 py-2 border rounded-lg text-xs outline-none">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Valor (R$) *</label>
+                        <input type="number" step="0.01" id="despesa-valor" required placeholder="0.00" class="w-full px-3 py-2 border rounded-lg text-xs outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Categoria</label>
+                        <select id="despesa-categoria" class="w-full px-3 py-2 border rounded-lg text-xs outline-none">
+                            <option value="Insumos/Materiais">Insumos / Materiais</option>
+                            <option value="Contas Fixas">Contas Fixas (Luz/Água/Net)</option>
+                            <option value="Laboratório">Laboratório de Prótese</option>
+                            <option value="Manutenção">Manutenção Equipamentos</option>
+                            <option value="Outros">Outros</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="pt-3 flex justify-end gap-2">
+                    <button type="button" onclick="fecharModal('modal-despesa')" class="px-4 py-2 border rounded-lg text-xs font-semibold text-slate-600">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-rose-600 text-white rounded-lg text-xs font-semibold shadow hover:bg-rose-700">Salvar Despesa</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script src="app.js"></script>
 </body>
 </html>
