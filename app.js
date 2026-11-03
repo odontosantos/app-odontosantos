@@ -398,10 +398,10 @@ function gerarSlotsExpediente() {
 function renderizarAgendaCards() {
     const container = document.getElementById('agenda-cards-container');
     const displayData = document.getElementById('data-agenda-display');
-    const inputData = document.getElementById('input-data-agenda');
+    
     if (!container || !displayData) return;
 
-    if (inputData) inputData.value = dataAgendaAtual;
+    
 
     const dataObj = new Date(dataAgendaAtual + 'T12:00:00');
     const diasSemana = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
