@@ -1,441 +1,461 @@
-let db = {
+// SISTEMA CONSULTÓRIO ODONTOLÓGICO - LÓGICA COMPLETA DE NEGÓCIO E INTERFACE
+
+// 1. ESTADO GLOBAL DA APLICAÇÃO (BANCO DE DADOS LOCAL E SESSÃO)
+const db = {
     pacientes: [],
-    prontuarios: [],
+    procedimentos: [],
     pagamentos: [],
-    despesas: []
+    prontuarios: [],
+    gastos: []
 };
 
-const SENHA_EXCLUSAO = '1234';
+let usuarioLogado = null;
+let filtroCategoria = 'todos'; // 'todos', 'clinico', 'orto'
+let apenasInativos = false;
+let origemVisualizacao = 'pacientes'; // 'pacientes' ou 'financeiro'
 
-// ==========================================
-// MODAL DE ALERTAS/PROMPTS PERSONALIZADOS
-// ==========================================
-function mostrarModalPersonalizado(titulo, corpoHtml, botoesHtml) {
-    const modal = document.getElementById('modal-customizado');
-    document.getElementById('modal-custom-titulo').innerText = titulo;
-    document.getElementById('modal-custom-corpo').innerHTML = corpoHtml;
-    document.getElementById('modal-custom-botoes').innerHTML = botoesHtml;
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
+// Função auxiliar para remover acentos na busca
+function removerAcentos(str) {
+    if (!str) return '';
+    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
-function fecharModalPersonalizado() {
-    fecharModal('modal-customizado');
-}
+// 2. INICIALIZAÇÃO E AUTENTICAÇÃO FIREBASE
+document.addEventListener('DOMContentLoaded', () => {
+    if (typeof firebase !== 'undefined' && firebase.auth) {
+        firebase.auth().onAuthStateChanged((user) => {
+            if (user) {
+                usuarioLogado = user;
+                document.getElementById('login-screen').classList.add('hidden');
+                document.getElementById('main-header').classList.remove('hidden');
+                document.getElementById('main-nav').classList.remove('hidden');
+                document.getElementById('main-content').classList.remove('hidden');
+                
+                const badge = document.getElementById('header-user-badge');
+                if (badge) badge.innerText = `Usuário: ${user.email}`;
 
-function verificarSenhaExclusao() {
-    return new Promise((resolve) => {
-        const corpo = `<p class="text-slate-600">Ação restrita. Digite a senha de exclusão:</p>
-                       <input type="password" id="input-senha-exclusao-modal" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Senha">`;
-        const botoes = `<button onclick="fecharModalPersonalizado(); window._senhaResolvida(false)" class="px-3 py-2 border rounded-lg text-xs">Cancelar</button>
-                        <button onclick="const s = document.getElementById('input-senha-exclusao-modal').value; fecharModalPersonalizado(); window._senhaResolvida(s === '${SENHA_EXCLUSAO}');" class="px-3 py-2 bg-rose-600 text-white rounded-lg text-xs font-semibold">Confirmar</button>`;
-        window._senhaResolvida = (val) => {
-            if (!val) alertCustomizado("❌ Senha incorreta ou ação cancelada.");
-            resolve(val);
-        };
-        mostrarModalPersonalizado("🔒 Confirmação de Segurança", corpo, botoes);
-    });
-}
-
-function alertCustomizado(mensagem) {
-    const corpo = `<p class="text-slate-700">${mensagem}</p>`;
-    const botoes = `<button onclick="fecharModalPersonalizado()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold">OK</button>`;
-    mostrarModalPersonalizado("Aviso", corpo, botoes);
-}
-
-function carregarDadosLocais() {
-    try {
-        db.pacientes = JSON.parse(localStorage.getItem('odonto_pacientes')) || [];
-        db.prontuarios = JSON.parse(localStorage.getItem('odonto_prontuarios')) || [];
-        db.pagamentos = JSON.parse(localStorage.getItem('odonto_pagamentos')) || [];
-        db.despesas = JSON.parse(localStorage.getItem('odonto_despesas')) || [];
-    } catch (e) {
-        console.error("Erro ao carregar dados locais.", e);
-    }
-}
-
-carregarDadosLocais();
-
-let usuarioAtual = null;
-let abaOrigem = 'pacientes';
-let subAbaAtualPaciente = 'prontuario';
-let pacienteAtualId = null;
-let exibiApenasInativos = false;
-
-function gerarIdUnico() {
-    return Date.now().toString() + '-' + Math.floor(Math.random() * 10000);
-}
-
-// ==========================================
-// SINCRONIZAÇÃO E PERSISTÊNCIA DE SESSÃO
-// ==========================================
-async function persistirDB() {
-    localStorage.setItem('odonto_pacientes', JSON.stringify(db.pacientes));
-    localStorage.setItem('odonto_prontuarios', JSON.stringify(db.prontuarios));
-    localStorage.setItem('odonto_pagamentos', JSON.stringify(db.pagamentos));
-    localStorage.setItem('odonto_despesas', JSON.stringify(db.despesas));
-
-    if (window.usaFirebase && window.firebaseDb && window.setDoc) {
-        try {
-            const docRef = window.doc(window.firebaseDb, "clinica", "dados_compartilhados");
-            await window.setDoc(docRef, db);
-        } catch (e) {
-            console.warn("Aviso: Falha ao sincronizar com o Firebase.", e);
-        }
-    }
-}
-
-async function sincronizarDadosNuvem() {
-    if (window.usaFirebase && window.firebaseDb && window.getDoc) {
-        try {
-            const docRef = window.doc(window.firebaseDb, "clinica", "dados_compartilhados");
-            const snap = await window.getDoc(docRef);
-            if (snap.exists()) {
-                db = Object.assign(db, snap.data());
-                persistirDB(); 
+                carregarDadosFirebase();
+                renderizarNavegacao();
+                trocarAba('pacientes');
+            } else {
+                usuarioLogado = null;
+                document.getElementById('login-screen').classList.remove('hidden');
+                document.getElementById('main-header').classList.add('hidden');
+                document.getElementById('main-nav').classList.add('hidden');
+                document.getElementById('main-content').classList.add('hidden');
             }
-        } catch (e) {
-            console.warn("Aviso: Falha ao puxar dados da nuvem.", e);
-        }
+        });
+    } else {
+        console.warn("Firebase SDK não detectado ou em ambiente offline local.");
+        carregarDadosLocalStorage();
+        renderizarNavegacao();
+        trocarAba('pacientes');
     }
-}
+});
 
-function mascaraTelefone(input) {
-    let v = input.value.replace(/\D/g, "");
-    v = v.replace(/^(\d{2})(\d)/g, "($1) $2");
-    v = v.replace(/(\d)(\d{4})$/, "$1-$2");
-    input.value = v.substring(0, 15);
-}
-
-function mascaraCPF(input) {
-    let v = input.value.replace(/\D/g, "");
-    v = v.replace(/(\d{3})(\d)/, "$1.$2");
-    v = v.replace(/(\d{3})(\d)/, "$1.$2");
-    v = v.replace(/(\d{3})(\d{1,2})$/, "$1-$2");
-    input.value = v.substring(0, 14);
-}
-
-function prevenirEnterBusca(e) {
-    if (e.key === 'Enter') e.preventDefault();
-}
-
-function obterDataLocalISO() {
-    const d = new Date();
-    const ano = d.getFullYear();
-    const mes = String(d.getMonth() + 1).padStart(2, '0');
-    const dia = String(d.getDate()).padStart(2, '0');
-    return ano + '-' + mes + '-' + dia;
-}
-
-function formatarMesAno(dataStr) {
-    if (!dataStr) return 'Outros';
-    const partes = dataStr.split('-');
-    if (partes.length < 2) return 'Outros';
-    const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-    return (meses[parseInt(partes[1], 10) - 1] || 'Mês') + ' de ' + partes[0];
-}
-
-// ==========================================
-// AUTENTICAÇÃO E PERSISTÊNCIA DE SESSÃO
-// ==========================================
-async function fazerLoginFirebase(event) {
-    event.preventDefault();
+function fazerLoginFirebase(e) {
+    e.preventDefault();
     const email = document.getElementById('login-email').value.trim();
     const senha = document.getElementById('login-senha').value;
 
-    if (!window.usaFirebase || !window.firebaseAuth) {
-        alertCustomizado("⚠️ O Firebase ainda está carregando. Aguarde um segundo e tente novamente.");
-        return;
-    }
-
-    try {
-        await window.firebaseAuth.setPersistence(window.firebase.auth.Auth.Persistence.LOCAL);
-        const userCredential = await window.signInWithEmailAndPassword(window.firebaseAuth, email, senha);
-        processarUsuarioLogado(userCredential.user);
-    } catch (error) {
-        let mensagemErro = error.message;
-        if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-email') {
-            mensagemErro = "E-mail ou senha incorretos.";
-        }
-        alertCustomizado("❌ Erro no login: " + mensagemErro);
-    }
-}
-
-window.addEventListener('DOMContentLoaded', () => {
-    setTimeout(() => {
-        if (window.usaFirebase && window.firebaseAuth) {
-            window.firebaseAuth.onAuthStateChanged(async (user) => {
-                if (user) {
-                    processarUsuarioLogado(user);
-                }
+    if (typeof firebase !== 'undefined' && firebase.auth) {
+        firebase.auth().signInWithEmailAndPassword(email, senha)
+            .catch(error => {
+                exibirModalCustomizado("Erro no Login", `Não foi possível autenticar: ${error.message}`);
             });
-        }
-    }, 1000);
-});
-
-async function processarUsuarioLogado(user) {
-    try {
-        const docRef = window.doc(window.firebaseDb, "usuarios", user.email);
-        const userDoc = await window.getDoc(docRef);
-        let perfilEncontrado = userDoc.exists() ? userDoc.data().perfil : 'secretaria';
-        usuarioAtual = { perfil: perfilEncontrado, email: user.email };
-        iniciarSessaoSistema();
-    } catch (e) {
-        usuarioAtual = { perfil: 'secretaria', email: user.email };
-        iniciarSessaoSistema();
+    } else {
+        usuarioLogado = { email: email || 'admin@consultorio.com' };
+        document.getElementById('login-screen').classList.add('hidden');
+        document.getElementById('main-header').classList.remove('hidden');
+        document.getElementById('main-nav').classList.remove('hidden');
+        document.getElementById('main-content').classList.remove('hidden');
+        carregarDadosLocalStorage();
+        renderizarNavegacao();
+        trocarAba('pacientes');
     }
-}
-
-async function iniciarSessaoSistema() {
-    const telaLogin = document.getElementById('login-screen');
-    if (telaLogin) telaLogin.classList.replace('flex', 'hidden');
-
-    await sincronizarDadosNuvem();
-    ativarSincronizacaoEmTempoReal();
-    document.getElementById('main-header').classList.remove('hidden');
-    document.getElementById('main-nav').classList.remove('hidden');
-    document.getElementById('main-content').classList.remove('hidden');
-    document.getElementById('main-content').classList.add('flex-grow');
-    
-    configurarNavbar();
-    inicializarSistema();
 }
 
 function logout() {
-    if (window.usaFirebase && window.signOut) {
-        window.signOut(window.firebaseAuth);
-    }
-    usuarioAtual = null;
-    document.getElementById('login-screen').classList.replace('hidden', 'flex');
-    document.getElementById('main-header').classList.add('hidden');
-    document.getElementById('main-nav').classList.add('hidden');
-    document.getElementById('main-content').classList.add('hidden');
-}
-
-function configurarNavbar() {
-    const navTabs = document.getElementById('nav-tabs');
-    const badge = document.getElementById('header-user-badge');
-    if (!navTabs || !badge) return;
-
-    if (usuarioAtual && usuarioAtual.perfil === 'secretaria') {
-        badge.innerText = 'Perfil: Secretaria / Recepção';
-        badge.className = 'inline-block px-2 py-0.5 text-[10px] sm:text-xs font-medium bg-emerald-100 text-emerald-800 rounded-full mt-0.5';
-    } else {
-        badge.innerText = 'Perfil: Dentista (Clínico)';
-        badge.className = 'inline-block px-2 py-0.5 text-[10px] sm:text-xs font-medium bg-blue-100 text-blue-800 rounded-full mt-0.5';
-    }
-
-    navTabs.innerHTML = 
-        '<button onclick="mudarAba(\'pacientes\')" id="btn-tab-pacientes" class="px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold border-b-2 border-blue-500 text-white flex items-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-users"></i> Pacientes</button>' +
-        '<button onclick="mudarAba(\'financeiro\')" id="btn-tab-financeiro" class="px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-white flex items-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-file-invoice-dollar"></i> Financeiro / Caixa</button>';
-}
-
-function mudarAba(nomeAba) {
-    document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-    document.querySelectorAll('#nav-tabs button').forEach(btn => {
-        btn.classList.remove('border-blue-500', 'text-white');
-        btn.classList.add('border-transparent', 'text-slate-400');
-    });
-
-    const abaAlvo = document.getElementById('tab-' + nomeAba);
-    if (abaAlvo) abaAlvo.classList.remove('hidden');
-
-    const ativoBtn = document.getElementById('btn-tab-' + nomeAba);
-    if (ativoBtn) {
-        ativoBtn.classList.remove('border-transparent', 'text-slate-400');
-        ativoBtn.classList.add('border-blue-500', 'text-white');
-    }
-
-    if (nomeAba === 'pacientes') renderizarPacientes();
-    if (nomeAba === 'financeiro') renderizarFinanceiro();
-}
-
-function inicializarSistema() {
-    popularSelectPacientesCaixa();
-    mudarAba('pacientes');
-}
-
-// ==========================================
-// PACIENTES
-// ==========================================
-function obterUltimaConsultaPaciente(pacienteId) {
-    const datas = [];
-    db.prontuarios.filter(pr => pr.pacienteId === pacienteId && pr.data).forEach(pr => datas.push(pr.data));
-
-    if (datas.length === 0) return null;
-    datas.sort((a, b) => new Date(b) - new Date(a));
-    return datas[0];
-}
-
-function calcularDiasDesdeUltimaConsulta(dataIso) {
-    if (!dataIso) return 9999;
-    const dataConsulta = new Date(dataIso);
-    const hoje = new Date();
-    const diffTempo = hoje - dataConsulta;
-    return Math.floor(diffTempo / (1000 * 60 * 60 * 24));
-}
-
-function definirFiltroCategoria(categoria) {
-    exibiApenasInativos = false;
-    window._categoriaSelecionada = categoria;
-    
-    ['todos', 'clinico', 'orto'].forEach(cat => {
-        const btn = document.getElementById('tag-filtro-' + cat);
-        if (btn) {
-            if (cat === categoria) {
-                btn.className = 'px-3.5 py-1.5 rounded-full text-xs font-bold transition bg-blue-600 text-white shadow-sm';
-            } else {
-                btn.className = 'px-3.5 py-1.5 rounded-full text-xs font-bold transition bg-slate-100 text-slate-700 hover:bg-slate-200';
+    exibirModalCustomizado(
+        "Confirmar Saída",
+        "Deseja realmente sair do sistema?",
+        [
+            { texto: "Cancelar", classe: "bg-slate-200 text-slate-700" },
+            { 
+                texto: "Sair", 
+                classe: "bg-rose-600 text-white", 
+                acao: () => {
+                    if (typeof firebase !== 'undefined' && firebase.auth) {
+                        firebase.auth().signOut();
+                    } else {
+                        location.reload();
+                    }
+                } 
             }
+        ]
+    );
+}
+
+// 3. PERSISTÊNCIA DE DADOS (FIRESTORE COM FALLBACK LOCALSTORAGE)
+function carregarDadosFirebase() {
+    if (typeof firebase !== 'undefined' && firebase.firestore) {
+        const firestore = firebase.firestore();
+        
+        firestore.collection("pacientes").onSnapshot(snapshot => {
+            db.pacientes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            atualizarTelas();
+        }, err => console.error("Erro pacientes:", err));
+
+        firestore.collection("procedimentos").onSnapshot(snapshot => {
+            db.procedimentos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            atualizarTelas();
+        }, err => console.error("Erro procedimentos:", err));
+
+        firestore.collection("pagamentos").onSnapshot(snapshot => {
+            db.pagamentos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            atualizarTelas();
+        }, err => console.error("Erro pagamentos:", err));
+
+        firestore.collection("prontuarios").onSnapshot(snapshot => {
+            db.prontuarios = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            atualizarTelas();
+        }, err => console.error("Erro prontuarios:", err));
+
+        firestore.collection("gastos").onSnapshot(snapshot => {
+            db.gastos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            atualizarTelas();
+        }, err => console.error("Erro gastos:", err));
+    } else {
+        carregarDadosLocalStorage();
+    }
+}
+
+function carregarDadosLocalStorage() {
+    db.pacientes = JSON.parse(localStorage.getItem('odonto_pacientes') || '[]');
+    db.procedimentos = JSON.parse(localStorage.getItem('odonto_procedimentos') || '[]');
+    db.pagamentos = JSON.parse(localStorage.getItem('odonto_pagamentos') || '[]');
+    db.prontuarios = JSON.parse(localStorage.getItem('odonto_prontuarios') || '[]');
+    db.gastos = JSON.parse(localStorage.getItem('odonto_gastos') || '[]');
+    atualizarTelas();
+}
+
+function salvarColecao(colecao) {
+    if (typeof firebase !== 'undefined' && firebase.firestore) {
+        const firestore = firebase.firestore();
+        db[colecao].forEach(item => {
+            if (item.id) {
+                firestore.collection(colecao).doc(item.id).set(item, { merge: true });
+            }
+        });
+    } else {
+        localStorage.setItem(`odonto_${colecao}`, JSON.stringify(db[colecao]));
+    }
+}
+
+function atualizarTelas() {
+    renderizarPacientes();
+    popularSelectPacientesCaixa();
+    renderizarFinanceiro();
+}
+
+// 4. SISTEMA DE NAVEGAÇÃO ENTRE ABAS
+const ABAS = [
+    { id: 'pacientes', titulo: 'Pacientes', icone: 'fa-users' },
+    { id: 'financeiro', titulo: 'Financeiro / Caixa', icone: 'fa-wallet' }
+];
+
+function renderizarNavegacao() {
+    const navContainer = document.getElementById('nav-tabs');
+    if (!navContainer) return;
+    
+    navContainer.innerHTML = ABAS.map(aba => `
+        <button onclick="trocarAba('${aba.id}')" id="nav-btn-${aba.id}" class="px-4 py-3 font-semibold text-xs sm:text-sm flex items-center space-x-2 border-b-2 border-transparent hover:text-blue-400 transition whitespace-nowrap">
+            <i class="fa-solid ${aba.icone}"></i>
+            <span>${aba.titulo}</span>
+        </button>
+    `).join('');
+}
+
+function trocarAba(abaId) {
+    document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add('hidden'));
+    
+    ABAS.forEach(aba => {
+        const btn = document.getElementById(`nav-btn-${aba.id}`);
+        if (btn) {
+            btn.classList.remove('border-blue-500', 'text-blue-400', 'bg-slate-800');
+            btn.classList.add('border-transparent');
         }
     });
-    
-    const btnInativos = document.getElementById('btn-filtro-inativos');
-    if (btnInativos) btnInativos.className = 'px-3.5 py-1.5 rounded-full text-xs font-bold transition bg-amber-50 text-amber-800 border border-amber-200';
 
+    const abaAtiva = document.getElementById(`tab-${abaId}`);
+    if (abaAtiva) abaAtiva.classList.remove('hidden');
+
+    const btnAtivo = document.getElementById(`nav-btn-${abaId}`);
+    if (btnAtivo) {
+        btnAtivo.classList.add('border-blue-500', 'text-blue-400', 'bg-slate-800');
+        btnAtivo.classList.remove('border-transparent');
+    }
+
+    if (abaId === 'pacientes') renderizarPacientes();
+    if (abaId === 'financeiro') {
+        popularSelectPacientesCaixa();
+        renderizarFinanceiro();
+    }
+}
+
+// 5. ABA 1: GESTÃO DE PACIENTES
+function definirFiltroCategoria(cat) {
+    filtroCategoria = cat;
+    apenasInativos = false;
+    atualizarBotoesFiltroPacientes();
     renderizarPacientes();
 }
 
 function alternarFiltroInativos() {
-    exibiApenasInativos = !exibiApenasInativos;
-    const btnInativos = document.getElementById('btn-filtro-inativos');
-    if (btnInativos) {
-        if (exibiApenasInativos) {
-            btnInativos.className = 'px-3.5 py-1.5 rounded-full text-xs font-bold transition bg-amber-600 text-white shadow-sm';
-        } else {
-            btnInativos.className = 'px-3.5 py-1.5 rounded-full text-xs font-bold transition bg-amber-50 text-amber-800 border border-amber-200';
-        }
-    }
+    apenasInativos = !apenasInativos;
+    atualizarBotoesFiltroPacientes();
     renderizarPacientes();
+}
+
+function atualizarBotoesFiltroPacientes() {
+    const btnTodos = document.getElementById('tag-filtro-todos');
+    const btnClinico = document.getElementById('tag-filtro-clinico');
+    const btnOrto = document.getElementById('tag-filtro-orto');
+    const btnInativos = document.getElementById('btn-filtro-inativos');
+
+    if (btnTodos) btnTodos.className = `px-3.5 py-1.5 rounded-full text-xs font-bold transition ${filtroCategoria === 'todos' && !apenasInativos ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`;
+    if (btnClinico) btnClinico.className = `px-3.5 py-1.5 rounded-full text-xs font-bold transition ${filtroCategoria === 'clinico' && !apenasInativos ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`;
+    if (btnOrto) btnOrto.className = `px-3.5 py-1.5 rounded-full text-xs font-bold transition ${filtroCategoria === 'orto' && !apenasInativos ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`;
+    if (btnInativos) btnInativos.className = `px-3.5 py-1.5 rounded-full text-xs font-bold transition ${apenasInativos ? 'bg-amber-600 text-white shadow-sm' : 'bg-amber-50 text-amber-800 border border-amber-200'}`;
 }
 
 function renderizarPacientes() {
     const container = document.getElementById('lista-pacientes-container');
     if (!container) return;
-    
-    const termoBusca = (document.getElementById('busca-pacientes-tabela')?.value || '').toLowerCase().trim();
-    const opcaoCategoria = window._categoriaSelecionada || 'todos';
 
-    container.innerHTML = '';
-    let total = db.pacientes.length, clinicos = 0, orto = 0, inativosCount = 0;
+    const termoBuscaInput = document.getElementById('busca-pacientes-tabela');
+    const termoBusca = removerAcentos((termoBuscaInput ? termoBuscaInput.value : '').toLowerCase().trim());
 
-    db.pacientes.forEach(p => {
-        p.categoria === 'Ortodontia' ? orto++ : clinicos++;
-        const ult = obterUltimaConsultaPaciente(p.id);
-        if (ult && calcularDiasDesdeUltimaConsulta(ult) > 30) inativosCount++;
-    });
+    const total = db.pacientes.length;
+    const totalClinico = db.pacientes.filter(p => (p.categoria || '').toLowerCase() === 'clínico' || (p.categoria || '').toLowerCase() === 'clinico').length;
+    const totalOrto = db.pacientes.filter(p => (p.categoria || '').toLowerCase() === 'ortodontia').length;
 
-    const kpiTotal = document.getElementById('kpi-total-pacientes');
-    const kpiClinico = document.getElementById('kpi-clinico-pacientes');
-    const kpiOrto = document.getElementById('kpi-orto-pacientes');
-    const kpiInativos = document.getElementById('kpi-inativos-pacientes');
+    const hoje = new Date();
+    const totalInativos = db.pacientes.filter(p => {
+        if (!p.ultimaConsulta) return true;
+        const diffDias = Math.floor((hoje - new Date(p.ultimaConsulta)) / (1000 * 60 * 60 * 24));
+        return diffDias > 30;
+    }).length;
 
-    if (kpiTotal) kpiTotal.innerText = total;
-    if (kpiClinico) kpiClinico.innerText = clinicos;
-    if (kpiOrto) kpiOrto.innerText = orto;
-    if (kpiInativos) kpiInativos.innerText = inativosCount;
+    if (document.getElementById('kpi-total-pacientes')) document.getElementById('kpi-total-pacientes').innerText = total;
+    if (document.getElementById('kpi-clinico-pacientes')) document.getElementById('kpi-clinico-pacientes').innerText = totalClinico;
+    if (document.getElementById('kpi-orto-pacientes')) document.getElementById('kpi-orto-pacientes').innerText = totalOrto;
+    if (document.getElementById('kpi-inativos-pacientes')) document.getElementById('kpi-inativos-pacientes').innerText = totalInativos;
 
-    const listaExibicao = db.pacientes.filter(p => {
-        const bateuBusca = (p.nome || '').toLowerCase().includes(termoBusca) || (p.cpf || '').includes(termoBusca);
-        if (!bateuBusca) return false;
-        if (opcaoCategoria === 'clinico' && p.categoria === 'Ortodontia') return false;
-        if (opcaoCategoria === 'orto' && p.categoria !== 'Ortodontia') return false;
-        if (exibiApenasInativos) {
-            const ult = obterUltimaConsultaPaciente(p.id);
-            return ult ? calcularDiasDesdeUltimaConsulta(ult) > 30 : false;
+    let listaFiltrada = db.pacientes.filter(p => {
+        const nomeNorm = removerAcentos((p.nome || '').toLowerCase());
+        const cpfNorm = (p.cpf || '').toLowerCase();
+        const atendeBusca = nomeNorm.includes(termoBusca) || cpfNorm.includes(termoBusca);
+        
+        let atendeCategoria = true;
+        if (filtroCategoria === 'clinico') {
+            atendeCategoria = (p.categoria || '').toLowerCase() === 'clínico' || (p.categoria || '').toLowerCase() === 'clinico';
+        } else if (filtroCategoria === 'orto') {
+            atendeCategoria = (p.categoria || '').toLowerCase() === 'ortodontia';
         }
-        return true;
+
+        let atendeInativo = true;
+        if (apenasInativos) {
+            if (!p.ultimaConsulta) atendeInativo = true;
+            else {
+                const diff = Math.floor((hoje - new Date(p.ultimaConsulta)) / (1000 * 60 * 60 * 24));
+                atendeInativo = diff > 30;
+            }
+        }
+
+        return atendeBusca && atendeCategoria && atendeInativo;
     });
 
-    if (listaExibicao.length === 0) {
-        container.innerHTML = '<div class="col-span-full p-6 text-center text-slate-400 bg-white rounded-xl border border-slate-200 shadow-sm"><i class="fa-solid fa-users-slash text-3xl mb-2"></i><p>Nenhum paciente encontrado.</p></div>';
+    if (listaFiltrada.length === 0) {
+        container.innerHTML = `
+            <div class="bg-white p-8 rounded-xl text-center border border-slate-200">
+                <i class="fa-solid fa-user-slash text-4xl text-slate-300 mb-3"></i>
+                <p class="text-slate-500 font-medium text-sm">Nenhum paciente localizado com os filtros selecionados.</p>
+            </div>`;
         return;
     }
 
-    listaExibicao.forEach(p => {
-        const badgeClass = p.categoria === 'Ortodontia' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-700';
-        const venc = p.categoria === 'Ortodontia' ? (p.vencimento ? p.vencimento.split('-').reverse().join('/') : 'Não definida') : '-';
-        const ultimaData = obterUltimaConsultaPaciente(p.id);
-        const dias = calcularDiasDesdeUltimaConsulta(ultimaData);
-        
-        let htmlUltimaConsulta = '-';
-        if (ultimaData) {
-            const dataFmt = ultimaData.split('-').reverse().join('/');
-            htmlUltimaConsulta = dias > 30 ? `<span class="text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">${dataFmt} (${dias}d)</span>` : `<span class="text-slate-700 font-medium">${dataFmt}</span>`;
-        } else {
-            htmlUltimaConsulta = '<span class="text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded border border-rose-100">Sem consultas</span>';
-        }
+    container.innerHTML = listaFiltrada.map(p => {
+        const totalProcedimentos = db.procedimentos.filter(proc => proc.pacienteId === p.id).reduce((acc, proc) => acc + (Number(proc.valor) || 0), 0);
+        const totalPago = db.pagamentos.filter(pag => pag.pacienteId === p.id).reduce((acc, pag) => acc + (Number(pag.valor) || 0), 0);
+        const saldo = totalProcedimentos - totalPago;
 
-        container.innerHTML += `
-        <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-200 flex flex-col gap-3 relative hover:shadow-md transition">
-            <div class="flex justify-between items-start gap-2">
-                <h4 class="font-bold text-slate-900 text-base truncate pr-2">${p.nome}</h4>
-                <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${badgeClass}">${p.categoria}</span>
+        const dataConsultaFormatada = p.ultimaConsulta ? new Date(p.ultimaConsulta + 'T00:00:00').toLocaleDateString('pt-BR') : 'Sem registro';
+
+        return `
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div class="space-y-1 flex-1">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <h3 class="font-bold text-slate-900 text-base leading-snug">${p.nome || 'SEM NOME'}</h3>
+                        <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold ${p.categoria === 'Ortodontia' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}">
+                            ${p.categoria || 'Clínico'}
+                        </span>
+                        ${p.temPendencia ? `<span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-700"><i class="fa-solid fa-triangle-exclamation"></i> Pendência Caixa</span>` : ''}
+                    </div>
+                    <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 font-medium">
+                        <span><i class="fa-solid fa-phone text-slate-400 mr-1"></i>${p.telefone || 'Sem Tel'}</span>
+                        <span><i class="fa-solid fa-id-card text-slate-400 mr-1"></i>${p.cpf || 'Sem CPF'}</span>
+                        <span><i class="fa-solid fa-calendar-day text-slate-400 mr-1"></i>Última: ${dataConsultaFormatada}</span>
+                        ${p.categoria === 'Ortodontia' && p.diaVencimentoOrto ? `<span class="text-purple-600 font-semibold"><i class="fa-solid fa-clock text-purple-400 mr-1"></i>Venc. Orto: Dia ${p.diaVencimentoOrto}</span>` : ''}
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-4 border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-100">
+                    <div class="text-left sm:text-right">
+                        <span class="text-[10px] uppercase font-bold text-slate-400 block">Saldo Paciente</span>
+                        <span class="text-sm font-extrabold ${saldo > 0 ? 'text-rose-600' : 'text-emerald-600'}">
+                            ${saldo > 0 ? `Débito: R$ ${saldo.toFixed(2)}` : 'Em dia / Quitado'}
+                        </span>
+                    </div>
+
+                    <div class="flex items-center gap-1.5">
+                        <button onclick="verDetalhesPaciente('${p.id}', 'pacientes')" class="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold rounded-lg transition flex items-center gap-1">
+                            <i class="fa-solid fa-folder-open"></i> Prontuário
+                        </button>
+                        <button onclick="editarPaciente('${p.id}')" class="p-1.5 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-slate-100 transition" title="Editar Cadastro">
+                            <i class="fa-solid fa-pen-to-square text-sm"></i>
+                        </button>
+                        <button onclick="excluirPaciente('${p.id}')" class="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-slate-100 transition" title="Excluir Paciente">
+                            <i class="fa-solid fa-trash text-sm"></i>
+                        </button>
+                    </div>
+                </div>
             </div>
-            <div class="text-sm text-slate-600 space-y-1.5 flex-grow">
-                <p class="flex items-center gap-2"><i class="fa-solid fa-phone text-slate-400 w-4 text-center"></i> <span class="truncate">${p.telefone || '-'}</span></p>
-                <p class="flex items-center gap-2"><i class="fa-solid fa-calendar-check text-slate-400 w-4 text-center"></i> ${htmlUltimaConsulta}</p>
-                ${p.categoria === 'Ortodontia' ? `<p class="flex items-center gap-2"><i class="fa-solid fa-file-invoice-dollar text-slate-400 w-4 text-center"></i> Vencimento: ${venc}</p>` : ''}
-            </div>
-            <div class="pt-3 border-t border-slate-100 flex gap-2">
-                <button onclick="abrirModalPaciente('${p.id}')" class="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg text-xs font-semibold transition flex items-center justify-center" title="Editar Cadastrais">
-                    <i class="fa-solid fa-pen-to-square"></i>
-                </button>
-                <button onclick="abrirDetalhesPaciente('${p.id}', 'pacientes')" class="px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg text-xs font-semibold transition flex-grow flex justify-center items-center gap-2">
-                    <i class="fa-solid fa-eye"></i> Abrir Ficha
-                </button>
-            </div>
-        </div>`;
-    });
+        `;
+    }).join('');
 }
 
-async function excluirPaciente(pacienteId) {
-    const paciente = db.pacientes.find(p => p.id === pacienteId);
+// 6. CADASTRO E EDIÇÃO DE PACIENTES
+function abrirModalPaciente() {
+    document.getElementById('form-paciente').reset();
+    document.getElementById('paciente-edit-id').value = '';
+    document.getElementById('titulo-modal-paciente').innerText = 'Cadastrar Novo Paciente';
+    toggleVencimentoOrto();
+    abrirModal('modal-paciente');
+}
+
+function toggleVencimentoOrto() {
+    const cat = document.getElementById('paciente-categoria').value;
+    const grupo = document.getElementById('grupo-vencimento-orto');
+    if (cat === 'Ortodontia') {
+        grupo.classList.remove('hidden');
+    } else {
+        grupo.classList.add('hidden');
+    }
+}
+
+function salvarPaciente(e) {
+    e.preventDefault();
+    const id = document.getElementById('paciente-edit-id').value;
+    const nome = document.getElementById('paciente-nome').value.trim().toUpperCase();
+    const telefone = document.getElementById('paciente-telefone').value.trim();
+    const nascimento = document.getElementById('paciente-nascimento').value;
+    const cpf = document.getElementById('paciente-cpf').value.trim();
+    const categoria = document.getElementById('paciente-categoria').value;
+    const dataVenc = document.getElementById('paciente-vencimento').value;
+
+    let diaVencimentoOrto = null;
+    if (categoria === 'Ortodontia' && dataVenc) {
+        diaVencimentoOrto = new Date(dataVenc + 'T00:00:00').getDate();
+    }
+
+    if (id) {
+        const idx = db.pacientes.findIndex(p => p.id === id);
+        if (idx !== -1) {
+            db.pacientes[idx] = {
+                ...db.pacientes[idx],
+                nome, telefone, nascimento, cpf, categoria,
+                diaVencimentoOrto: diaVencimentoOrto || db.pacientes[idx].diaVencimentoOrto
+            };
+        }
+    } else {
+        const novoId = 'pac_' + Date.now();
+        db.pacientes.push({
+            id: novoId,
+            nome,
+            telefone,
+            nascimento,
+            cpf,
+            categoria,
+            diaVencimentoOrto,
+            ultimaConsulta: new Date().toISOString().split('T')[0],
+            temPendencia: false
+        });
+    }
+
+    salvarColecao('pacientes');
+    fecharModal('modal-paciente');
+    renderizarPacientes();
+    popularSelectPacientesCaixa();
+}
+
+function editarPaciente(id) {
+    const paciente = db.pacientes.find(p => p.id === id);
     if (!paciente) return;
 
-    if (!(await verificarSenhaExclusao())) return;
-    
-    const corpo = `<p class="text-slate-600">Tem certeza que deseja EXCLUIR permanentemente o paciente "${paciente.nome}"?</p>`;
-    const botoes = `<button onclick="fecharModalPersonalizado(); window._confirmaExcluirPac(false)" class="px-3 py-2 border rounded-lg text-xs">Cancelar</button>
-                    <button onclick="fecharModalPersonalizado(); window._confirmaExcluirPac(true)" class="px-3 py-2 bg-rose-600 text-white rounded-lg text-xs font-semibold">Excluir</button>`;
-    window._confirmaExcluirPac = (conf) => {
-        if (conf) {
-            db.pacientes = db.pacientes.filter(p => p.id !== pacienteId);
-            db.prontuarios = db.prontuarios.filter(pr => pr.pacienteId !== pacienteId);
+    document.getElementById('paciente-edit-id').value = paciente.id;
+    document.getElementById('paciente-nome').value = paciente.nome || '';
+    document.getElementById('paciente-telefone').value = paciente.telefone || '';
+    document.getElementById('paciente-nascimento').value = paciente.nascimento || '';
+    document.getElementById('paciente-cpf').value = paciente.cpf || '';
+    document.getElementById('paciente-categoria').value = paciente.categoria || 'Clínico';
 
-            db.pagamentos.forEach(pg => {
-                if (pg.pacienteId === pacienteId) {
-                    pg.pacienteId = null; 
-                    pg.descricao = `[Paciente Excluído: ${paciente.nome}] ` + pg.descricao;
-                }
-            });
-
-            persistirDB();
-            renderizarPacientes();
-            alertCustomizado('Paciente excluído com sucesso!');
-            voltarParaOrigem();
-        }
-    };
-    mostrarModalPersonalizado("Excluir Paciente", corpo, botoes);
+    toggleVencimentoOrto();
+    document.getElementById('titulo-modal-paciente').innerText = 'Editar Paciente';
+    abrirModal('modal-paciente');
 }
 
-async function excluirProntuario(prontuarioId, pacienteId) {
-    if (!(await verificarSenhaExclusao())) return;
-    db.prontuarios = db.prontuarios.filter(pr => pr.id !== prontuarioId);
-    persistirDB();
-    abrirDetalhesPaciente(pacienteId, abaOrigem);
+function excluirPaciente(id) {
+    exibirModalCustomizado(
+        "Excluir Paciente",
+        "Tem certeza que deseja remover este paciente? Registros vinculados serão mantidos no histórico.",
+        [
+            { texto: "Cancelar", classe: "bg-slate-200 text-slate-700" },
+            { 
+                texto: "Sim, Excluir", 
+                classe: "bg-rose-600 text-white", 
+                acao: () => {
+                    db.pacientes = db.pacientes.filter(p => p.id !== id);
+                    if (typeof firebase !== 'undefined' && firebase.firestore) {
+                        firebase.firestore().collection('pacientes').doc(id).delete();
+                    } else {
+                        salvarColecao('pacientes');
+                    }
+                    renderizarPacientes();
+                    popularSelectPacientesCaixa();
+                } 
+            }
+        ]
+    );
 }
 
-// ==========================================
-// FINANCEIRO & CAIXA
-// ==========================================
+// 7. ABA 2: FINANCEIRO E CAIXA COM PESQUISA DE PACIENTES CORRIGIDA
 function popularSelectPacientesCaixa() {
     const select = document.getElementById('caixa-financeiro-paciente');
     if (!select) return;
+
+    const inputFiltro = document.getElementById('filtro-caixa-paciente-busca');
+    if (inputFiltro && inputFiltro.value.trim() !== '') {
+        filtrarPacientesCaixaSelect();
+        return;
+    }
+
     select.innerHTML = '<option value="">-- Selecione o Paciente --</option>';
-    db.pacientes.forEach(p => {
-        select.innerHTML += `<option value="${p.id}">${p.nome} (${p.categoria})</option>`;
-    });
+    if (Array.isArray(db.pacientes)) {
+        db.pacientes.forEach(p => {
+            select.innerHTML += `<option value="${p.id}">${p.nome || 'SEM NOME'} (${p.categoria || 'Clínico'})</option>`;
+        });
+    }
 }
 
 function filtrarPacientesCaixaSelect() {
@@ -443,856 +463,669 @@ function filtrarPacientesCaixaSelect() {
     const select = document.getElementById('caixa-financeiro-paciente');
     if (!inputFiltro || !select) return;
 
-    const termo = inputFiltro.value.toLowerCase();
+    const termo = removerAcentos((inputFiltro.value || '').toLowerCase().trim());
     select.innerHTML = '<option value="">-- Selecione o Paciente --</option>';
-    
-    const filtrados = db.pacientes.filter(p => p.nome.toLowerCase().includes(termo));
-    filtrados.forEach(p => {
-        select.innerHTML += `<option value="${p.id}">${p.nome} (${p.categoria})</option>`;
+
+    if (!Array.isArray(db.pacientes)) return;
+
+    const filtrados = db.pacientes.filter(p => {
+        const nomeNorm = removerAcentos((p.nome || '').toLowerCase());
+        const cpfNorm = (p.cpf || '').toLowerCase();
+        return nomeNorm.includes(termo) || cpfNorm.includes(termo);
     });
+
+    if (filtrados.length === 0) {
+        select.innerHTML = '<option value="">Nenhum paciente encontrado com esse nome</option>';
+        return;
+    }
+
+    filtrados.forEach(p => {
+        select.innerHTML += `<option value="${p.id}">${p.nome || 'SEM NOME'} (${p.categoria || 'Clínico'})</option>`;
+    });
+
+    if (filtrados.length === 1) {
+        select.value = filtrados[0].id;
+    }
 }
 
-function salvarLancamentoCaixaAbaFinanceiro(event) {
-    event.preventDefault();
+function salvarLancamentoCaixaAbaFinanceiro(e) {
+    e.preventDefault();
     const pacienteId = document.getElementById('caixa-financeiro-paciente').value;
-    const desc = document.getElementById('caixa-fin-desc').value.trim();
+    const descricao = document.getElementById('caixa-fin-desc').value.trim();
     const valor = parseFloat(document.getElementById('caixa-fin-valor').value) || 0;
-    const forma = document.getElementById('caixa-fin-forma').value;
+    const formaPagamento = document.getElementById('caixa-fin-forma').value;
     const obs = document.getElementById('caixa-fin-obs').value.trim();
-    const temPendencia = document.getElementById('caixa-fin-marca-pendencia').checked;
+    const marcaPendencia = document.getElementById('caixa-fin-marca-pendencia').checked;
 
-    if (!pacienteId) { alertCustomizado('Selecione um paciente.'); return; }
-    if (!desc) { alertCustomizado('Informe a descrição ou procedimento.'); return; }
+    if (!pacienteId) {
+        exibirModalCustomizado("Atenção", "Por favor, selecione um paciente.");
+        return;
+    }
+
+    const dataHoje = new Date().toISOString().split('T')[0];
+
+    if (valor > 0) {
+        const novoPagamento = {
+            id: 'pag_' + Date.now(),
+            pacienteId,
+            descricao,
+            valor,
+            formaPagamento,
+            obs,
+            data: dataHoje
+        };
+        db.pagamentos.push(novoPagamento);
+        salvarColecao('pagamentos');
+    }
 
     const paciente = db.pacientes.find(p => p.id === pacienteId);
     if (paciente) {
-        paciente.possuiPendenciaManual = temPendencia;
-        if (obs) paciente.obsFinanceiraManual = obs;
+        paciente.temPendencia = marcaPendencia;
+        paciente.ultimaConsulta = dataHoje;
+        salvarColecao('pacientes');
     }
 
-    if (valor > 0) {
-        let descFinal = desc;
-        if (obs) descFinal += ' (Obs: ' + obs + ')';
-        
-        db.pagamentos.push({
-            id: gerarIdUnico(),
-            pacienteId: pacienteId,
-            data: obterDataLocalISO(),
-            valor: valor,
-            forma: forma,
-            descricao: descFinal
-        });
-    }
-
-    persistirDB();
-    renderizarFinanceiro();
-    alertCustomizado('Lançamento de Caixa registrado com sucesso!');
-    
     document.getElementById('caixa-fin-desc').value = '';
     document.getElementById('caixa-fin-valor').value = '';
     document.getElementById('caixa-fin-obs').value = '';
     document.getElementById('caixa-fin-marca-pendencia').checked = false;
-}
 
-function estornarPagamento(pagamentoId, pacienteId) {
-    const pagamentoOriginal = db.pagamentos.find(pg => pg.id === pagamentoId);
-    if (!pagamentoOriginal) return;
-
-    const corpo = `<p class="text-slate-600">Digite o motivo do estorno do pagamento (Obrigatório):</p>
-                   <input type="text" id="input-motivo-estorno" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Ex: Cobrança indevida, desistência...">`;
-    const botoes = `<button onclick="fecharModalPersonalizado()" class="px-3 py-2 border rounded-lg text-xs">Cancelar</button>
-                    <button onclick="const m = document.getElementById('input-motivo-estorno').value; if(!m) { alert('Motivo obrigatório'); return; } fecharModalPersonalizado(); executarEstorno('${pagamentoId}', '${pacienteId}', '${m}')" class="px-3 py-2 bg-amber-600 text-white rounded-lg text-xs font-semibold">Avançar</button>`;
-    mostrarModalPersonalizado("Motivo do Estorno", corpo, botoes);
-}
-
-async function executarEstorno(pagamentoId, pacienteId, motivo) {
-    const pagamentoOriginal = db.pagamentos.find(pg => pg.id === pagamentoId);
-    if (!pagamentoOriginal) return;
-    if (!(await verificarSenhaExclusao())) return;
-
-    db.pagamentos.push({
-        id: gerarIdUnico(),
-        pacienteId: pacienteId,
-        data: obterDataLocalISO(),
-        valor: -Math.abs(parseFloat(pagamentoOriginal.valor)),
-        forma: 'Estorno',
-        descricao: `ESTORNO: ${pagamentoOriginal.descricao} - Motivo: ${motivo}`
-    });
-
-    persistirDB();
-    alertCustomizado('Estorno realizado com sucesso!');
-    if (pacienteId) {
-        abrirDetalhesPaciente(pacienteId, abaOrigem);
-    } else {
-        renderizarFinanceiro();
-    }
-}
-
-function salvarLancamentoCaixaManual(event, pacienteId) {
-    event.preventDefault();
-    const descricaoProc = document.getElementById('caixa-proc-desc').value.trim();
-    const valorPago = parseFloat(document.getElementById('caixa-valor-pago').value) || 0;
-    const forma = document.getElementById('caixa-forma').value;
-    const observacao = document.getElementById('caixa-obs-manual').value.trim();
-    const temPendencia = document.getElementById('caixa-marca-pendencia').checked;
-    
-    const paciente = db.pacientes.find(p => p.id === pacienteId);
-    if (!paciente) return;
-
-    paciente.possuiPendenciaManual = temPendencia;
-    paciente.obsFinanceiraManual = observacao;
-
-    if (valorPago > 0) {
-        let descFinal = descricaoProc;
-        if (observacao) descFinal += ' (Obs: ' + observacao + ')';
-        
-        db.pagamentos.push({ 
-            id: gerarIdUnico(), 
-            pacienteId: pacienteId, 
-            data: obterDataLocalISO(), 
-            valor: valorPago, 
-            forma: forma, 
-            descricao: descFinal
-        });
-    }
-
-    persistirDB();
-    alertCustomizado('Lançamento salvo e status atualizado com sucesso!');
-    abrirDetalhesPaciente(pacienteId, abaOrigem);
-}
-
-function removerPendenciaManual(pacienteId) {
-    const paciente = db.pacientes.find(p => p.id === pacienteId);
-    if (!paciente) return;
-    
-    paciente.possuiPendenciaManual = false;
-    paciente.obsFinanceiraManual = '';
-    persistirDB();
-    
-    if (!document.getElementById('tab-detalhes-paciente').classList.contains('hidden')) {
-        abrirDetalhesPaciente(pacienteId, abaOrigem);
-    } else {
-        renderizarFinanceiro();
-    }
+    exibirModalCustomizado("Sucesso", "Lançamento de caixa registrado com sucesso!");
+    renderizarFinanceiro();
+    renderizarPacientes();
 }
 
 function lancarDespesa() {
-    const corpo = `<div class="space-y-3">
-        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Descrição</label><input type="text" id="desp-desc" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Ex: Material de consumo"></div>
-        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Valor (R$)</label><input type="number" step="0.01" id="desp-valor" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="0.00"></div>
-        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Categoria</label><input type="text" id="desp-cat" class="w-full px-3 py-2 border rounded-lg text-sm" value="Operacional"></div>
-    </div>`;
-    const botoes = `<button onclick="fecharModalPersonalizado()" class="px-3 py-2 border rounded-lg text-xs">Cancelar</button>
-                    <button onclick="salvarDespesaCustom()" class="px-3 py-2 bg-rose-600 text-white rounded-lg text-xs font-semibold">Salvar Despesa</button>`;
-    mostrarModalPersonalizado("Lançar Despesa", corpo, botoes);
-}
+    exibirModalCustomizado(
+        "Lançar Despesa / Saída",
+        `
+        <div class="space-y-3">
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Descrição da Despesa *</label>
+                <input type="text" id="modal-despesa-desc" placeholder="Ex: Material Dental, Conta de Luz..." class="w-full px-3 py-2 border rounded-lg text-sm outline-none">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Valor (R$) *</label>
+                <input type="number" step="0.01" id="modal-despesa-valor" placeholder="0.00" class="w-full px-3 py-2 border rounded-lg text-sm outline-none">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Categoria / Observação</label>
+                <input type="text" id="modal-despesa-cat" placeholder="Ex: Insumos, Aluguel, Manutenção" class="w-full px-3 py-2 border rounded-lg text-sm outline-none">
+            </div>
+        </div>
+        `,
+        [
+            { texto: "Cancelar", classe: "bg-slate-200 text-slate-700" },
+            {
+                texto: "Salvar Despesa",
+                classe: "bg-rose-600 text-white",
+                acao: () => {
+                    const desc = document.getElementById('modal-despesa-desc').value.trim();
+                    const valor = parseFloat(document.getElementById('modal-despesa-valor').value) || 0;
+                    const cat = document.getElementById('modal-despesa-cat').value.trim();
 
-function salvarDespesaCustom() {
-    const desc = document.getElementById('desp-desc').value.trim();
-    let valorStr = document.getElementById('desp-valor').value.replace(',', '.');
-    const valor = parseFloat(valorStr);
-    const cat = document.getElementById('desp-cat').value.trim() || 'Operacional';
+                    if (!desc || valor <= 0) {
+                        exibirModalCustomizado("Erro", "Preencha a descrição e um valor válido para a despesa.");
+                        return;
+                    }
 
-    if (!desc || isNaN(valor) || valor <= 0) {
-        alertCustomizado("Preencha a descrição e um valor válido.");
-        return;
-    }
+                    const novaDespesa = {
+                        id: 'gasto_' + Date.now(),
+                        descricao: desc,
+                        valor: valor,
+                        categoria: cat,
+                        data: new Date().toISOString().split('T')[0]
+                    };
 
-    db.despesas.push({
-        id: gerarIdUnico(),
-        data: obterDataLocalISO(),
-        descricao: desc,
-        valor: valor,
-        categoria: cat
-    });
-
-    persistirDB();
-    fecharModalPersonalizado();
-    renderizarFinanceiro();
-    alertCustomizado('Despesa lançada com sucesso!');
-}
-
-async function excluirDespesa(id) {
-    if (!(await verificarSenhaExclusao())) return;
-    db.despesas = db.despesas.filter(d => d.id !== id);
-    persistirDB();
-    renderizarFinanceiro();
-    alertCustomizado('Despesa excluída!');
-}
-
-function abrirModalCaixaDiario() {
-    const inputData = document.getElementById('input-data-caixa-diario');
-    if (inputData) inputData.value = obterDataLocalISO();
-    carregarFechamentoCaixaData();
-    const modal = document.getElementById('modal-fechamento-caixa');
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
-}
-
-function carregarFechamentoCaixaData() {
-    const inputData = document.getElementById('input-data-caixa-diario');
-    const dataSelecionada = inputData ? inputData.value : obterDataLocalISO();
-    
-    const pagamentosDia = db.pagamentos.filter(pg => pg.data === dataSelecionada);
-    const despesasDia = db.despesas.filter(d => d.data === dataSelecionada);
-
-    let totalEntradas = 0;
-    pagamentosDia.forEach(pg => totalEntradas += parseFloat(pg.valor || 0));
-
-    let totalSaidas = 0;
-    despesasDia.forEach(d => totalSaidas += parseFloat(d.valor || 0));
-
-    let saldoDia = totalEntradas - totalSaidas;
-
-    const porForma = {};
-    pagamentosDia.forEach(pg => {
-        if(pg.valor > 0){
-           porForma[pg.forma] = (porForma[pg.forma] || 0) + parseFloat(pg.valor || 0);
-        }
-    });
-
-    let html = `<div class="space-y-2 mb-4">
-                <div class="flex justify-between items-center p-3 bg-slate-50 border rounded-lg">
-                    <span class="font-semibold text-slate-600"><i class="fa-solid fa-arrow-down text-emerald-500 mr-2"></i>Entradas/Movimentos</span>
-                    <span class="font-bold text-emerald-600">R$ ${totalEntradas.toFixed(2)}</span>
-                </div>
-                <div class="flex justify-between items-center p-3 bg-slate-50 border rounded-lg">
-                    <span class="font-semibold text-slate-600"><i class="fa-solid fa-arrow-up text-rose-500 mr-2"></i>Despesas</span>
-                    <span class="font-bold text-rose-600">R$ ${totalSaidas.toFixed(2)}</span>
-                </div>
-                <div class="flex justify-between items-center p-3 bg-blue-100 border border-blue-200 rounded-lg">
-                    <span class="font-bold text-blue-900"><i class="fa-solid fa-wallet text-blue-600 mr-2"></i>Saldo Líquido</span>
-                    <span class="font-extrabold text-blue-700">R$ ${saldoDia.toFixed(2)}</span>
-                </div>
-             </div>`;
-
-    if (Object.keys(porForma).length > 0) {
-        html += `<h4 class="font-bold text-slate-800 mb-2 border-b pb-1 text-xs uppercase">Resumo por Forma de Pagamento</h4><div class="space-y-1">`;
-        for (let forma in porForma) {
-            html += `<div class="flex justify-between text-sm p-2 bg-slate-50 rounded border">
-                        <span class="text-slate-700 font-medium">${forma}</span>
-                        <span class="font-bold text-slate-900">R$ ${porForma[forma].toFixed(2)}</span>
-                     </div>`;
-        }
-        html += `</div>`;
-    } else {
-        html += `<p class="text-sm text-slate-500 italic text-center">Nenhuma entrada registrada nesta data.</p>`;
-    }
-
-    document.getElementById('conteudo-fechamento-caixa').innerHTML = html;
+                    db.gastos.push(novaDespesa);
+                    salvarColecao('gastos');
+                    renderizarFinanceiro();
+                    exibirModalCustomizado("Sucesso", "Despesa lançada com sucesso!");
+                }
+            }
+        ]
+    );
 }
 
 function abrirModalPagamentoAvulso() {
-    const corpo = `<div class="space-y-3">
-        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Valor (R$)</label><input type="number" step="0.01" id="avulso-valor" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="0.00"></div>
-        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Descrição</label><input type="text" id="avulso-desc" class="w-full px-3 py-2 border rounded-lg text-sm" value="Consulta / Procedimento"></div>
-        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Forma de Pagamento</label><select id="avulso-forma" class="w-full px-3 py-2 border rounded-lg text-sm bg-white"><option value="Pix">Pix</option><option value="Cartão de Crédito">Cartão de Crédito</option><option value="Cartão de Débito">Cartão de Débito</option><option value="Dinheiro">Dinheiro</option></select></div>
-    </div>`;
-    const botoes = `<button onclick="fecharModalPersonalizado()" class="px-3 py-2 border rounded-lg text-xs">Cancelar</button>
-                    <button onclick="salvarPagamentoAvulsoCustom()" class="px-3 py-2 bg-emerald-600 text-white rounded-lg text-xs font-semibold">Salvar</button>`;
-    mostrarModalPersonalizado("Pagamento Avulso", corpo, botoes);
-}
+    popularSelectPacientesCaixa();
+    exibirModalCustomizado(
+        "Pagamento Avulso / Recebimento",
+        `
+        <div class="space-y-3">
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Selecionar Paciente *</label>
+                <select id="modal-avulso-paciente" class="w-full px-3 py-2 border rounded-lg text-sm bg-white">
+                    ${db.pacientes.map(p => `<option value="${p.id}">${p.nome} (${p.categoria})</option>`).join('')}
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Descrição</label>
+                <input type="text" id="modal-avulso-desc" placeholder="Ex: Quitação de débito, Parcela Orto" class="w-full px-3 py-2 border rounded-lg text-sm">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Valor (R$) *</label>
+                <input type="number" step="0.01" id="modal-avulso-valor" placeholder="0.00" class="w-full px-3 py-2 border rounded-lg text-sm">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Forma de Pagamento</label>
+                <select id="modal-avulso-forma" class="w-full px-3 py-2 border rounded-lg text-sm bg-white">
+                    <option value="Pix">Pix</option>
+                    <option value="Cartão de Crédito">Cartão de Crédito</option>
+                    <option value="Cartão de Débito">Cartão de Débito</option>
+                    <option value="Dinheiro">Dinheiro</option>
+                </select>
+            </div>
+        </div>
+        `,
+        [
+            { texto: "Cancelar", classe: "bg-slate-200 text-slate-700" },
+            {
+                texto: "Registrar Pagamento",
+                classe: "bg-emerald-600 text-white",
+                acao: () => {
+                    const pacienteId = document.getElementById('modal-avulso-paciente').value;
+                    const desc = document.getElementById('modal-avulso-desc').value.trim() || 'Pagamento Avulso';
+                    const valor = parseFloat(document.getElementById('modal-avulso-valor').value) || 0;
+                    const forma = document.getElementById('modal-avulso-forma').value;
 
-function salvarPagamentoAvulsoCustom() {
-    let valorStr = document.getElementById('avulso-valor').value.replace(',', '.');
-    const valor = parseFloat(valorStr);
-    const desc = document.getElementById('avulso-desc').value.trim() || 'Pagamento Avulso';
-    const forma = document.getElementById('avulso-forma').value;
+                    if (!pacienteId || valor <= 0) {
+                        exibirModalCustomizado("Erro", "Selecione o paciente e um valor válido.");
+                        return;
+                    }
 
-    if (isNaN(valor) || valor <= 0) {
-        alertCustomizado("Informe um valor válido.");
-        return;
-    }
+                    db.pagamentos.push({
+                        id: 'pag_' + Date.now(),
+                        pacienteId,
+                        descricao: desc,
+                        valor,
+                        formaPagamento: forma,
+                        data: new Date().toISOString().split('T')[0]
+                    });
 
-    db.pagamentos.push({ 
-        id: gerarIdUnico(), 
-        pacienteId: null, 
-        data: obterDataLocalISO(), 
-        valor: valor, 
-        forma: forma, 
-        descricao: desc 
-    });
-    
-    persistirDB();
-    fecharModalPersonalizado();
-    renderizarFinanceiro();
-    alertCustomizado('Pagamento lançado com sucesso!');
+                    const p = db.pacientes.find(pac => pac.id === pacienteId);
+                    if (p) {
+                        p.temPendencia = false;
+                        salvarColecao('pacientes');
+                    }
+
+                    salvarColecao('pagamentos');
+                    renderizarFinanceiro();
+                    renderizarPacientes();
+                    exibirModalCustomizado("Sucesso", "Pagamento avulso registrado com sucesso!");
+                }
+            }
+        ]
+    );
 }
 
 function alternarFiltroPersonalizadoFinanceiro() {
-    const filtro = document.getElementById('filtro-periodo-financeiro').value;
-    const container = document.getElementById('container-datas-personalizadas');
-    if (filtro === 'personalizado') {
-        container.classList.remove('hidden');
-        container.classList.add('flex');
+    const tipo = document.getElementById('filtro-periodo-financeiro').value;
+    const containerDatas = document.getElementById('container-datas-personalizadas');
+    if (tipo === 'personalizado') {
+        containerDatas.classList.remove('hidden');
+        containerDatas.classList.add('flex');
     } else {
-        container.classList.add('hidden');
-        container.classList.remove('flex');
-        renderizarFinanceiro();
+        containerDatas.classList.add('hidden');
+        containerDatas.classList.remove('flex');
     }
+    renderizarFinanceiro();
 }
 
 function renderizarFinanceiro() {
-    popularSelectPacientesCaixa();
+    const periodo = document.getElementById('filtro-periodo-financeiro') ? document.getElementById('filtro-periodo-financeiro').value : 'mes';
+    const hoje = new Date();
+    const dataHojeStr = hoje.toISOString().split('T')[0];
 
-    const listaPendencias = document.getElementById('lista-pendencias-financeiras');
-    const listaFluxo = document.getElementById('lista-pagamentos-realizados');
-    const filtroPeriodo = document.getElementById('filtro-periodo-financeiro')?.value || 'mes';
-    
-    const dataInicioFin = document.getElementById('data-inicio-fin')?.value;
-    const dataFimFin = document.getElementById('data-fim-fin')?.value;
+    let pagamentosFiltrados = [...db.pagamentos];
+    let gastosFiltrados = [...db.gastos];
 
-    if (!listaPendencias || !listaFluxo) return;
-
-    listaPendencias.innerHTML = '';
-    listaFluxo.innerHTML = '';
-
-    const agora = new Date();
-    const anoAtual = agora.getFullYear();
-    const mesAtual = String(agora.getMonth() + 1).padStart(2, '0');
-    const prefixoMes = anoAtual + '-' + mesAtual;
-    const hojeIso = obterDataLocalISO();
-
-    let transacoes = [];
-    db.pagamentos.forEach(pg => transacoes.push({ id: pg.id, tipo: 'entrada', data: pg.data, valor: pg.valor, forma: pg.forma, descricao: pg.descricao, pacienteId: pg.pacienteId }));
-    db.despesas.forEach(d => transacoes.push({ id: d.id, tipo: 'saida', data: d.data, valor: d.valor, forma: 'Despesa', descricao: d.descricao + ' (' + d.categoria + ')', pacienteId: null }));
-
-    transacoes = transacoes.filter(t => {
-        if (!t.data) return false;
-        if (filtroPeriodo === 'hoje') return t.data === hojeIso;
-        if (filtroPeriodo === 'mes') return t.data.startsWith(prefixoMes);
-        if (filtroPeriodo === 'personalizado') {
-            if (dataInicioFin && t.data < dataInicioFin) return false;
-            if (dataFimFin && t.data > dataFimFin) return false;
-            return true;
-        }
-        return true;
-    });
-
-    let faturamentoFiltrado = 0;
-    let despesasFiltradas = 0;
-    transacoes.forEach(t => {
-        if (t.tipo === 'entrada') faturamentoFiltrado += parseFloat(t.valor || 0);
-        else despesasFiltradas += parseFloat(t.valor || 0);
-    });
-    let saldoLiquidoFiltrado = faturamentoFiltrado - despesasFiltradas;
-    let qtdPacientesComPendencia = db.pacientes.filter(p => p.possuiPendenciaManual).length;
-
-    const elFat = document.getElementById('kpi-faturamento');
-    const elDesp = document.getElementById('kpi-despesas');
-    const elSaldo = document.getElementById('kpi-saldo-liquido');
-    const elRec = document.getElementById('kpi-receber');
-
-    if (elFat) elFat.innerText = 'R$ ' + faturamentoFiltrado.toFixed(2);
-    if (elDesp) elDesp.innerText = 'R$ ' + despesasFiltradas.toFixed(2);
-    if (elSaldo) elSaldo.innerText = 'R$ ' + saldoLiquidoFiltrado.toFixed(2);
-    if (elRec) elRec.innerText = qtdPacientesComPendencia + ' Pacientes';
-
-    let encontrouPendencia = false;
-    db.pacientes.forEach(paciente => {
-        if (paciente.possuiPendenciaManual) {
-            encontrouPendencia = true;
-            listaPendencias.innerHTML += '<div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm flex justify-between items-center">' +
-                '<div><p class="font-semibold text-amber-900">' + paciente.nome + '</p><span class="text-xs text-amber-700">' + (paciente.obsFinanceiraManual || 'Pendência manual') + '</span></div>' +
-                '<div class="text-right flex items-center gap-2"><button onclick="abrirDetalhesPaciente(\'' + paciente.id + '\', \'financeiro\')" class="text-xs text-blue-600 hover:underline px-2">Ver Ficha</button><button onclick="removerPendenciaManual(\'' + paciente.id + '\')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded shadow transition"><i class="fa-solid fa-check"></i> Baixar</button></div>' +
-            '</div>';
-        }
-    });
-
-    if (!encontrouPendencia) {
-        listaPendencias.innerHTML = '<p class="text-sm text-slate-400">Nenhum paciente marcado com pendência.</p>';
-    }
-
-    transacoes.sort((a, b) => new Date(b.data) - new Date(a.data));
-
-    if (transacoes.length === 0) {
-        listaFluxo.innerHTML = '<p class="text-sm text-slate-400">Nenhum lançamento registrado para este período.</p>';
-    } else {
-        transacoes.forEach(t => {
-            if (t.tipo === 'entrada') {
-                const paciente = db.pacientes.find(p => p.id === t.pacienteId) || { nome: 'PACIENTE AVULSO / EXCLUÍDO' };
-                const isEstorno = t.valor < 0;
-                const corValor = isEstorno ? 'text-rose-600' : 'text-emerald-600';
-                const prefixoValor = isEstorno ? '' : '+ ';
-
-                listaFluxo.innerHTML += '<div class="p-3 bg-white border border-slate-100 rounded-lg text-sm flex justify-between items-center shadow-sm">' +
-                    '<div><p class="font-semibold text-slate-900"><i class="fa-solid fa-circle-dot text-xs mr-1 ' + corValor + '"></i> ' + paciente.nome + '</p><span class="text-xs text-slate-500">' + t.descricao + ' • ' + (t.data ? t.data.split('-').reverse().join('/') : '-') + ' (' + t.forma + ')</span></div>' +
-                    '<span class="font-bold ' + corValor + '">' + prefixoValor + 'R$ ' + Number(t.valor).toFixed(2) + '</span>' +
-                '</div>';
-            } else {
-                listaFluxo.innerHTML += '<div class="p-3 bg-rose-50 border border-rose-100 rounded-lg text-sm flex justify-between items-center">' +
-                    '<div><p class="font-semibold text-rose-900"><i class="fa-solid fa-arrow-up mr-1"></i> Despesa Clínica</p><span class="text-xs text-slate-500">' + t.descricao + ' • ' + (t.data ? t.data.split('-').reverse().join('/') : '-') + '</span></div>' +
-                    '<div class="flex items-center gap-3"><span class="font-bold text-rose-600">- R$ ' + Number(t.valor).toFixed(2) + '</span><button onclick="excluirDespesa(\'' + t.id + '\')" class="text-rose-400 hover:text-rose-700 text-xs transition"><i class="fa-solid fa-trash"></i></button></div>' +
-                '</div>';
-            }
+    if (periodo === 'hoje') {
+        pagamentosFiltrados = pagamentosFiltrados.filter(p => p.data === dataHojeStr);
+        gastosFiltrados = gastosFiltrados.filter(g => g.data === dataHojeStr);
+    } else if (periodo === 'mes') {
+        const mesAtual = hoje.getMonth();
+        const anoAtual = hoje.getFullYear();
+        pagamentosFiltrados = pagamentosFiltrados.filter(p => {
+            if (!p.data) return false;
+            const d = new Date(p.data + 'T00:00:00');
+            return d.getMonth() === mesAtual && d.getFullYear() === anoAtual;
         });
-    }
-}
-
-// ==========================================
-// FICHA DO PACIENTE & MODAIS AUXILIARES
-// ==========================================
-function voltarParaOrigem() { mudarAba(abaOrigem || 'pacientes'); }
-function alternarAccordion(id) { const el = document.getElementById(id); if (el) el.classList.toggle('hidden'); }
-
-function abrirSubAbaPaciente(subAba) {
-    subAbaAtualPaciente = subAba;
-    document.querySelectorAll('.subtab-btn').forEach(btn => {
-        btn.classList.remove('border-blue-600', 'text-blue-600');
-        btn.classList.add('border-transparent', 'text-slate-500');
-    });
-    document.querySelectorAll('.subtab-content').forEach(content => content.classList.add('hidden'));
-
-    const btnAtivo = document.getElementById('btn-subtab-' + subAba);
-    const contentAtivo = document.getElementById('subtab-content-' + subAba);
-    
-    if (btnAtivo) {
-        btnAtivo.classList.remove('border-transparent', 'text-slate-500');
-        btnAtivo.classList.add('border-blue-600', 'text-blue-600');
-    }
-    if (contentAtivo) contentAtivo.classList.remove('hidden');
-}
-
-function filtrarProntuarioLinhaTempo(pacienteId) {
-    const inputBusca = document.getElementById('busca-prontuario-input');
-    if (!inputBusca) return;
-    const termo = inputBusca.value.toLowerCase();
-    const container = document.getElementById('container-prontuario-timeline');
-    const prontuarios = db.prontuarios.filter(pr => pr.pacienteId === pacienteId);
-    if (prontuarios.length === 0) return;
-    const prontuariosFiltrados = prontuarios.filter(pr => (pr.procedimento || '').toLowerCase().includes(termo) || (pr.data || '').includes(termo));
-    renderizarLinhaTempoProntuario(container, prontuariosFiltrados, pacienteId);
-}
-
-function renderizarLinhaTempoProntuario(container, prontuarios, pacienteId) {
-    if (!container) return;
-    container.innerHTML = '';
-    if (prontuarios.length === 0) {
-        container.innerHTML = '<p class="text-sm text-slate-400 p-2">Nenhum registro encontrado.</p>';
-        return;
+        gastosFiltrados = gastosFiltrados.filter(g => {
+            if (!g.data) return false;
+            const d = new Date(g.data + 'T00:00:00');
+            return d.getMonth() === mesAtual && d.getFullYear() === anoAtual;
+        });
+    } else if (periodo === 'personalizado') {
+        const dataInicio = document.getElementById('data-inicio-fin').value;
+        const dataFim = document.getElementById('data-fim-fin').value;
+        if (dataInicio) {
+            pagamentosFiltrados = pagamentosFiltrados.filter(p => p.data >= dataInicio);
+            gastosFiltrados = gastosFiltrados.filter(g => g.data >= dataInicio);
+        }
+        if (dataFim) {
+            pagamentosFiltrados = pagamentosFiltrados.filter(p => p.data <= dataFim);
+            gastosFiltrados = gastosFiltrados.filter(g => g.data <= dataFim);
+        }
     }
 
-    const grupos = {};
-    const prontuariosOrdenados = prontuarios.slice().sort((a, b) => new Date(b.data) - new Date(a.data));
-    prontuariosOrdenados.forEach(pr => {
-        const mesAno = formatarMesAno(pr.data);
-        if (!grupos[mesAno]) grupos[mesAno] = [];
-        grupos[mesAno].push(pr);
-    });
+    const faturamento = pagamentosFiltrados.reduce((acc, p) => acc + (Number(p.valor) || 0), 0);
+    const despesas = gastosFiltrados.reduce((acc, g) => acc + (Number(g.valor) || 0), 0);
+    const saldoLiquido = faturamento - despesas;
+    const qtdPendentes = db.pacientes.filter(p => p.temPendencia).length;
 
-    let index = 0;
-    const mesAtualFormatado = formatarMesAno(obterDataLocalISO());
+    if (document.getElementById('kpi-saldo-liquido')) document.getElementById('kpi-saldo-liquido').innerText = `R$ ${saldoLiquido.toFixed(2)}`;
+    if (document.getElementById('kpi-faturamento')) document.getElementById('kpi-faturamento').innerText = `R$ ${faturamento.toFixed(2)}`;
+    if (document.getElementById('kpi-despesas')) document.getElementById('kpi-despesas').innerText = `R$ ${despesas.toFixed(2)}`;
+    if (document.getElementById('kpi-receber')) document.getElementById('kpi-receber').innerText = `${qtdPendentes} Paciente(s)`;
 
-    Object.keys(grupos).forEach(mesAno => {
-        const accId = 'acc-prontuario-' + index;
-        const estaAberto = (mesAno === mesAtualFormatado) || (index === 0);
-        
-        let htmlItens = '';
-        grupos[mesAno].forEach(pr => {
-            const proxHtml = pr.proximaConsulta ? '<p class="text-xs font-semibold text-blue-700 bg-blue-50 p-1.5 rounded mt-1"><i class="fa-solid fa-clock-rotate-left mr-1"></i> Próxima consulta: ' + pr.proximaConsulta + '</p>' : '';
-            
-            htmlItens += '<div class="p-3 bg-white rounded-lg border border-slate-100 space-y-1 shadow-sm flex justify-between items-start gap-2">' +
-                '<div class="space-y-1 flex-grow">' +
-                    '<div class="flex justify-between text-xs text-slate-500"><span>Data: <strong>' + (pr.data ? pr.data.split('-').reverse().join('/') : '-') + '</strong></span></div>' +
-                    '<p class="text-slate-800 font-medium">Descrição: ' + pr.procedimento + '</p>' +
-                    proxHtml +
-                '</div>' +
-                '<button onclick="excluirProntuario(\'' + pr.id + '\', \'' + pacienteId + '\')" class="text-slate-400 hover:text-red-600 text-xs p-1" title="Excluir Prontuário"><i class="fa-solid fa-trash"></i></button>' +
-            '</div>';
+    const containerPendencias = document.getElementById('lista-pendencias-financeiras');
+    if (containerPendencias) {
+        const pacientesComPendencia = db.pacientes.filter(p => {
+            const totalProc = db.procedimentos.filter(proc => proc.pacienteId === p.id).reduce((acc, proc) => acc + (Number(proc.valor) || 0), 0);
+            const totalPag = db.pagamentos.filter(pag => pag.pacienteId === p.id).reduce((acc, pag) => acc + (Number(pag.valor) || 0), 0);
+            return p.temPendencia || (totalProc - totalPag > 0);
         });
 
-        container.innerHTML += '<div class="border border-slate-200 rounded-xl overflow-hidden bg-slate-50">' +
-            '<button onclick="alternarAccordion(\'' + accId + '\')" class="w-full px-4 py-3 text-left font-bold text-slate-800 flex justify-between items-center hover:bg-slate-100 transition text-sm">' +
-                '<span><i class="fa-regular fa-calendar-check mr-2 text-blue-600"></i>' + mesAno + ' (' + grupos[mesAno].length + ' registros)</span>' +
-                '<i class="fa-solid fa-chevron-down text-xs text-slate-400"></i>' +
-            '</button>' +
-            '<div id="' + accId + '" class="' + (estaAberto ? '' : 'hidden') + ' p-3 space-y-2 border-t border-slate-200">' + htmlItens + '</div>' +
-        '</div>';
-        index++;
-    });
-}
+        if (pacientesComPendencia.length === 0) {
+            containerPendencias.innerHTML = `<p class="text-xs text-slate-400 font-medium py-3 text-center">Nenhuma pendência financeira pendente.</p>`;
+        } else {
+            containerPendencias.innerHTML = pacientesComPendencia.map(p => {
+                const totalProc = db.procedimentos.filter(proc => proc.pacienteId === p.id).reduce((acc, proc) => acc + (Number(proc.valor) || 0), 0);
+                const totalPag = db.pagamentos.filter(pag => pag.pacienteId === p.id).reduce((acc, pag) => acc + (Number(pag.valor) || 0), 0);
+                const saldoDevido = totalProc - totalPag;
 
-function salvarProcedimentoDentista(event, pacienteId) {
-    event.preventDefault();
-    const procedimento = document.getElementById('proc-desc').value;
-    const proximaConsulta = document.getElementById('proc-proxima').value;
-    const hoje = obterDataLocalISO();
-
-    db.prontuarios.push({
-        id: gerarIdUnico(),
-        pacienteId: pacienteId,
-        data: hoje,
-        procedimento: procedimento,
-        valorCobrado: 0,
-        proximaConsulta: proximaConsulta
-    });
-    persistirDB();
-    alertCustomizado('Evolução do Prontuário salva!');
-    abrirDetalhesPaciente(pacienteId, abaOrigem);
-}
-
-function adicionarEtapaPlanejamento(event, pacienteId) {
-    event.preventDefault();
-    const denteInput = document.getElementById('plan-dente');
-    const descInput = document.getElementById('plan-desc');
-    const valorInput = document.getElementById('plan-valor');
-
-    const dente = denteInput ? (denteInput.value.trim() || 'Geral') : 'Geral';
-    const desc = descInput ? descInput.value.trim() : '';
-    const valor = valorInput ? (parseFloat(valorInput.value) || 0) : 0;
-
-    if (!desc) { alertCustomizado('Informe a descrição.'); return; }
-
-    const paciente = db.pacientes.find(p => p.id === pacienteId);
-    if (paciente) {
-        if (!Array.isArray(paciente.planejamentoEtapas)) paciente.planejamentoEtapas = [];
-        paciente.planejamentoEtapas.push({ id: gerarIdUnico(), dente: dente, procedimento: desc, valor: valor, concluido: false });
-        persistirDB();
-        abrirDetalhesPaciente(pacienteId, abaOrigem);
+                return `
+                    <div class="p-3 rounded-lg border border-slate-100 bg-slate-50 flex justify-between items-center text-xs">
+                        <div>
+                            <span class="font-bold text-slate-800 block">${p.nome}</span>
+                            <span class="text-slate-500">${p.categoria} ${p.temPendencia ? '• <span class="text-amber-600 font-semibold">Pendência marcada</span>' : ''}</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="font-bold text-rose-600 block">${saldoDevido > 0 ? `R$ ${saldoDevido.toFixed(2)}` : 'Sinalizado'}</span>
+                            <button onclick="verDetalhesPaciente('${p.id}', 'financeiro')" class="text-[11px] text-blue-600 font-semibold hover:underline">Ver Prontuário</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
     }
-}
 
-function alternarStatusEtapa(pacienteId, etapaId) {
-    const paciente = db.pacientes.find(p => p.id === pacienteId);
-    if (paciente && Array.isArray(paciente.planejamentoEtapas)) {
-        const etapa = paciente.planejamentoEtapas.find(e => e.id === etapaId);
-        if (etapa) {
-            etapa.concluido = !etapa.concluido;
-            persistirDB();
-            abrirDetalhesPaciente(pacienteId, abaOrigem);
+    const containerHistorico = document.getElementById('lista-pagamentos-realizados');
+    if (containerHistorico) {
+        const movimentacoes = [
+            ...pagamentosFiltrados.map(p => ({ ...p, tipoMov: 'entrada' })),
+            ...gastosFiltrados.map(g => ({ ...g, tipoMov: 'saida' }))
+        ].sort((a, b) => new Date(b.data) - new Date(a.data));
+
+        if (movimentacoes.length === 0) {
+            containerHistorico.innerHTML = `<p class="text-xs text-slate-400 font-medium py-3 text-center">Nenhuma movimentação registrada no período.</p>`;
+        } else {
+            containerHistorico.innerHTML = movimentacoes.map(m => {
+                const isEntrada = m.tipoMov === 'entrada';
+                const paciente = isEntrada ? db.pacientes.find(p => p.id === m.pacienteId) : null;
+                const nomeCliente = paciente ? paciente.nome : (m.descricao || 'Despesa');
+
+                return `
+                    <div class="p-3 rounded-lg border border-slate-100 bg-white flex justify-between items-center text-xs">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${isEntrada ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}">
+                                <i class="fa-solid ${isEntrada ? 'fa-arrow-down' : 'fa-arrow-up'}"></i>
+                            </div>
+                            <div>
+                                <span class="font-bold text-slate-800 block">${nomeCliente}</span>
+                                <span class="text-slate-400 text-[11px]">${m.descricao || 'Lançamento'} • ${m.formaPagamento || m.categoria || 'Geral'}</span>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <span class="font-extrabold block ${isEntrada ? 'text-emerald-600' : 'text-rose-600'}">
+                                ${isEntrada ? '+' : '-'} R$ ${(Number(m.valor) || 0).toFixed(2)}
+                            </span>
+                            <span class="text-[10px] text-slate-400">${m.data ? new Date(m.data + 'T00:00:00').toLocaleDateString('pt-BR') : ''}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
         }
     }
 }
 
-async function excluirEtapaPlanejamento(pacienteId, etapaId) {
-    if (!(await verificarSenhaExclusao())) return;
-    const paciente = db.pacientes.find(p => p.id === pacienteId);
-    if (paciente && Array.isArray(paciente.planejamentoEtapas)) {
-        paciente.planejamentoEtapas = paciente.planejamentoEtapas.filter(e => e.id !== etapaId);
-        persistirDB();
-        abrirDetalhesPaciente(pacienteId, abaOrigem);
-    }
-}
-
-function exportarBackup() {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db, null, 2));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", "backup_clinica_" + obterDataLocalISO() + ".json");
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
-}
-
-function importarBackup(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            const conteudo = JSON.parse(e.target.result);
-            if (conteudo && Array.isArray(conteudo.pacientes)) {
-                if (confirm('⚠️ Deseja realmente restaurar este backup?')) {
-                    db = conteudo;
-                    persistirDB();
-                    renderizarPacientes();
-                    alertCustomizado('Backup restaurado com sucesso!');
-                }
-            } else {
-                alertCustomizado('Arquivo de backup inválido.');
-            }
-        } catch (err) {
-            alertCustomizado('Erro ao ler o arquivo JSON: ' + err.message);
-        }
-    };
-    reader.readAsText(file);
-    event.target.value = '';
-}
-
-function abrirModalPaciente(pacienteId) {
-    const formPaciente = document.getElementById('form-paciente');
-    if (formPaciente) formPaciente.reset();
-
-    const titulo = document.getElementById('titulo-modal-paciente');
-    const editId = document.getElementById('paciente-edit-id');
-
-    if (pacienteId) {
-        const paciente = db.pacientes.find(p => p.id === pacienteId);
-        if (!paciente) return;
-
-        if (titulo) titulo.innerText = 'Editar Cadastro do Paciente';
-        if (editId) editId.value = paciente.id;
-        document.getElementById('paciente-nome').value = paciente.nome;
-        document.getElementById('paciente-telefone').value = paciente.telefone || '';
-        document.getElementById('paciente-nascimento').value = paciente.nascimento || '';
-        document.getElementById('paciente-cpf').value = paciente.cpf || '';
-        document.getElementById('paciente-categoria').value = paciente.categoria;
-        document.getElementById('paciente-vencimento').value = paciente.vencimento || '';
-        
-        toggleVencimentoOrto();
-    } else {
-        if (titulo) titulo.innerText = 'Cadastrar Novo Paciente';
-        if (editId) editId.value = '';
-        const grupoVencimento = document.getElementById('grupo-vencimento-orto');
-        if (grupoVencimento) grupoVencimento.classList.add('hidden');
-    }
-
-    const modalPaciente = document.getElementById('modal-paciente');
-    if (modalPaciente) {
-        modalPaciente.classList.remove('hidden');
-        modalPaciente.classList.add('flex');
-    }
-}
-
-function fecharModal(id) {
-    const modal = document.getElementById(id);
-    if (modal) {
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
-    }
-}
-
-function toggleVencimentoOrto() {
-    const categoria = document.getElementById('paciente-categoria')?.value;
-    const grupoOrto = document.getElementById('grupo-vencimento-orto');
-    if (!grupoOrto) return;
-    if (categoria === 'Ortodontia') grupoOrto.classList.remove('hidden');
-    else grupoOrto.classList.add('hidden');
-}
-
-function salvarPaciente(event) {
-    event.preventDefault();
-    const categoria = document.getElementById('paciente-categoria').value;
-    const nomeCaixaAlta = document.getElementById('paciente-nome').value.trim().toUpperCase();
-    const editId = document.getElementById('paciente-edit-id').value;
-
-    if (!nomeCaixaAlta) { alertCustomizado('O nome do paciente é obrigatório.'); return; }
-
-    const dadosPaciente = {
-        nome: nomeCaixaAlta,
-        telefone: document.getElementById('paciente-telefone').value,
-        nascimento: document.getElementById('paciente-nascimento').value,
-        cpf: document.getElementById('paciente-cpf').value,
-        categoria: categoria,
-        vencimento: categoria === 'Ortodontia' ? document.getElementById('paciente-vencimento').value : ''
-    };
-
-    if (editId) {
-        const index = db.pacientes.findIndex(p => p.id === editId);
-        if (index !== -1) {
-            const etapasAnteriores = db.pacientes[index].planejamentoEtapas || [];
-            db.pacientes[index] = { ...dadosPaciente, id: editId, planejamentoEtapas: etapasAnteriores };
-        }
-    } else {
-        db.pacientes.push({ id: gerarIdUnico(), planejamentoEtapas: [], possuiPendenciaManual: false, obsFinanceiraManual: '', ...dadosPaciente });
-    }
-
-    persistirDB();
-    fecharModal('modal-paciente');
-    renderizarPacientes();
-
-    if (editId && !document.getElementById('tab-detalhes-paciente').classList.contains('hidden')) {
-        abrirDetalhesPaciente(editId, abaOrigem);
-    }
-    alertCustomizado('Dados do paciente salvos!');
-}
-
-function abrirDetalhesPaciente(pacienteId, origem) {
-    abaOrigem = origem;
-    pacienteAtualId = pacienteId;
-    const paciente = db.pacientes.find(p => p.id === pacienteId);
+// 8. ABA 3: PRONTUÁRIO COMPLETO DO PACIENTE COM PROCEDIMENTOS
+function verDetalhesPaciente(id, origem = 'pacientes') {
+    origemVisualizacao = origem;
+    const paciente = db.pacientes.find(p => p.id === id);
     if (!paciente) return;
 
-    const prontuariosPaciente = db.prontuarios.filter(pr => pr.pacienteId === pacienteId);
-    const pagamentosPaciente = db.pagamentos.filter(pg => pg.pacienteId === pacienteId);
-    
+    trocarAba('detalhes-paciente');
     const container = document.getElementById('detalhes-paciente-container');
     if (!container) return;
 
-    const telefoneLimpo = paciente.telefone ? paciente.telefone.replace(/\D/g, '') : '';
-    const btnWhatsapp = telefoneLimpo ? '<a href="https://wa.me/55' + telefoneLimpo + '" target="_blank" class="text-emerald-600 hover:text-emerald-700 font-bold ml-2 inline-flex items-center gap-1"><i class="fa-brands fa-whatsapp text-base"></i> Conversar</a>' : '';
+    const procs = db.procedimentos.filter(p => p.pacienteId === id);
+    const pags = db.pagamentos.filter(p => p.pacienteId === id);
+    const pronts = db.prontuarios.filter(p => p.pacienteId === id);
 
-    let badgePendencia = '';
-    if (paciente.possuiPendenciaManual) {
-        badgePendencia = '<div class="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1.5">' +
-            '<div class="flex items-center justify-between">' +
-                '<span class="text-[10px] uppercase font-bold text-amber-600 tracking-wider"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Pendência Financeira</span>' +
-            '</div>' +
-            '<p class="text-xs font-medium text-amber-900">' + (paciente.obsFinanceiraManual || 'Paciente marcado com pendência/débito.') + '</p>' +
-            '<button onclick="removerPendenciaManual(\'' + paciente.id + '\')" class="w-full py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow transition flex items-center justify-center gap-1"><i class="fa-solid fa-check"></i> Dar Baixa</button>' +
-        '</div>';
-    } else {
-        badgePendencia = '<div class="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">' +
-            '<div><span class="text-[10px] uppercase font-bold text-emerald-600">Financeiro: </span><span class="text-xs font-semibold text-emerald-800">Sem pendências</span></div>' +
-        '</div>';
-    }
+    const totalProcedimentos = procs.reduce((acc, p) => acc + (Number(p.valor) || 0), 0);
+    const totalPagamentos = pags.reduce((acc, p) => acc + (Number(p.valor) || 0), 0);
+    const saldo = totalProcedimentos - totalPagamentos;
 
-    let etapas = Array.isArray(paciente.planejamentoEtapas) ? paciente.planejamentoEtapas : [];
-    const valorTotalPlano = etapas.reduce((acc, curr) => acc + (parseFloat(curr.valor) || 0), 0);
+    container.innerHTML = `
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+                <div class="flex items-center gap-2">
+                    <h2 class="text-xl font-bold text-slate-900">${paciente.nome}</h2>
+                    <span class="px-2.5 py-0.5 rounded-full text-xs font-bold ${paciente.categoria === 'Ortodontia' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}">${paciente.categoria}</span>
+                </div>
+                <p class="text-xs text-slate-500 mt-1">CPF: ${paciente.cpf || 'Não informado'} • Tel: ${paciente.telefone || 'Não informado'} • Nasc: ${paciente.nascimento || 'Não informado'}</p>
+            </div>
+            <div class="bg-slate-50 p-3 rounded-lg border text-right w-full sm:w-auto">
+                <span class="text-[10px] uppercase font-bold text-slate-400 block">Balanço do Paciente</span>
+                <span class="text-base font-extrabold ${saldo > 0 ? 'text-rose-600' : 'text-emerald-600'}">
+                    ${saldo > 0 ? `Débito: R$ ${saldo.toFixed(2)}` : 'Sem débitos pendentes'}
+                </span>
+            </div>
+        </div>
 
-    let htmlItensEtapas = etapas.length === 0 ? '<p class="text-xs text-slate-400 italic p-2">Nenhuma etapa cadastrada no plano de tratamento.</p>' :
-        etapas.map((et, index) => {
-            const numEtapa = index + 1;
-            const statusBg = et.concluido ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800';
-            const statusTexto = et.concluido ? 'Concluído' : 'Pendente';
-            const estiloTexto = et.concluido ? 'line-through text-slate-400' : 'text-slate-800 font-medium';
-            const valorFmt = et.valor ? 'R$ ' + Number(et.valor).toFixed(2) : 'R$ 0,00';
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
+                <div class="flex justify-between items-center border-b pb-2">
+                    <h4 class="font-bold text-slate-800 text-sm"><i class="fa-solid fa-tooth text-blue-600 mr-2"></i> Procedimentos & Tratamentos</h4>
+                    <button onclick="adicionarProcedimentoProntuario('${paciente.id}')" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow transition">
+                        + Procedimento
+                    </button>
+                </div>
+                <div class="space-y-2 max-h-[40vh] overflow-y-auto pr-1">
+                    ${procs.length === 0 ? '<p class="text-xs text-slate-400 py-2">Nenhum procedimento registrado.</p>' : procs.map(proc => `
+                        <div class="p-3 bg-slate-50 rounded-lg border text-xs flex justify-between items-center">
+                            <div>
+                                <span class="font-bold text-slate-800 block">${proc.descricao}</span>
+                                <span class="text-slate-400 text-[11px]">${proc.data ? new Date(proc.data + 'T00:00:00').toLocaleDateString('pt-BR') : ''}</span>
+                            </div>
+                            <span class="font-bold text-slate-900">R$ ${(Number(proc.valor) || 0).toFixed(2)}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
 
-            const btnCheck = usuarioAtual && usuarioAtual.perfil === 'dentista' ? '<button type="button" onclick="alternarStatusEtapa(\'' + paciente.id + '\', \'' + et.id + '\')" class="px-2 py-1 ' + (et.concluido ? 'bg-slate-200 text-slate-700' : 'bg-emerald-600 text-white') + ' text-xs font-semibold rounded hover:opacity-90 transition"><i class="fa-solid ' + (et.concluido ? 'fa-rotate-left' : 'fa-check') + '"></i> ' + (et.concluido ? 'Reabrir' : 'Concluir') + '</button>' : '';
-            const btnLixo = usuarioAtual && usuarioAtual.perfil === 'dentista' ? '<button type="button" onclick="excluirEtapaPlanejamento(\'' + paciente.id + '\', \'' + et.id + '\')" class="text-slate-400 hover:text-red-600 text-xs p-1" title="Excluir Etapa"><i class="fa-solid fa-trash"></i></button>' : '';
-
-            return '<div class="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-white rounded-lg border border-indigo-100 text-xs gap-2 shadow-sm">' +
-                '<div class="flex items-center space-x-2 flex-grow min-w-0">' +
-                    '<span class="font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">#' + numEtapa + '</span>' +
-                    '<span class="font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded whitespace-nowrap">' + (et.dente || 'Geral') + '</span>' +
-                    '<span class="' + estiloTexto + ' truncate">' + et.procedimento + '</span>' +
-                '</div>' +
-                '<div class="flex items-center justify-between sm:justify-end space-x-2 whitespace-nowrap pt-1 sm:pt-0 border-t sm:border-0 border-slate-100">' +
-                    '<span class="font-bold text-slate-700 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">' + valorFmt + '</span>' +
-                    '<span class="px-2 py-0.5 text-[10px] font-bold rounded-full ' + statusBg + '">' + statusTexto + '</span>' + btnCheck + btnLixo +
-                '</div></div>';
-        }).join('');
-
-    let htmlFormAdicionarEtapa = '';
-    if (usuarioAtual && usuarioAtual.perfil === 'dentista') {
-        htmlFormAdicionarEtapa = '<form onsubmit="adicionarEtapaPlanejamento(event, \'' + paciente.id + '\')" class="grid grid-cols-1 sm:grid-cols-12 gap-2 pt-2 border-t border-indigo-100">' +
-            '<div class="sm:col-span-2"><input type="text" id="plan-dente" placeholder="Dente (16)" class="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white outline-none"></div>' +
-            '<div class="sm:col-span-5"><input type="text" id="plan-desc" required placeholder="Procedimento (ex: Restauração)" class="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white outline-none"></div>' +
-            '<div class="sm:col-span-3"><input type="number" step="0.01" id="plan-valor" placeholder="Valor (R$)" class="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white outline-none"></div>' +
-            '<div class="sm:col-span-2"><button type="submit" class="w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg text-xs shadow flex items-center justify-center gap-1"><i class="fa-solid fa-plus"></i> Add</button></div></form>';
-    }
-
-    let htmlPlanoTratamento = '<div class="space-y-3 bg-indigo-50/20 p-3 rounded-xl border border-indigo-100">' +
-        '<div class="flex justify-between items-center text-xs font-bold text-indigo-900"><span>Itens do Plano</span><span>Total: R$ ' + valorTotalPlano.toFixed(2) + '</span></div>' +
-        '<div class="space-y-2 max-h-[50vh] overflow-y-auto pr-1">' + htmlItensEtapas + '</div>' + htmlFormAdicionarEtapa + '</div>';
-
-    let htmlFormProntuario = '';
-    if (usuarioAtual && usuarioAtual.perfil === 'dentista') {
-        htmlFormProntuario = '<div class="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3 shadow-sm mb-4">' +
-            '<h4 class="font-bold text-blue-900 text-sm flex items-center gap-2"><i class="fa-solid fa-stethoscope text-blue-600"></i> Registrar Evolução do Prontuário</h4>' +
-            '<form onsubmit="salvarProcedimentoDentista(event, \'' + paciente.id + '\')" class="space-y-3">' +
-                '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Procedimento Realizado *</label><input type="text" id="proc-desc" required placeholder="Ex: Restauração Resina Dente 16" class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"></div>' +
-                '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">O que fazer no Próximo Retorno?</label><input type="text" id="proc-proxima" placeholder="Ex: Moldagem e ajuste de oclusão" class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"></div>' +
-                '<button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg text-xs shadow transition">Salvar Prontuário</button></form></div>';
-    }
-
-    let htmlFormCaixa = '<div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-3 shadow-sm mb-4">' +
-        '<h4 class="font-bold text-emerald-900 text-sm flex items-center gap-2"><i class="fa-solid fa-cash-register text-emerald-600"></i> Lançamento & Observação Financeira</h4>' +
-        '<form onsubmit="salvarLancamentoCaixaManual(event, \'' + paciente.id + '\')" class="space-y-3">' +
-            '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Descrição do Procedimento *</label><input type="text" id="caixa-proc-desc" required placeholder="Ex: Manutenção Orto, Clareamento..." class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"></div>' +
-            '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">' +
-                '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Valor do Pagamento (R$)</label><input type="number" step="0.01" id="caixa-valor-pago" placeholder="0.00" class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"></div>' +
-                '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Forma de Pagamento</label><select id="caixa-forma" class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"><option value="Pix">Pix</option><option value="Cartão de Crédito">Cartão de Crédito</option><option value="Cartão de Débito">Cartão de Débito</option><option value="Dinheiro">Dinheiro</option></select></div>' +
-            '</div>' +
-            '<div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Observação (Pendências ou Créditos)</label><input type="text" id="caixa-obs-manual" placeholder="Ex: Acerto combinado, valor pendente, crédito..." value="' + (paciente.obsFinanceiraManual || '') + '" class="w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none"></div>' +
-            '<div class="flex items-center gap-2 pt-1">' +
-                '<input type="checkbox" id="caixa-marca-pendencia" class="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500" ' + (paciente.possuiPendenciaManual ? 'checked' : '') + '>' +
-                '<label for="caixa-marca-pendencia" class="text-xs font-semibold text-slate-700 cursor-pointer">Marcar paciente com pendência/débito financeiro</label>' +
-            '</div>' +
-            '<button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg text-xs shadow transition">Salvar Lançamento</button></form></div>';
-
-    let htmlPagamentosTimeline = '';
-    if (pagamentosPaciente.length === 0) {
-        htmlPagamentosTimeline = '<p class="text-sm text-slate-400 p-2">Nenhum pagamento registrado.</p>';
-    } else {
-        const gruposPg = {};
-        const pagamentosOrdenados = pagamentosPaciente.slice().sort((a, b) => new Date(b.data) - new Date(a.data));
-        pagamentosOrdenados.forEach(pg => {
-            const mesAno = formatarMesAno(pg.data);
-            if (!gruposPg[mesAno]) gruposPg[mesAno] = [];
-            gruposPg[mesAno].push(pg);
-        });
-
-        let idxPg = 0;
-        const mesAtualFormatado = formatarMesAno(obterDataLocalISO());
-
-        Object.keys(gruposPg).forEach(mesAno => {
-            const accId = 'acc-pagamento-' + idxPg;
-            const estaAberto = (mesAno === mesAtualFormatado) || (idxPg === 0);
-            let htmlItensPg = '';
-            gruposPg[mesAno].forEach(pg => {
-                const isEstorno = pg.valor < 0;
-                const corBg = isEstorno ? 'bg-rose-50 border-rose-100' : 'bg-emerald-50 border-emerald-100';
-                const corTexto = isEstorno ? 'text-rose-900' : 'text-emerald-900';
-                const corValor = isEstorno ? 'text-rose-600 font-bold' : 'text-emerald-700 font-bold';
-
-                const btnEstornar = !isEstorno ? '<button onclick="estornarPagamento(\'' + pg.id + '\', \'' + pacienteId + '\')" class="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded text-xs font-semibold transition flex items-center gap-1" title="Estornar Lançamento"><i class="fa-solid fa-rotate-left"></i> Estornar</button>' : '';
-
-                htmlItensPg += '<div class="p-3 ' + corBg + ' border rounded-lg text-sm flex justify-between items-center">' +
-                    '<div><p class="font-semibold ' + corTexto + '">' + pg.descricao + '</p><span class="text-xs text-slate-500">' + (pg.data ? pg.data.split('-').reverse().join('/') : '-') + ' • ' + pg.forma + '</span></div>' +
-                    '<div class="flex items-center gap-2"><span class="' + corValor + '">R$ ' + Number(pg.valor).toFixed(2) + '</span>' + btnEstornar + '</div>' +
-                '</div>';
-            });
-            htmlPagamentosTimeline += '<div class="border border-slate-200 rounded-xl overflow-hidden bg-slate-50">' +
-                '<button onclick="alternarAccordion(\'' + accId + '\')" class="w-full px-4 py-3 text-left font-bold text-slate-800 flex justify-between items-center hover:bg-slate-100 transition text-sm"><span><i class="fa-solid fa-receipt mr-2 text-emerald-600"></i>' + mesAno + ' (' + gruposPg[mesAno].length + ' pagamentos)</span><i class="fa-solid fa-chevron-down text-xs text-slate-400"></i></button>' +
-                '<div id="' + accId + '" class="' + (estaAberto ? '' : 'hidden') + ' p-3 space-y-2 border-t border-slate-200">' + htmlItensPg + '</div></div>';
-            idxPg++;
-        });
-    }
-
-    container.innerHTML = '<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">' +
-        '<div class="lg:col-span-1 space-y-4">' +
-            '<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3">' +
-                '<div class="flex items-center space-x-3 border-b pb-3"><div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-base">' + paciente.nome.charAt(0) + '</div><div><h3 class="font-bold text-slate-900 text-base leading-tight">' + paciente.nome + '</h3><span class="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full ' + (paciente.categoria === 'Ortodontia' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-700') + ' mt-0.5">' + paciente.categoria + '</span></div></div>' +
-                '<div class="space-y-1.5 text-xs">' +
-                    '<div><span class="font-semibold text-slate-400">Telefone:</span> <span class="font-medium text-slate-800">' + (paciente.telefone || '-') + '</span>' + btnWhatsapp + '</div>' +
-                    '<div><span class="font-semibold text-slate-400">CPF:</span> <span class="font-medium text-slate-800">' + (paciente.cpf || '-') + '</span></div>' +
-                    '<div><span class="font-semibold text-slate-400">Nascimento:</span> <span class="font-medium text-slate-800">' + (paciente.nascimento ? paciente.nascimento.split('-').reverse().join('/') : '-') + '</span></div>' +
-                    (paciente.categoria === 'Ortodontia' ? '<div><span class="font-semibold text-slate-400">Vencimento:</span> <span class="font-medium text-slate-800">' + (paciente.vencimento ? paciente.vencimento.split('-').reverse().join('/') : 'Não definida') + '</span></div>' : '') +
-                '</div>' + badgePendencia +
-                '<div class="pt-2 border-t flex gap-2">' +
-                    '<button onclick="abrirModalPaciente(\'' + paciente.id + '\')" class="flex-1 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1"><i class="fa-solid fa-user-pen"></i> Editar</button>' +
-                    '<button onclick="excluirPaciente(\'' + paciente.id + '\')" class="flex-1 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1"><i class="fa-solid fa-user-xmark"></i> Excluir</button>' +
-                '</div></div></div>' +
-        '<div class="lg:col-span-2 space-y-4">' +
-            '<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-4">' +
-                '<div class="border-b border-slate-200 flex space-x-4 text-xs sm:text-sm font-semibold overflow-x-auto scrollbar-none">' +
-                    '<button onclick="abrirSubAbaPaciente(\'prontuario\')" id="btn-subtab-prontuario" class="subtab-btn pb-2 border-b-2 border-blue-600 text-blue-600 flex items-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-notes-medical"></i> Prontuário</button>' +
-                    '<button onclick="abrirSubAbaPaciente(\'plano\')" id="btn-subtab-plano" class="subtab-btn pb-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 flex items-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-clipboard-list"></i> Plano de Tratamento</button>' +
-                    '<button onclick="abrirSubAbaPaciente(\'caixa\')" id="btn-subtab-caixa" class="subtab-btn pb-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 flex items-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-cash-register"></i> Caixa & Pagamentos</button>' +
-                '</div>' +
-                '<div id="subtab-content-prontuario" class="subtab-content space-y-4">' +
-                    htmlFormProntuario +
-                    '<input type="text" id="busca-prontuario-input" oninput="filtrarProntuarioLinhaTempo(\'' + paciente.id + '\')" placeholder="🔍 Pesquisar no histórico..." class="w-full px-3 py-2 border rounded-lg text-xs sm:text-sm bg-slate-50">' +
-                    '<div id="container-prontuario-timeline" class="space-y-3 max-h-[50vh] overflow-y-auto pr-1"></div>' +
-                '</div>' +
-                '<div id="subtab-content-plano" class="subtab-content hidden space-y-3">' + htmlPlanoTratamento + '</div>' +
-                '<div id="subtab-content-caixa" class="subtab-content hidden space-y-3 max-h-[60vh] overflow-y-auto pr-1">' + htmlFormCaixa + '<div class="space-y-2">' + htmlPagamentosTimeline + '</div></div>' +
-            '</div></div></div>';
-
-    mudarAba('detalhes-paciente');
-    renderizarLinhaTempoProntuario(document.getElementById('container-prontuario-timeline'), prontuariosPaciente, paciente.id);
-    abrirSubAbaPaciente(subAbaAtualPaciente);
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
+                <div class="flex justify-between items-center border-b pb-2">
+                    <h4 class="font-bold text-slate-800 text-sm"><i class="fa-solid fa-notes-medical text-emerald-600 mr-2"></i> Evolução / Anotações Clínicas</h4>
+                    <button onclick="adicionarAnotacaoProntuario('${paciente.id}')" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow transition">
+                        + Anotação
+                    </button>
+                </div>
+                <div class="space-y-2 max-h-[40vh] overflow-y-auto pr-1">
+                    ${pronts.length === 0 ? '<p class="text-xs text-slate-400 py-2">Nenhuma anotação médica registrada.</p>' : pronts.map(pront => `
+                        <div class="p-3 bg-slate-50 rounded-lg border text-xs space-y-1">
+                            <div class="flex justify-between text-[11px] text-slate-400 border-b pb-1">
+                                <span><i class="fa-regular fa-clock mr-1"></i>${pront.data ? new Date(pront.data + 'T00:00:00').toLocaleDateString('pt-BR') : ''}</span>
+                                <span>Por: ${pront.usuario || 'Dentista'}</span>
+                            </div>
+                            <p class="text-slate-700 whitespace-pre-wrap">${pront.texto}</p>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        </div>
+    `;
 }
 
-// ==========================================
-// SINCRONIZAÇÃO EM TEMPO REAL CORRIGIDA
-// ==========================================
-function ativarSincronizacaoEmTempoReal() {
-    if (window.usaFirebase && window.firebaseDb) {
-        const onSnapshotFunc = window.onSnapshot || (window.firebase && window.firebase.firestore && window.firebase.firestore.onSnapshot);
-        const docFunc = window.doc || (window.firebase && window.firebase.firestore && window.firebase.firestore.doc);
+function voltarParaOrigem() {
+    trocarAba(origemVisualizacao || 'pacientes');
+}
 
-        if (onSnapshotFunc && docFunc) {
-            const docRef = docFunc(window.firebaseDb, "clinica", "dados_compartilhados");
-            
-            onSnapshotFunc(docRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    const dadosNuvem = docSnap.data();
-                    db = Object.assign(db, dadosNuvem);
-                    
-                    localStorage.setItem('odonto_pacientes', JSON.stringify(db.pacientes));
-                    localStorage.setItem('odonto_prontuarios', JSON.stringify(db.prontuarios));
-                    localStorage.setItem('odonto_pagamentos', JSON.stringify(db.pagamentos));
-                    localStorage.setItem('odonto_despesas', JSON.stringify(db.despesas));
-
-                    if (!document.getElementById('tab-pacientes').classList.contains('hidden')) {
-                        renderizarPacientes();
-                    } else if (!document.getElementById('tab-financeiro').classList.contains('hidden')) {
-                        renderizarFinanceiro();
+function adicionarProcedimentoProntuario(pacienteId) {
+    exibirModalCustomizado(
+        "Novo Procedimento Odontológico",
+        `
+        <div class="space-y-3">
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Descrição do Procedimento *</label>
+                <input type="text" id="modal-proc-desc" placeholder="Ex: Restauração Resina, Limpeza, Extração" class="w-full px-3 py-2 border rounded-lg text-sm">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Valor (R$) *</label>
+                <input type="number" step="0.01" id="modal-proc-valor" placeholder="0.00" class="w-full px-3 py-2 border rounded-lg text-sm">
+            </div>
+        </div>
+        `,
+        [
+            { texto: "Cancelar", classe: "bg-slate-200 text-slate-700" },
+            {
+                texto: "Adicionar Procedimento",
+                classe: "bg-blue-600 text-white",
+                acao: () => {
+                    const desc = document.getElementById('modal-proc-desc').value.trim();
+                    const valor = parseFloat(document.getElementById('modal-proc-valor').value) || 0;
+                    if (!desc || valor <= 0) {
+                        exibirModalCustomizado("Erro", "Preencha uma descrição e um valor válido.");
+                        return;
                     }
+
+                    db.procedimentos.push({
+                        id: 'proc_' + Date.now(),
+                        pacienteId,
+                        descricao: desc,
+                        valor,
+                        data: new Date().toISOString().split('T')[0]
+                    });
+
+                    salvarColecao('procedimentos');
+                    verDetalhesPaciente(pacienteId, origemVisualizacao);
+                    renderizarPacientes();
                 }
-            });
+            }
+        ]
+    );
+}
+
+function adicionarAnotacaoProntuario(pacienteId) {
+    exibirModalCustomizado(
+        "Adicionar Evolução Clínica",
+        `
+        <div>
+            <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Anotações do Atendimento *</label>
+            <textarea id="modal-pront-texto" rows="4" placeholder="Descreva os achados, procedimento realizado, queixas do paciente..." class="w-full px-3 py-2 border rounded-lg text-sm outline-none"></textarea>
+        </div>
+        `,
+        [
+            { texto: "Cancelar", classe: "bg-slate-200 text-slate-700" },
+            {
+                texto: "Salvar Anotação",
+                classe: "bg-emerald-600 text-white",
+                acao: () => {
+                    const texto = document.getElementById('modal-pront-texto').value.trim();
+                    if (!texto) {
+                        exibirModalCustomizado("Erro", "O texto da anotação não pode ficar em branco.");
+                        return;
+                    }
+
+                    db.prontuarios.push({
+                        id: 'pront_' + Date.now(),
+                        pacienteId,
+                        texto,
+                        usuario: usuarioLogado ? usuarioLogado.email : 'Dentista',
+                        data: new Date().toISOString().split('T')[0]
+                    });
+
+                    salvarColecao('prontuarios');
+                    verDetalhesPaciente(pacienteId, origemVisualizacao);
+                }
+            }
+        ]
+    );
+}
+
+// 9. FECHAMENTO DE CAIXA DIÁRIO
+function abrirModalCaixaDiario() {
+    const dataHoje = new Date().toISOString().split('T')[0];
+    document.getElementById('input-data-caixa-diario').value = dataHoje;
+    carregarFechamentoCaixaData();
+    abrirModal('modal-fechamento-caixa');
+}
+
+function carregarFechamentoCaixaData() {
+    const dataSel = document.getElementById('input-data-caixa-diario').value;
+    const container = document.getElementById('conteudo-fechamento-caixa');
+    if (!container || !dataSel) return;
+
+    const pagamentos = db.pagamentos.filter(p => p.data === dataSel);
+    const despesas = db.gastos.filter(g => g.data === dataSel);
+
+    const totalEntradas = pagamentos.reduce((acc, p) => acc + (Number(p.valor) || 0), 0);
+    const totalSaidas = despesas.reduce((acc, g) => acc + (Number(g.valor) || 0), 0);
+    const saldoDia = totalEntradas - totalSaidas;
+
+    container.innerHTML = `
+        <div class="grid grid-cols-3 gap-2 text-center my-2">
+            <div class="bg-emerald-50 p-2.5 rounded-lg border border-emerald-200">
+                <span class="text-[10px] font-bold uppercase text-emerald-700 block">Entradas</span>
+                <span class="font-extrabold text-emerald-700 text-xs sm:text-sm">R$ ${totalEntradas.toFixed(2)}</span>
+            </div>
+            <div class="bg-rose-50 p-2.5 rounded-lg border border-rose-200">
+                <span class="text-[10px] font-bold uppercase text-rose-700 block">Saídas</span>
+                <span class="font-extrabold text-rose-700 text-xs sm:text-sm">R$ ${totalSaidas.toFixed(2)}</span>
+            </div>
+            <div class="bg-blue-50 p-2.5 rounded-lg border border-blue-200">
+                <span class="text-[10px] font-bold uppercase text-blue-700 block">Saldo Dia</span>
+                <span class="font-extrabold text-blue-700 text-xs sm:text-sm">R$ ${saldoDia.toFixed(2)}</span>
+            </div>
+        </div>
+
+        <div class="space-y-3 pt-2">
+            <h5 class="font-bold text-xs uppercase text-slate-500">Recebimentos (${pagamentos.length})</h5>
+            ${pagamentos.length === 0 ? '<p class="text-xs text-slate-400">Nenhum recebimento nesta data.</p>' : pagamentos.map(p => {
+                const pac = db.pacientes.find(item => item.id === p.pacienteId);
+                return `
+                    <div class="p-2 bg-slate-50 rounded border text-xs flex justify-between">
+                        <span><strong>${pac ? pac.nome : 'Paciente'}</strong> (${p.formaPagamento})</span>
+                        <span class="font-bold text-emerald-600">+ R$ ${(Number(p.valor) || 0).toFixed(2)}</span>
+                    </div>
+                `;
+            }).join('')}
+
+            <h5 class="font-bold text-xs uppercase text-slate-500 pt-2 border-t">Saídas / Gastos (${despesas.length})</h5>
+            ${despesas.length === 0 ? '<p class="text-xs text-slate-400">Nenhuma saída nesta data.</p>' : despesas.map(g => `
+                <div class="p-2 bg-slate-50 rounded border text-xs flex justify-between">
+                    <span><strong>${g.descricao}</strong> (${g.categoria || 'Geral'})</span>
+                    <span class="font-bold text-rose-600">- R$ ${(Number(g.valor) || 0).toFixed(2)}</span>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+// 10. IMPORTAÇÃO E EXPORTAÇÃO DE BACKUP JSON
+function exportarBackup() {
+    const dados = JSON.stringify(db, null, 2);
+    const blob = new Blob([dados], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `backup_consultorio_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+function importarBackup(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        try {
+            const importado = JSON.parse(event.target.result);
+            if (importado.pacientes && importado.procedimentos) {
+                db.pacientes = importado.pacientes || [];
+                db.procedimentos = importado.procedimentos || [];
+                db.pagamentos = importado.pagamentos || [];
+                db.prontuarios = importado.prontuarios || [];
+                db.gastos = importado.gastos || [];
+
+                salvarColecao('pacientes');
+                salvarColecao('procedimentos');
+                salvarColecao('pagamentos');
+                salvarColecao('prontuarios');
+                salvarColecao('gastos');
+
+                atualizarTelas();
+                exibirModalCustomizado("Backup Restaurado", "Todos os dados foram importados com sucesso!");
+            } else {
+                exibirModalCustomizado("Erro no Arquivo", "Formato de arquivo de backup inválido.");
+            }
+        } catch (err) {
+            exibirModalCustomizado("Erro de Leitura", "Falha ao ler arquivo JSON: " + err.message);
         }
+    };
+    reader.readAsText(file);
+}
+
+// 11. UTILITÁRIOS DE MÁSCARA E MODAL CUSTOMIZADO
+function mascaraTelefone(input) {
+    let v = input.value.replace(/\D/g, '');
+    if (v.length > 11) v = v.slice(0, 11);
+    if (v.length > 6) {
+        input.value = `(${v.slice(0, 2)}) ${v.slice(2, 7)}-${v.slice(7)}`;
+    } else if (v.length > 2) {
+        input.value = `(${v.slice(0, 2)}) ${v.slice(2)}`;
+    } else {
+        input.value = v;
     }
+}
+
+function mascaraCPF(input) {
+    let v = input.value.replace(/\D/g, '');
+    if (v.length > 11) v = v.slice(0, 11);
+    if (v.length > 9) {
+        input.value = `${v.slice(0, 3)}.${v.slice(3, 6)}.${v.slice(6, 9)}-${v.slice(9)}`;
+    } else if (v.length > 6) {
+        input.value = `${v.slice(0, 3)}.${v.slice(3, 6)}.${v.slice(6)}`;
+    } else if (v.length > 3) {
+        input.value = `${v.slice(0, 3)}.${v.slice(3)}`;
+    } else {
+        input.value = v;
+    }
+}
+
+function abrirModal(idModal) {
+    const el = document.getElementById(idModal);
+    if (el) {
+        el.classList.remove('hidden');
+        el.classList.add('flex');
+    }
+}
+
+function fecharModal(idModal) {
+    const el = document.getElementById(idModal);
+    if (el) {
+        el.classList.add('hidden');
+        el.classList.remove('flex');
+    }
+}
+
+function exibirModalCustomizado(titulo, corpoHTML, botoes = null) {
+    document.getElementById('modal-custom-titulo').innerText = titulo;
+    document.getElementById('modal-custom-corpo').innerHTML = typeof corpoHTML === 'string' ? `<p class="text-slate-600">${corpoHTML}</p>` : '';
+    if (typeof corpoHTML !== 'string') {
+        document.getElementById('modal-custom-corpo').appendChild(corpoHTML);
+    }
+
+    const containerBotoes = document.getElementById('modal-custom-botoes');
+    containerBotoes.innerHTML = '';
+
+    if (!botoes) {
+        botoes = [{ texto: "OK", classe: "bg-blue-600 text-white", acao: null }];
+    }
+
+    botoes.forEach(btn => {
+        const button = document.createElement('button');
+        button.className = `px-4 py-2 text-xs font-semibold rounded-lg shadow transition ${btn.classe}`;
+        button.innerText = btn.texto;
+        button.onclick = () => {
+            fecharModal('modal-customizado');
+            if (btn.acao) btn.acao();
+        };
+        containerBotoes.appendChild(button);
+    });
+
+    abrirModal('modal-customizado');
 }
