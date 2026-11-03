@@ -1688,11 +1688,32 @@ function abrirModalDetalhesAgendamento(agendamentoId) {
     const ag = db.agendamentos.find(item => item.id === agendamentoId);
     if (!ag) return;
 
-    if (ag.isLembrete) {
-        document.getElementById('detalhe-ag-paciente').innerText = '📌 ' + ag.titulo;
-        document.getElementById('detalhe-ag-categoria').innerText = 'Lembrete / Bloqueio';
+    // Tratamento específico para BLOQUEIO DE AGENDA REAL
+    if (ag.isBloqueio) {
+        document.getElementById('detalhe-ag-paciente').innerText = '🔒 ' + ag.titulo;
+        document.getElementById('detalhe-ag-categoria').innerText = 'Bloqueio de Horário';
         document.getElementById('detalhe-ag-datahora').innerText = (ag.data ? ag.data.split('-').reverse().join('/') : '') + ' • ' + ag.horario + ' às ' + (ag.horaFim || '?');
         document.getElementById('detalhe-ag-tipo').innerText = 'Bloqueio de Agenda';
+        document.getElementById('detalhe-ag-obs').innerText = ag.obs || 'Nenhuma observação registrada.';
+
+        let divStatus = document.getElementById('container-status-agendamento');
+        if (divStatus) divStatus.innerHTML = ''; 
+
+        document.getElementById('btn-excluir-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); excluirAgendamento(ag.id, null); };
+        document.getElementById('btn-editar-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); abrirModalEditarBloqueio(ag.id); };
+        document.getElementById('btn-ver-ficha-ag-modal').parentElement.style.display = 'none'; 
+
+        document.getElementById('modal-detalhes-agendamento').classList.remove('hidden');
+        document.getElementById('modal-detalhes-agendamento').classList.add('flex');
+        return;
+    }
+
+    // Tratamento específico para LEMBRETE COMUM
+    if (ag.isLembrete) {
+        document.getElementById('detalhe-ag-paciente').innerText = '📌 ' + ag.titulo;
+        document.getElementById('detalhe-ag-categoria').innerText = 'Lembrete / Aviso';
+        document.getElementById('detalhe-ag-datahora').innerText = (ag.data ? ag.data.split('-').reverse().join('/') : '') + ' • ' + ag.horario;
+        document.getElementById('detalhe-ag-tipo').innerText = 'Lembrete';
         document.getElementById('detalhe-ag-obs').innerText = ag.obs || 'Nenhuma observação registrada.';
 
         let divStatus = document.getElementById('container-status-agendamento');
@@ -1867,18 +1888,106 @@ function salvarAgendamento(event) {
     }
 }
 
+// ==========================================
+// FUNÇÕES DE BLOQUEIO DE AGENDA
+// ==========================================
+function atualizarHoraFimBloqueioPadrao() {
+    const inputInicio = document.getElementById('bloqueio-horario');
+    const inputFim = document.getElementById('bloqueio-hora-fim');
+    if (!inputInicio || !inputFim) return;
+
+    const horaInicio = inputInicio.value;
+    if (horaInicio) {
+        const partes = horaInicio.split(':');
+        let h = parseInt(partes[0], 10);
+        let m = parseInt(partes[1], 10) + 30;
+        h += Math.floor(m / 60);
+        m = m % 60;
+        inputFim.value = String(h % 24).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+    }
+}
+
+function abrirModalBloqueio(dataPreenchida, horaPreenchida) {
+    document.getElementById('titulo-modal-bloqueio').innerText = 'Novo Bloqueio de Horário';
+    document.getElementById('bloqueio-edit-id').value = '';
+    document.getElementById('bloqueio-titulo').value = '';
+    document.getElementById('bloqueio-obs').value = '';
+
+    document.getElementById('bloqueio-data').value = dataPreenchida || dataAgendaAtual || obterDataLocalISO();
+    document.getElementById('bloqueio-horario').value = horaPreenchida || '12:00';
+    atualizarHoraFimBloqueioPadrao();
+
+    const modal = document.getElementById('modal-bloqueio');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function abrirModalEditarBloqueio(bloqueioId) {
+    const ag = db.agendamentos.find(a => a.id === bloqueioId);
+    if (!ag || !ag.isBloqueio) return;
+
+    document.getElementById('titulo-modal-bloqueio').innerText = 'Editar Bloqueio de Horário';
+    document.getElementById('bloqueio-edit-id').value = ag.id;
+    document.getElementById('bloqueio-titulo').value = ag.titulo;
+    document.getElementById('bloqueio-data').value = ag.data;
+    document.getElementById('bloqueio-horario').value = ag.horario;
+    document.getElementById('bloqueio-hora-fim').value = ag.horaFim || '';
+    document.getElementById('bloqueio-obs').value = ag.obs || '';
+
+    const modal = document.getElementById('modal-bloqueio');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function salvarBloqueio(event) {
+    event.preventDefault();
+    const editId = document.getElementById('bloqueio-edit-id').value;
+    const titulo = document.getElementById('bloqueio-titulo').value.trim();
+    const dataBloqueio = document.getElementById('bloqueio-data').value;
+    const horaInicio = document.getElementById('bloqueio-horario').value;
+    const horaFim = document.getElementById('bloqueio-hora-fim').value;
+
+    if (!titulo) { alertCustomizado('Informe o motivo do bloqueio.'); return; }
+    if (horaFim <= horaInicio) { alertCustomizado('A Hora Final deve ser posterior à Hora Inicial.'); return; }
+
+    const dadosBloqueio = {
+        isBloqueio: true,
+        isLembrete: false,
+        titulo: titulo,
+        data: dataBloqueio,
+        horario: horaInicio,
+        horaFim: horaFim,
+        obs: document.getElementById('bloqueio-obs').value.trim(),
+        cor: '#d50000' // Vermelho forte indicando bloqueio real
+    };
+
+    if (editId) {
+        const index = db.agendamentos.findIndex(a => a.id === editId);
+        if (index !== -1) {
+            db.agendamentos[index] = { ...db.agendamentos[index], ...dadosBloqueio };
+        }
+    } else {
+        db.agendamentos.push({ id: gerarIdUnico(), ...dadosBloqueio });
+    }
+
+    persistirDB();
+    fecharModal('modal-bloqueio');
+    atualizarCalendario();
+    alertCustomizado('Bloqueio de agenda salvo com sucesso!');
+}
+
+
+// ==========================================
+// FUNÇÕES DE LEMBRETE SIMPLES
+// ==========================================
 function abrirModalLembrete(dataPreenchida, horaPreenchida) {
-    document.getElementById('titulo-modal-lembrete').innerText = 'Novo Lembrete / Bloqueio';
+    document.getElementById('titulo-modal-lembrete').innerText = 'Novo Lembrete / Aviso';
     document.getElementById('lembrete-edit-id').value = '';
     document.getElementById('lembrete-titulo').value = '';
     document.getElementById('lembrete-obs').value = '';
 
-    const btnPadrao = document.querySelector('.cor-lembrete-btn[style*="#616161"]');
-    selecionarCorLembrete('#616161', btnPadrao);
-
     document.getElementById('lembrete-data').value = dataPreenchida || dataAgendaAtual || obterDataLocalISO();
-    document.getElementById('lembrete-horario').value = horaPreenchida || '12:00';
-    atualizarHoraFimLembretePadrao();
+    document.getElementById('lembrete-horario').value = horaPreenchida || '09:00';
 
     const modal = document.getElementById('modal-lembrete');
     modal.classList.remove('hidden');
@@ -1889,17 +1998,12 @@ function abrirModalEditarLembrete(lembreteId) {
     const ag = db.agendamentos.find(a => a.id === lembreteId);
     if (!ag || !ag.isLembrete) return;
 
-    document.getElementById('titulo-modal-lembrete').innerText = 'Editar Lembrete / Bloqueio';
+    document.getElementById('titulo-modal-lembrete').innerText = 'Editar Lembrete / Aviso';
     document.getElementById('lembrete-edit-id').value = ag.id;
     document.getElementById('lembrete-titulo').value = ag.titulo;
     document.getElementById('lembrete-data').value = ag.data;
     document.getElementById('lembrete-horario').value = ag.horario;
-    document.getElementById('lembrete-hora-fim').value = ag.horaFim || '';
     document.getElementById('lembrete-obs').value = ag.obs || '';
-
-    const corSalva = ag.cor || '#616161';
-    const btnCorSalva = document.querySelector(`.cor-lembrete-btn[style*="${corSalva}"]`) || document.querySelector('.cor-lembrete-btn[style*="#616161"]');
-    selecionarCorLembrete(corSalva, btnCorSalva);
 
     const modal = document.getElementById('modal-lembrete');
     modal.classList.remove('hidden');
@@ -1911,21 +2015,19 @@ function salvarLembrete(event) {
     const editId = document.getElementById('lembrete-edit-id').value;
     const titulo = document.getElementById('lembrete-titulo').value.trim();
     const dataLembrete = document.getElementById('lembrete-data').value;
-    const horaInicio = document.getElementById('lembrete-horario').value;
-    const horaFim = document.getElementById('lembrete-hora-fim').value;
+    const horario = document.getElementById('lembrete-horario').value;
 
     if (!titulo) { alertCustomizado('Informe o título do lembrete.'); return; }
-    if (horaFim <= horaInicio) { alertCustomizado('A Hora Final deve ser posterior à Hora Inicial.'); return; }
 
-    const inputCor = document.getElementById('lembrete-cor');
     const dadosLembrete = {
+        isBloqueio: false,
         isLembrete: true,
         titulo: titulo,
         data: dataLembrete,
-        horario: horaInicio,
-        horaFim: horaFim,
+        horario: horario,
+        horaFim: '',
         obs: document.getElementById('lembrete-obs').value.trim(),
-        cor: inputCor ? inputCor.value : '#616161'
+        cor: '#616161' // Cinza/Grafite para lembrete simples
     };
 
     if (editId) {
@@ -1940,7 +2042,7 @@ function salvarLembrete(event) {
     persistirDB();
     fecharModal('modal-lembrete');
     atualizarCalendario();
-    alertCustomizado('Lembrete/Bloqueio salvo com sucesso!');
+    alertCustomizado('Lembrete salvo com sucesso!');
 }
 
 // ==========================================
