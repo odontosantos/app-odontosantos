@@ -119,11 +119,14 @@
                     </button>
                 </div>
 
-                <div class="flex flex-wrap gap-2 w-full sm:w-auto">
-                    <button onclick="abrirModalLembrete()" class="flex-1 sm:flex-none px-3.5 py-2 bg-slate-700 hover:bg-slate-800 text-white text-xs sm:text-sm font-semibold rounded-lg shadow transition flex items-center justify-center gap-1.5">
-                        <i class="fa-solid fa-thumbtack"></i> + Bloqueio
+               <div class="flex flex-wrap gap-2 w-full sm:w-auto">
+                    <button onclick="abrirModalBloqueio()" class="flex-1 sm:flex-none px-3 py-2 bg-rose-700 hover:bg-rose-800 text-white text-xs sm:text-sm font-semibold rounded-lg shadow transition flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-lock"></i> + Bloqueio
                     </button>
-                    <button onclick="abrirModalAgendamento()" class="flex-1 sm:flex-none px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold rounded-lg shadow transition flex items-center justify-center gap-2">
+                    <button onclick="abrirModalLembrete()" class="flex-1 sm:flex-none px-3 py-2 bg-slate-700 hover:bg-slate-800 text-white text-xs sm:text-sm font-semibold rounded-lg shadow transition flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-thumbtack"></i> + Lembrete
+                    </button>
+                    <button onclick="abrirModalAgendamento()" class="flex-1 sm:flex-none px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold rounded-lg shadow transition flex items-center justify-center gap-2">
                         <i class="fa-solid fa-plus"></i> Agendar
                     </button>
                 </div>
@@ -425,17 +428,57 @@
         </div>
     </div>
 
+    <!-- MODAL DE BLOQUEIO DE AGENDA -->
+    <div id="modal-bloqueio" class="fixed inset-0 bg-slate-900 bg-opacity-75 hidden items-center justify-center z-50 p-3 sm:p-4">
+        <div class="bg-white rounded-2xl shadow-xl max-w-lg w-full p-4 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 id="titulo-modal-bloqueio" class="text-base sm:text-lg font-bold text-rose-900 flex items-center gap-2"><i class="fa-solid fa-lock"></i> Bloqueio de Horário</h3>
+                <button onclick="fecharModal('modal-bloqueio')" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <form onsubmit="salvarBloqueio(event)" class="space-y-4">
+                <input type="hidden" id="bloqueio-edit-id" value="">
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Motivo do Bloqueio *</label>
+                    <input type="text" id="bloqueio-titulo" required placeholder="Ex: Almoço, Cirurgia Externa, Manutenção..." class="w-full px-3 py-2 border rounded-lg text-sm">
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Data</label>
+                        <input type="date" id="bloqueio-data" required class="w-full px-3 py-2 border rounded-lg text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Horário Inicial</label>
+                        <input type="time" id="bloqueio-horario" onchange="atualizarHoraFimBloqueioPadrao()" required class="w-full px-3 py-2 border rounded-lg text-sm">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Horário Final</label>
+                    <input type="time" id="bloqueio-hora-fim" required class="w-full px-3 py-2 border rounded-lg text-sm bg-white">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Observações Adicionais</label>
+                    <textarea id="bloqueio-obs" rows="2" class="w-full px-3 py-2 border rounded-lg text-sm"></textarea>
+                </div>
+                <div class="flex justify-end space-x-3 pt-4 border-t">
+                    <button type="button" onclick="fecharModal('modal-bloqueio')" class="px-4 py-2 border rounded-lg text-sm text-slate-600 hover:bg-slate-100">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-rose-700 hover:bg-rose-800 text-white text-sm font-semibold rounded-lg shadow">Salvar Bloqueio</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL DE LEMBRETE -->
     <div id="modal-lembrete" class="fixed inset-0 bg-slate-900 bg-opacity-75 hidden items-center justify-center z-50 p-3 sm:p-4">
         <div class="bg-white rounded-2xl shadow-xl max-w-lg w-full p-4 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center border-b pb-3">
-                <h3 id="titulo-modal-lembrete" class="text-base sm:text-lg font-bold text-slate-900">Novo Lembrete / Bloqueio</h3>
+                <h3 id="titulo-modal-lembrete" class="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2"><i class="fa-solid fa-thumbtack"></i> Lembrete / Aviso</h3>
                 <button onclick="fecharModal('modal-lembrete')" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark text-lg"></i></button>
             </div>
             <form onsubmit="salvarLembrete(event)" class="space-y-4">
                 <input type="hidden" id="lembrete-edit-id" value="">
                 <div>
-                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Título do Lembrete / Motivo do Bloqueio *</label>
-                    <input type="text" id="lembrete-titulo" required placeholder="Ex: Almoço, Reunião, Curso, Manutenção..." class="w-full px-3 py-2 border rounded-lg text-sm">
+                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Título do Lembrete *</label>
+                    <input type="text" id="lembrete-titulo" required placeholder="Ex: Ligar para fornecedor, Comprar material..." class="w-full px-3 py-2 border rounded-lg text-sm">
                 </div>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     <div>
@@ -443,30 +486,12 @@
                         <input type="date" id="lembrete-data" required class="w-full px-3 py-2 border rounded-lg text-sm">
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Horário Inicial</label>
-                        <input type="time" id="lembrete-horario" onchange="atualizarHoraFimLembretePadrao()" required class="w-full px-3 py-2 border rounded-lg text-sm">
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Horário</label>
+                        <input type="time" id="lembrete-horario" required class="w-full px-3 py-2 border rounded-lg text-sm">
                     </div>
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Horário Final</label>
-                    <input type="time" id="lembrete-hora-fim" required class="w-full px-3 py-2 border rounded-lg text-sm bg-white">
-                </div>
-                <div class="pt-2">
-                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-2">Cor do Bloqueio</label>
-                    <input type="hidden" id="lembrete-cor" value="#616161">
-                    <div class="flex flex-wrap gap-2" id="container-cores-lembrete">
-                        <button type="button" onclick="selecionarCorLembrete('#616161', this)" class="cor-lembrete-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #616161;" title="Grafite"></button>
-                        <button type="button" onclick="selecionarCorLembrete('#d50000', this)" class="cor-lembrete-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #d50000;" title="Vermelho"></button>
-                        <button type="button" onclick="selecionarCorLembrete('#f4511e', this)" class="cor-lembrete-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #f4511e;" title="Laranja"></button>
-                        <button type="button" onclick="selecionarCorLembrete('#f6bf26', this)" class="cor-lembrete-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #f6bf26;" title="Amarelo"></button>
-                        <button type="button" onclick="selecionarCorLembrete('#33b679', this)" class="cor-lembrete-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #33b679;" title="Verde"></button>
-                        <button type="button" onclick="selecionarCorLembrete('#3f51b5', this)" class="cor-lembrete-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #3f51b5;" title="Azul"></button>
-                        <button type="button" onclick="selecionarCorLembrete('#8e24aa', this)" class="cor-lembrete-btn w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110 flex items-center justify-center" style="background-color: #8e24aa;" title="Roxo"></button>
-                    </div>
-                </div>
-
-                <div>
-                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Observações Adicionais</label>
+                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Observações</label>
                     <textarea id="lembrete-obs" rows="2" class="w-full px-3 py-2 border rounded-lg text-sm"></textarea>
                 </div>
                 <div class="flex justify-end space-x-3 pt-4 border-t">
@@ -476,7 +501,6 @@
             </form>
         </div>
     </div>
-
     <div id="modal-paciente" class="fixed inset-0 bg-slate-900 bg-opacity-75 hidden items-center justify-center z-50 p-3 sm:p-4">
         <div class="bg-white rounded-2xl shadow-xl max-w-lg w-full p-4 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center border-b pb-3">
