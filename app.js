@@ -219,6 +219,30 @@ async function processarUsuarioLogado(user) {
         iniciarSessaoSistema();
     }
 }
+async function iniciarSessaoSistema() {
+    const telaLogin = document.getElementById('login-screen');
+    if (telaLogin) {
+        telaLogin.classList.remove('flex');
+        telaLogin.classList.add('hidden');
+    }
+
+    await sincronizarDadosNuvem();
+    ativarSincronizacaoEmTempoReal();
+
+    const mainHeader = document.getElementById('main-header');
+    const mainNav = document.getElementById('main-nav');
+    const mainContent = document.getElementById('main-content');
+
+    if (mainHeader) mainHeader.classList.remove('hidden');
+    if (mainNav) mainNav.classList.remove('hidden');
+    if (mainContent) {
+        mainContent.classList.remove('hidden');
+        mainContent.classList.add('flex-grow');
+    }
+    
+    configurarNavbar();
+    inicializarSistema();
+}
 
 // ==========================================
 // PACIENTES (TELA GERAL APRIMORADA)
