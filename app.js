@@ -1191,8 +1191,14 @@ function abrirDetalhesPaciente(pacienteId, origem) {
     }
 
     let htmlPlanoTratamento = '<div class="space-y-3 bg-indigo-50/20 p-3 rounded-xl border border-indigo-100">' +
-        '<div class="flex justify-between items-center text-xs font-bold text-indigo-900"><span>Itens do Plano</span><span>Total: R$ ' + valorTotalPlano.toFixed(2) + '</span></div>' +
-        '<div class="space-y-2 max-h-[50vh] overflow-y-auto pr-1">' + htmlItensEtapas + '</div>' + htmlFormAdicionarEtapa + '</div>';
+    '<div class="flex justify-between items-center text-xs font-bold text-indigo-900">' +
+        '<span>Itens do Plano</span>' +
+        '<div class="flex items-center gap-3">' +
+            '<span>Total: R$ ' + valorTotalPlano.toFixed(2) + '</span>' +
+            '<button type="button" onclick="gerarPdfPlanoTratamento(\'' + paciente.id + '\')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow transition flex items-center gap-1.5"><i class="fa-solid fa-file-pdf"></i> Baixar PDF</button>' +
+        '</div>' +
+    '</div>' +
+    '<div class="space-y-2 max-h-[50vh] overflow-y-auto pr-1">' + htmlItensEtapas + '</div>' + htmlFormAdicionarEtapa + '</div>';
 
     let htmlFormProntuario = '';
     if (usuarioAtual && usuarioAtual.perfil === 'dentista') {
@@ -1323,4 +1329,88 @@ function ativarSincronizacaoEmTempoReal() {
             });
         }
     }
+}
+
+
+function gerarPdfPlanoTratamento(pacienteId) {
+    const paciente = db.pacientes.find(p => p.id === pacienteId);
+    if (!paciente) {
+        alertCustomizado("❌ Paciente não encontrado.");
+        return;
+    }
+
+    const etapas = Array.isArray(paciente.planejamentoEtapas) ? paciente.planejamentoEtapas : [];
+    if (etapas.length === 0) {
+        alertCustomizado("⚠️ Este paciente ainda não possui etapas cadastradas no plano de tratamento.");
+        return;
+    }
+
+    const totalPlano = etapas.reduce((acc, curr) => acc + (parseFloat(curr.valor) || 0), 0);
+
+    // Cria o elemento temporário formatado para impressão em PDF
+    const elTemp = document.createElement('div');
+    elTemp.style.padding = '30px';
+    elTemp.style.fontFamily = 'Arial, sans-serif';
+    elTemp.style.color = '#334155';
+
+    const linhasTabela = etapas.map((et, index) => `
+        <tr style="border-bottom: 1px solid #e2e8f0;">
+            <td style="padding: 10px; font-weight: bold; text-align: center; color: #4f46e5;">#${index + 1}</td>
+            <td style="padding: 10px; text-align: center; font-weight: bold;">${et.dente || 'Geral'}</td>
+            <td style="padding: 10px;">${et.procedimento}</td>
+            <td style="padding: 10px; text-align: right; font-weight: bold;">R$ ${Number(et.valor || 0).toFixed(2)}</td>
+            <td style="padding: 10px; text-align: center;">
+                <span style="padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; ${et.concluido ? 'background-color: #d1fae5; color: #065f46;' : 'background-color: #fef3c7; color: #92400e;'}">
+                    ${et.concluido ? 'Concluído' : 'Pendente'}
+                </span>
+            </td>
+        </tr>
+    `).join('');
+
+    elTemp.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #4f46e5; padding-bottom: 15px; margin-bottom: 20px;">
+            <div>
+                <h1 style="margin: 0; font-size: 22px; color: #1e293b;">Plano de Tratamento Odontológico</h1>
+                <p style="margin: 5px 0 0 0; font-size: 13px; color: #64748b;">Orçamento e Planejamento Clínico</p>
+            </div>
+            <div style="text-align: right; font-size: 12px; color: #64748b;">
+                <p style="margin: 0;">Data de emissão: ${new Date().toLocaleDateString('pt-BR')}</p>
+            </div>
+        </div>
+
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-bottom: 20px; font-size: 13px;">
+            <p style="margin: 0 0 5px 0;"><strong>Paciente:</strong> ${paciente.nome}</p>
+            <p style="margin: 0 0 5px 0;"><strong>Telefone:</strong> ${paciente.telefone || '-'}</p>
+            <p style="margin: 0;"><strong>Categoria:</strong> ${paciente.categoria}</p>
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 20px;">
+            <thead>
+                <tr style="background-color: #4f46e5; color: white;">
+                    <th style="padding: 10px; text-align: center;">Etapa</th>
+                    <th style="padding: 10px; text-align: center;">Dente / Região</th>
+                    <th style="padding: 10px; text-align: left;">Procedimento</th>
+                    <th style="padding: 10px; text-align: right;">Valor</th>
+                    <th style="padding: 10px; text-align: center;">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${linhasTabela}
+            </tbody>
+        </table>
+
+        <div style="text-align: right; font-size: 16px; font-weight: bold; color: #1e293b; margin-top: 20px; padding-top: 10px; border-top: 2px solid #e2e8f0;">
+            Valor Total Previsto: R$ ${totalPlano.toFixed(2)}
+        </div>
+    `;
+
+    const opcoes = {
+        margin: 10,
+        filename: `Plano_Tratamento_${paciente.nome.replace(/\s+/g, '_')}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    html2pdf().set(opcoes).from(elTemp).save();
 }
