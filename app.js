@@ -244,6 +244,12 @@ function renderizarPacientes() {
     const container = document.getElementById('lista-pacientes-container');
     if (!container) return;
     
+    // Garante que o array de pacientes exista antes de manipular
+    if (!db || !Array.isArray(db.pacientes)) {
+        if (!db) db = {};
+        db.pacientes = [];
+    }
+
     const termoBusca = (document.getElementById('busca-pacientes-tabela')?.value || '').toLowerCase().trim();
     const opcaoCategoria = window._categoriaSelecionada || 'todos';
 
@@ -273,7 +279,7 @@ function renderizarPacientes() {
         return true;
     });
 
-    // ORDENAÇÃO ALFABÉTICA (A-Z)
+    // Ordenação alfabética (A-Z)
     listaExibicao.sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { sensitivity: 'base' }));
 
     if (listaExibicao.length === 0) {
