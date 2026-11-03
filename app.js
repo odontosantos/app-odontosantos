@@ -60,7 +60,6 @@ let usuarioAtual = null;
 let abaOrigem = 'pacientes';
 let subAbaAtualPaciente = 'prontuario';
 let pacienteAtualId = null;
-let exibiApenasInativos = false;
 
 function gerarIdUnico() {
     return Date.now().toString() + '-' + Math.floor(Math.random() * 10000);
@@ -256,56 +255,22 @@ function inicializarSistema() {
 }
 
 // ==========================================
-// PACIENTES
+// PACIENTES (TELA GERAL APRIMORADA)
 // ==========================================
-function obterUltimaConsultaPaciente(pacienteId) {
-    const datas = [];
-    db.prontuarios.filter(pr => pr.pacienteId === pacienteId && pr.data).forEach(pr => datas.push(pr.data));
-
-    if (datas.length === 0) return null;
-    datas.sort((a, b) => new Date(b) - new Date(a));
-    return datas[0];
-}
-
-function calcularDiasDesdeUltimaConsulta(dataIso) {
-    if (!dataIso) return 9999;
-    const dataConsulta = new Date(dataIso);
-    const hoje = new Date();
-    const diffTempo = hoje - dataConsulta;
-    return Math.floor(diffTempo / (1000 * 60 * 60 * 24));
-}
-
 function definirFiltroCategoria(categoria) {
-    exibiApenasInativos = false;
     window._categoriaSelecionada = categoria;
     
     ['todos', 'clinico', 'orto'].forEach(cat => {
         const btn = document.getElementById('tag-filtro-' + cat);
         if (btn) {
             if (cat === categoria) {
-                btn.className = 'px-3.5 py-1.5 rounded-full text-xs font-bold transition bg-blue-600 text-white shadow-sm';
+                btn.className = 'px-4 py-2 rounded-xl text-xs font-bold transition bg-blue-600 text-white shadow-sm flex items-center gap-1.5';
             } else {
-                btn.className = 'px-3.5 py-1.5 rounded-full text-xs font-bold transition bg-slate-100 text-slate-700 hover:bg-slate-200';
+                btn.className = 'px-4 py-2 rounded-xl text-xs font-bold transition bg-slate-100 text-slate-700 hover:bg-slate-200 flex items-center gap-1.5';
             }
         }
     });
-    
-    const btnInativos = document.getElementById('btn-filtro-inativos');
-    if (btnInativos) btnInativos.className = 'px-3.5 py-1.5 rounded-full text-xs font-bold transition bg-amber-50 text-amber-800 border border-amber-200';
 
-    renderizarPacientes();
-}
-
-function alternarFiltroInativos() {
-    exibiApenasInativos = !exibiApenasInativos;
-    const btnInativos = document.getElementById('btn-filtro-inativos');
-    if (btnInativos) {
-        if (exibiApenasInativos) {
-            btnInativos.className = 'px-3.5 py-1.5 rounded-full text-xs font-bold transition bg-amber-600 text-white shadow-sm';
-        } else {
-            btnInativos.className = 'px-3.5 py-1.5 rounded-full text-xs font-bold transition bg-amber-50 text-amber-800 border border-amber-200';
-        }
-    }
     renderizarPacientes();
 }
 
@@ -317,72 +282,99 @@ function renderizarPacientes() {
     const opcaoCategoria = window._categoriaSelecionada || 'todos';
 
     container.innerHTML = '';
-    let total = db.pacientes.length, clinicos = 0, orto = 0, inativosCount = 0;
+    let total = db.pacientes.length, clinicos = 0, orto = 0;
 
     db.pacientes.forEach(p => {
         p.categoria === 'Ortodontia' ? orto++ : clinicos++;
-        const ult = obterUltimaConsultaPaciente(p.id);
-        if (ult && calcularDiasDesdeUltimaConsulta(ult) > 30) inativosCount++;
     });
 
     const kpiTotal = document.getElementById('kpi-total-pacientes');
     const kpiClinico = document.getElementById('kpi-clinico-pacientes');
     const kpiOrto = document.getElementById('kpi-orto-pacientes');
-    const kpiInativos = document.getElementById('kpi-inativos-pacientes');
 
     if (kpiTotal) kpiTotal.innerText = total;
     if (kpiClinico) kpiClinico.innerText = clinicos;
     if (kpiOrto) kpiOrto.innerText = orto;
-    if (kpiInativos) kpiInativos.innerText = inativosCount;
 
     const listaExibicao = db.pacientes.filter(p => {
-        const bateuBusca = (p.nome || '').toLowerCase().includes(termoBusca) || (p.cpf || '').includes(termoBusca);
+        const bateuBusca = (p.nome || '').toLowerCase().includes(termoBusca) || 
+                           (p.cpf || '').includes(termoBusca) ||
+                           (p.telefone || '').includes(termoBusca);
         if (!bateuBusca) return false;
         if (opcaoCategoria === 'clinico' && p.categoria === 'Ortodontia') return false;
         if (opcaoCategoria === 'orto' && p.categoria !== 'Ortodontia') return false;
-        if (exibiApenasInativos) {
-            const ult = obterUltimaConsultaPaciente(p.id);
-            return ult ? calcularDiasDesdeUltimaConsulta(ult) > 30 : false;
-        }
         return true;
     });
 
     if (listaExibicao.length === 0) {
-        container.innerHTML = '<div class="col-span-full p-6 text-center text-slate-400 bg-white rounded-xl border border-slate-200 shadow-sm"><i class="fa-solid fa-users-slash text-3xl mb-2"></i><p>Nenhum paciente encontrado.</p></div>';
+        container.innerHTML = '<div class="col-span-full p-8 text-center text-slate-400 bg-white rounded-xl border border-slate-200 shadow-sm"><i class="fa-solid fa-users-slash text-4xl mb-3 text-slate-300"></i><p class="font-medium text-sm">Nenhum paciente encontrado.</p></div>';
         return;
     }
 
     listaExibicao.forEach(p => {
-        const badgeClass = p.categoria === 'Ortodontia' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-700';
-        const venc = p.categoria === 'Ortodontia' ? (p.vencimento ? p.vencimento.split('-').reverse().join('/') : 'Não definida') : '-';
-        const ultimaData = obterUltimaConsultaPaciente(p.id);
-        const dias = calcularDiasDesdeUltimaConsulta(ultimaData);
+        const badgeClass = p.categoria === 'Ortodontia' ? 'bg-purple-100 text-purple-700 border-purple-200' : 'bg-blue-100 text-blue-700 border-blue-200';
+        const inicial = (p.nome && p.nome.trim().length > 0) ? p.nome.trim().charAt(0).toUpperCase() : '?';
+        const venc = p.categoria === 'Ortodontia' ? (p.vencimento ? p.vencimento.split('-').reverse().join('/') : 'Não definida') : null;
+        const nascFmt = p.nascimento ? p.nascimento.split('-').reverse().join('/') : null;
         
-        let htmlUltimaConsulta = '-';
-        if (ultimaData) {
-            const dataFmt = ultimaData.split('-').reverse().join('/');
-            htmlUltimaConsulta = dias > 30 ? `<span class="text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">${dataFmt} (${dias}d)</span>` : `<span class="text-slate-700 font-medium">${dataFmt}</span>`;
-        } else {
-            htmlUltimaConsulta = '<span class="text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded border border-rose-100">Sem consultas</span>';
+        const telefoneLimpo = p.telefone ? p.telefone.replace(/\D/g, '') : '';
+        const btnWhatsapp = telefoneLimpo ? `<a href="https://wa.me/55${telefoneLimpo}" target="_blank" class="text-emerald-600 hover:text-emerald-700 font-semibold ml-1.5 inline-flex items-center gap-1 text-xs" title="Conversar no WhatsApp"><i class="fa-brands fa-whatsapp text-sm"></i> WhatsApp</a>` : '';
+
+        let htmlPendencia = '';
+        if (p.possuiPendenciaManual) {
+            htmlPendencia = `<div class="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-lg text-[11px] text-amber-800 font-semibold flex items-center gap-1.5">
+                <i class="fa-solid fa-triangle-exclamation text-amber-600"></i>
+                <span class="truncate">${p.obsFinanceiraManual || 'Pendência financeira'}</span>
+            </div>`;
         }
 
         container.innerHTML += `
-        <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-200 flex flex-col gap-3 relative hover:shadow-md transition">
-            <div class="flex justify-between items-start gap-2">
-                <h4 class="font-bold text-slate-900 text-base truncate pr-2">${p.nome}</h4>
-                <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${badgeClass}">${p.categoria}</span>
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex flex-col justify-between gap-3 hover:shadow-md transition">
+            <div class="space-y-3">
+                <div class="flex items-start justify-between gap-2 border-b border-slate-100 pb-3">
+                    <div class="flex items-center space-x-3 min-w-0">
+                        <div class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 font-extrabold flex items-center justify-center text-base shrink-0 border border-blue-100">
+                            ${inicial}
+                        </div>
+                        <div class="min-w-0">
+                            <h4 class="font-bold text-slate-900 text-base leading-tight truncate">${p.nome}</h4>
+                            <span class="inline-block mt-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${badgeClass}">
+                                ${p.categoria}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="text-xs text-slate-600 space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-slate-400 font-medium"><i class="fa-solid fa-phone w-4 text-center mr-1"></i> Telefone:</span>
+                        <span class="font-semibold text-slate-800">${p.telefone || '-'} ${btnWhatsapp}</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-slate-400 font-medium"><i class="fa-solid fa-id-card w-4 text-center mr-1"></i> CPF:</span>
+                        <span class="font-semibold text-slate-800">${p.cpf || '-'}</span>
+                    </div>
+                    ${nascFmt ? `
+                    <div class="flex items-center justify-between">
+                        <span class="text-slate-400 font-medium"><i class="fa-solid fa-cake-candles w-4 text-center mr-1"></i> Nascimento:</span>
+                        <span class="font-semibold text-slate-800">${nascFmt}</span>
+                    </div>` : ''}
+                    ${venc ? `
+                    <div class="flex items-center justify-between">
+                        <span class="text-slate-400 font-medium"><i class="fa-solid fa-calendar-day w-4 text-center mr-1"></i> Venc. Mensal:</span>
+                        <span class="font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-100">${venc}</span>
+                    </div>` : ''}
+                </div>
+
+                ${htmlPendencia}
             </div>
-            <div class="text-sm text-slate-600 space-y-1.5 flex-grow">
-                <p class="flex items-center gap-2"><i class="fa-solid fa-phone text-slate-400 w-4 text-center"></i> <span class="truncate">${p.telefone || '-'}</span></p>
-                <p class="flex items-center gap-2"><i class="fa-solid fa-calendar-check text-slate-400 w-4 text-center"></i> ${htmlUltimaConsulta}</p>
-                ${p.categoria === 'Ortodontia' ? `<p class="flex items-center gap-2"><i class="fa-solid fa-file-invoice-dollar text-slate-400 w-4 text-center"></i> Vencimento: ${venc}</p>` : ''}
-            </div>
+
             <div class="pt-3 border-t border-slate-100 flex gap-2">
-                <button onclick="abrirModalPaciente('${p.id}')" class="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg text-xs font-semibold transition flex items-center justify-center" title="Editar Cadastrais">
-                    <i class="fa-solid fa-pen-to-square"></i>
+                <button onclick="abrirModalPaciente('${p.id}')" class="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1.5" title="Editar Dados">
+                    <i class="fa-solid fa-pen-to-square"></i> Editar
                 </button>
-                <button onclick="abrirDetalhesPaciente('${p.id}', 'pacientes')" class="px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg text-xs font-semibold transition flex-grow flex justify-center items-center gap-2">
-                    <i class="fa-solid fa-eye"></i> Abrir Ficha
+                <button onclick="abrirDetalhesPaciente('${p.id}', 'pacientes')" class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold transition flex-grow flex justify-center items-center gap-2 shadow-sm">
+                    <i class="fa-solid fa-folder-open"></i> Abrir Ficha
                 </button>
             </div>
         </div>`;
@@ -427,15 +419,17 @@ async function excluirProntuario(prontuarioId, pacienteId) {
 }
 
 // ==========================================
-// FINANCEIRO & CAIXA
+// FINANCEIRO & CAIXA (BUSCA E ESTORNO CORRIGIDOS)
 // ==========================================
 function popularSelectPacientesCaixa() {
     const select = document.getElementById('caixa-financeiro-paciente');
     if (!select) return;
+    const valorAtual = select.value;
     select.innerHTML = '<option value="">-- Selecione o Paciente --</option>';
     db.pacientes.forEach(p => {
         select.innerHTML += `<option value="${p.id}">${p.nome} (${p.categoria})</option>`;
     });
+    if (valorAtual) select.value = valorAtual;
 }
 
 function filtrarPacientesCaixaSelect() {
@@ -443,13 +437,27 @@ function filtrarPacientesCaixaSelect() {
     const select = document.getElementById('caixa-financeiro-paciente');
     if (!inputFiltro || !select) return;
 
-    const termo = inputFiltro.value.toLowerCase();
+    const termo = inputFiltro.value.toLowerCase().trim();
     select.innerHTML = '<option value="">-- Selecione o Paciente --</option>';
     
-    const filtrados = db.pacientes.filter(p => p.nome.toLowerCase().includes(termo));
+    const filtrados = db.pacientes.filter(p => 
+        (p.nome || '').toLowerCase().includes(termo) ||
+        (p.cpf || '').includes(termo) ||
+        (p.telefone || '').includes(termo)
+    );
+
+    if (filtrados.length === 0) {
+        select.innerHTML = '<option value="">Nenhum paciente encontrado</option>';
+        return;
+    }
+
     filtrados.forEach(p => {
         select.innerHTML += `<option value="${p.id}">${p.nome} (${p.categoria})</option>`;
     });
+
+    if (filtrados.length === 1) {
+        select.selectedIndex = 1;
+    }
 }
 
 function salvarLancamentoCaixaAbaFinanceiro(event) {
@@ -498,11 +506,22 @@ function estornarPagamento(pagamentoId, pacienteId) {
     const pagamentoOriginal = db.pagamentos.find(pg => pg.id === pagamentoId);
     if (!pagamentoOriginal) return;
 
-    const corpo = `<p class="text-slate-600">Digite o motivo do estorno do pagamento (Obrigatório):</p>
-                   <input type="text" id="input-motivo-estorno" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Ex: Cobrança indevida, desistência...">`;
-    const botoes = `<button onclick="fecharModalPersonalizado()" class="px-3 py-2 border rounded-lg text-xs">Cancelar</button>
-                    <button onclick="const m = document.getElementById('input-motivo-estorno').value; if(!m) { alert('Motivo obrigatório'); return; } fecharModalPersonalizado(); executarEstorno('${pagamentoId}', '${pacienteId}', '${m}')" class="px-3 py-2 bg-amber-600 text-white rounded-lg text-xs font-semibold">Avançar</button>`;
+    const corpo = `<p class="text-slate-600 mb-2">Digite o motivo do estorno do pagamento (Obrigatório):</p>
+                   <input type="text" id="input-motivo-estorno" class="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-amber-500" placeholder="Ex: Cobrança indevida, desistência...">`;
+    const botoes = `<button onclick="fecharModalPersonalizado()" class="px-3 py-2 border rounded-lg text-xs font-semibold text-slate-600">Cancelar</button>
+                    <button onclick="confirmarEExecutarEstorno('${pagamentoId}', '${pacienteId}')" class="px-3 py-2 bg-amber-600 text-white rounded-lg text-xs font-semibold shadow hover:bg-amber-700">Avançar</button>`;
     mostrarModalPersonalizado("Motivo do Estorno", corpo, botoes);
+}
+
+function confirmarEExecutarEstorno(pagamentoId, pacienteId) {
+    const inputMotivo = document.getElementById('input-motivo-estorno');
+    const motivo = inputMotivo ? inputMotivo.value.trim() : '';
+    if (!motivo) {
+        alertCustomizado("⚠️ O motivo do estorno é obrigatório.");
+        return;
+    }
+    fecharModalPersonalizado();
+    executarEstorno(pagamentoId, pacienteId, motivo);
 }
 
 async function executarEstorno(pagamentoId, pacienteId, motivo) {
