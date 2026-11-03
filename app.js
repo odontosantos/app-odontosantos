@@ -306,6 +306,9 @@ function renderizarPacientes() {
         return true;
     });
 
+    // Ordenação alfabética (A-Z) considerando caracteres e acentos em português
+    listaExibicao.sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { sensitivity: 'base' }));
+
     if (listaExibicao.length === 0) {
         container.innerHTML = '<div class="col-span-full p-8 text-center text-slate-400 bg-white rounded-xl border border-slate-200 shadow-sm"><i class="fa-solid fa-users-slash text-4xl mb-3 text-slate-300"></i><p class="font-medium text-sm">Nenhum paciente encontrado.</p></div>';
         return;
@@ -426,7 +429,13 @@ function popularSelectPacientesCaixa() {
     if (!select) return;
     const valorAtual = select.value;
     select.innerHTML = '<option value="">-- Selecione o Paciente --</option>';
-    db.pacientes.forEach(p => {
+
+    // Ordena uma cópia do array antes de iterar
+    const pacientesOrdenados = [...db.pacientes].sort((a, b) => 
+        (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { sensitivity: 'base' })
+    );
+
+    pacientesOrdenados.forEach(p => {
         select.innerHTML += `<option value="${p.id}">${p.nome} (${p.categoria})</option>`;
     });
     if (valorAtual) select.value = valorAtual;
