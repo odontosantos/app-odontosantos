@@ -1,6 +1,5 @@
 let db = {
     pacientes: [],
-    agendamentos: [],
     prontuarios: [],
     pagamentos: [],
     despesas: []
@@ -9,7 +8,7 @@ let db = {
 const SENHA_EXCLUSAO = '1234';
 
 // ==========================================
-// MODAL DE ALERTAS/PROMPTS PERSONALIZADOS (MOBILE)
+// MODAL DE ALERTAS/PROMPTS PERSONALIZADOS
 // ==========================================
 function mostrarModalPersonalizado(titulo, corpoHtml, botoesHtml) {
     const modal = document.getElementById('modal-customizado');
@@ -47,7 +46,6 @@ function alertCustomizado(mensagem) {
 function carregarDadosLocais() {
     try {
         db.pacientes = JSON.parse(localStorage.getItem('odonto_pacientes')) || [];
-        db.agendamentos = JSON.parse(localStorage.getItem('odonto_agendamentos')) || [];
         db.prontuarios = JSON.parse(localStorage.getItem('odonto_prontuarios')) || [];
         db.pagamentos = JSON.parse(localStorage.getItem('odonto_pagamentos')) || [];
         db.despesas = JSON.parse(localStorage.getItem('odonto_despesas')) || [];
@@ -59,12 +57,10 @@ function carregarDadosLocais() {
 carregarDadosLocais();
 
 let usuarioAtual = null;
-let abaOrigem = 'agenda';
+let abaOrigem = 'pacientes';
 let subAbaAtualPaciente = 'prontuario';
 let pacienteAtualId = null;
 let exibiApenasInativos = false;
-let dataAgendaAtual = obterDataLocalISO();
-let visaoAgendaAtual = 'diaria'; // 'diaria', 'semanal', 'mensal'
 
 function gerarIdUnico() {
     return Date.now().toString() + '-' + Math.floor(Math.random() * 10000);
@@ -75,7 +71,6 @@ function gerarIdUnico() {
 // ==========================================
 async function persistirDB() {
     localStorage.setItem('odonto_pacientes', JSON.stringify(db.pacientes));
-    localStorage.setItem('odonto_agendamentos', JSON.stringify(db.agendamentos));
     localStorage.setItem('odonto_prontuarios', JSON.stringify(db.prontuarios));
     localStorage.setItem('odonto_pagamentos', JSON.stringify(db.pagamentos));
     localStorage.setItem('odonto_despesas', JSON.stringify(db.despesas));
@@ -230,9 +225,9 @@ function configurarNavbar() {
         badge.className = 'inline-block px-2 py-0.5 text-[10px] sm:text-xs font-medium bg-blue-100 text-blue-800 rounded-full mt-0.5';
     }
 
-    navTabs.innerHTML = '<button onclick="mudarAba(\'agenda\')" id="btn-tab-agenda" class="px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold border-b-2 border-blue-500 text-white flex items-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-calendar-days"></i> Agenda</button>' +
-        '<button onclick="mudarAba(\'pacientes\')" id="btn-tab-pacientes" class="px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-white flex items-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-users"></i> Pacientes</button>' +
-        '<button onclick="mudarAba(\'financeiro\')" id="btn-tab-financeiro" class="px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-white flex items-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-file-invoice-dollar"></i> Financeiro</button>';
+    navTabs.innerHTML = 
+        '<button onclick="mudarAba(\'pacientes\')" id="btn-tab-pacientes" class="px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold border-b-2 border-blue-500 text-white flex items-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-users"></i> Pacientes</button>' +
+        '<button onclick="mudarAba(\'financeiro\')" id="btn-tab-financeiro" class="px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-white flex items-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-file-invoice-dollar"></i> Financeiro / Caixa</button>';
 }
 
 function mudarAba(nomeAba) {
@@ -251,330 +246,13 @@ function mudarAba(nomeAba) {
         ativoBtn.classList.add('border-blue-500', 'text-white');
     }
 
-    const fab = document.getElementById('fab-agenda-mobile');
-    if (fab) {
-        fab.classList.toggle('hidden', nomeAba !== 'agenda');
-    }
-
-    if (nomeAba === 'agenda') renderizarAgendaCards();
     if (nomeAba === 'pacientes') renderizarPacientes();
     if (nomeAba === 'financeiro') renderizarFinanceiro();
 }
 
 function inicializarSistema() {
-    popularSelectPacientes();
-    mudarAba('agenda');
-    inicializarCalendario();
-}
-
-// ==========================================
-// AGENDA & MINI CALENDÁRIO
-// ==========================================
-function inicializarCalendario() {
-    renderizarAgendaCards();
-}
-
-function atualizarCalendario() {
-    renderizarAgendaCards();
-}
-
-function mudarDiaAgenda(dias) {
-    const data = new Date(dataAgendaAtual + 'T12:00:00');
-    data.setDate(data.getDate() + dias);
-    dataAgendaAtual = data.toISOString().split('T')[0];
-    renderizarAgendaCards();
-}
-
-function alterarDataAgendaManual(event) {
-    if (event.target.value) {
-        dataAgendaAtual = event.target.value;
-        renderizarAgendaCards();
-    }
-}
-
-function definirVisaoAgenda(visao) {
-    visaoAgendaAtual = visao;
-    ['diaria', 'semanal', 'mensal'].forEach(v => {
-        const btn = document.getElementById('btn-visao-' + v);
-        if (btn) {
-            if (v === visao) {
-                btn.className = 'px-3 py-1.5 rounded-lg text-xs font-bold transition bg-blue-600 text-white shadow-sm';
-            } else {
-                btn.className = 'px-3 py-1.5 rounded-lg text-xs font-bold transition bg-slate-100 text-slate-700 hover:bg-slate-200';
-            }
-        }
-    });
-    renderizarAgendaCards();
-}
-
-function alternarMiniCalendario() {
-    const cont = document.getElementById('mini-calendario-container');
-    if (cont) {
-        cont.classList.toggle('hidden');
-        if (!cont.classList.contains('hidden')) {
-            renderizarMiniCalendario();
-        }
-    }
-}
-
-function renderizarMiniCalendario() {
-    const cont = document.getElementById('mini-calendario-conteudo');
-    if (!cont) return;
-
-    const dataAtualObj = new Date(dataAgendaAtual + 'T12:00:00');
-    const ano = dataAtualObj.getFullYear();
-    const mes = dataAtualObj.getMonth();
-
-    const primeiroDiaMes = new Date(ano, mes, 1);
-    const ultimoDiaMes = new Date(ano, mes + 1, 0);
-    const diasNoMes = ultimoDiaMes.getDate();
-    const diaSemanaInicio = primeiroDiaMes.getDay();
-
-    const mesesNomes = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-    
-    let html = `<div class="flex justify-between items-center mb-2">
-                    <span class="font-bold text-xs text-slate-800">${mesesNomes[mes]} de ${ano}</span>
-                    <div class="flex gap-1">
-                        <button onclick="mudarMesMini(-1)" class="p-1 hover:bg-slate-200 rounded text-xs"><i class="fa-solid fa-chevron-left"></i></button>
-                        <button onclick="mudarMesMini(1)" class="p-1 hover:bg-slate-200 rounded text-xs"><i class="fa-solid fa-chevron-right"></i></button>
-                    </div>
-                </div>
-                <div class="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-slate-400 mb-1">
-                    <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
-                </div>
-                <div class="grid grid-cols-7 gap-1 text-center text-xs">`;
-
-    for (let i = 0; i < diaSemanaInicio; i++) {
-        html += `<div></div>`;
-    }
-
-    for (let dia = 1; dia <= diasNoMes; dia++) {
-        const diaStr = String(dia).padStart(2, '0');
-        const mesStr = String(mes + 1).padStart(2, '0');
-        const dataIsoStr = `${ano}-${mesStr}-${diaStr}`;
-
-        const temAgendamentos = db.agendamentos.some(a => a.data === dataIsoStr);
-        const ehHoje = dataIsoStr === obterDataLocalISO();
-        const ehSelecionado = dataIsoStr === dataAgendaAtual;
-
-        let estilo = 'hover:bg-slate-100 text-slate-700';
-        if (ehSelecionado) estilo = 'bg-blue-600 text-white font-bold shadow-sm';
-        else if (ehHoje) estilo = 'border border-blue-500 text-blue-600 font-bold';
-
-        html += `<div onclick="selecionarDataMini('${dataIsoStr}')" class="relative p-1 rounded-lg cursor-pointer transition ${estilo} flex flex-col items-center justify-center">
-                    <span>${dia}</span>
-                    ${temAgendamentos && !ehSelecionado ? '<span class="absolute bottom-0.5 w-1 h-1 bg-blue-500 rounded-full"></span>' : ''}
-                 </div>`;
-    }
-
-    html += `</div>`;
-    cont.innerHTML = html;
-}
-
-function mudarMesMini(direcao) {
-    const d = new Date(dataAgendaAtual + 'T12:00:00');
-    d.setMonth(d.getMonth() + direcao);
-    dataAgendaAtual = d.toISOString().split('T')[0];
-    renderizarMiniCalendario();
-    renderizarAgendaCards();
-}
-
-function selecionarDataMini(dataIso) {
-    dataAgendaAtual = dataIso;
-    renderizarAgendaCards();
-}
-
-function gerarSlotsExpediente() {
-    const slots = [];
-    for (let h = 8; h <= 21; h++) {
-        slots.push(`${String(h).padStart(2, '0')}:00`);
-        if (h < 21) {
-            slots.push(`${String(h).padStart(2, '0')}:30`);
-        }
-    }
-    return slots;
-}
-
-function renderizarAgendaCards() {
-    const container = document.getElementById('agenda-cards-container');
-    const displayData = document.getElementById('data-agenda-display');
-    
-    if (!container || !displayData) return;
-
-    
-
-    const dataObj = new Date(dataAgendaAtual + 'T12:00:00');
-    const diasSemana = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-    const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-    
-    const hojeIso = obterDataLocalISO();
-    if (dataAgendaAtual === hojeIso) {
-        displayData.innerText = `Hoje, ${String(dataObj.getDate()).padStart(2,'0')} de ${meses[dataObj.getMonth()]} (${diasSemana[dataObj.getDay()]})`;
-    } else {
-        displayData.innerText = `${diasSemana[dataObj.getDay()]}, ${String(dataObj.getDate()).padStart(2,'0')} de ${meses[dataObj.getMonth()]}`;
-    }
-
-    if (!document.getElementById('mini-calendario-container').classList.contains('hidden')) {
-        renderizarMiniCalendario();
-    }
-    container.innerHTML = '';
-
-    if (visaoAgendaAtual === 'semanal') {
-        renderizarVisaoSemanal(container);
-        return;
-    }
-    if (visaoAgendaAtual === 'mensal') {
-        renderizarVisaoMensal(container);
-        return;
-    }
-
-    // Visão Diária
-    const eventosDia = db.agendamentos.filter(a => a.data === dataAgendaAtual);
-    const slots = gerarSlotsExpediente();
-
-    let htmlGrade = `<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-3 space-y-2 max-h-[68vh] overflow-y-auto pr-1">`;
-
-    slots.forEach(horarioSlot => {
-        const eventoNoSlot = eventosDia.find(ev => ev.horario === horarioSlot);
-
-        if (eventoNoSlot) {
-            const isLembrete = eventoNoSlot.isLembrete;
-            let titulo = isLembrete ? '📌 ' + eventoNoSlot.titulo : (db.pacientes.find(p => p.id === eventoNoSlot.pacienteId)?.nome || 'Paciente Não Encontrado');
-            let subtitulo = isLembrete ? (eventoNoSlot.obs || 'Bloqueio') : (eventoNoSlot.tipo + (eventoNoSlot.obs ? ' • ' + eventoNoSlot.obs : ''));
-            let corFundo = eventoNoSlot.cor || '#039be5';
-            
-            let statusHtml = '';
-            if(!isLembrete) {
-                const statusAtual = eventoNoSlot.status || 'agendado';
-                let corStatus = 'bg-blue-100 text-blue-700';
-                if (statusAtual === 'atendido') { corStatus = 'bg-emerald-100 text-emerald-700'; corFundo = '#10b981'; }
-                if (statusAtual === 'faltou') { corStatus = 'bg-rose-100 text-rose-700'; corFundo = '#f43f5e'; }
-                if (statusAtual === 'remarcou') { corStatus = 'bg-slate-200 text-slate-700'; corFundo = '#94a3b8'; }
-                statusHtml = `<span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${corStatus}">${statusAtual}</span>`;
-            }
-
-            htmlGrade += `
-            <div class="relative bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden flex cursor-pointer hover:shadow-md transition active:scale-[0.98]" onclick="abrirModalDetalhesAgendamento('${eventoNoSlot.id}')">
-                <div class="absolute left-0 top-0 bottom-0 w-2" style="background-color: ${corFundo};"></div>
-                <div class="p-2.5 pl-5 flex-grow flex items-center justify-between gap-2">
-                    <div>
-                        <div class="flex items-center gap-2 mb-0.5">
-                            <span class="font-extrabold text-slate-900 text-xs"><i class="fa-regular fa-clock mr-1 text-slate-400"></i> ${eventoNoSlot.horario} - ${eventoNoSlot.horaFim || '?'}</span>
-                            ${statusHtml}
-                        </div>
-                        <h4 class="font-bold text-slate-800 text-sm leading-tight">${titulo}</h4>
-                        <p class="text-[11px] text-slate-500 truncate max-w-xs sm:max-w-md">${subtitulo}</p>
-                    </div>
-                    <span class="text-xs text-slate-400"><i class="fa-solid fa-chevron-right"></i></span>
-                </div>
-            </div>`;
-        } else {
-            htmlGrade += `
-            <div onclick="abrirModalAgendamento('${dataAgendaAtual}', '${horarioSlot}')" class="group border border-dashed border-slate-300 hover:border-blue-400 bg-slate-50/50 hover:bg-blue-50/30 rounded-lg p-2.5 flex items-center justify-between cursor-pointer transition">
-                <span class="font-bold text-slate-400 group-hover:text-blue-600 text-xs">${horarioSlot}</span>
-                <span class="text-[11px] font-semibold text-slate-400 group-hover:text-blue-600 flex items-center gap-1">
-                    <i class="fa-solid fa-plus text-[10px]"></i> Livre (Agendar)
-                </span>
-            </div>`;
-        }
-    });
-
-    htmlGrade += `</div>`;
-    container.innerHTML = htmlGrade;
-}
-
-function renderizarVisaoSemanal(container) {
-    const dataInicio = new Date(dataAgendaAtual + 'T12:00:00');
-    const diaSemana = dataInicio.getDay();
-    dataInicio.setDate(dataInicio.getDate() - diaSemana); // Domingo
-
-    let html = `<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3 max-h-[68vh] overflow-y-auto">
-                    <h4 class="font-bold text-slate-800 text-sm border-b pb-2">Visão Semanal (A partir de ${dataInicio.toLocaleDateString('pt-BR')})</h4>
-                    <div class="grid grid-cols-1 sm:grid-cols-7 gap-2">`;
-
-    for (let i = 0; i < 7; i++) {
-        const d = new Date(dataInicio);
-        d.setDate(d.getDate() + i);
-        const iso = d.toISOString().split('T')[0];
-        const evs = db.agendamentos.filter(a => a.data === iso);
-        const diasNomes = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-
-        // Ao clicar no dia na visão semanal, abre a visão diária daquele dia (igual visão mensal)
-        html += `<div class="bg-slate-50 border rounded-lg p-2.5 space-y-2 cursor-pointer hover:border-blue-400 transition" onclick="dataAgendaAtual='${iso}'; definirVisaoAgenda('diaria');">
-                    <div class="text-center border-b pb-1">
-                        <span class="text-[10px] font-bold text-slate-400 uppercase block">${diasNomes[i]}</span>
-                        <span class="font-extrabold text-xs text-slate-800">${d.getDate()}/${d.getMonth()+1}</span>
-                    </div>
-                    <div class="space-y-1.5 min-h-[120px]">`;
-
-        if (evs.length === 0) {
-            html += `<p class="text-[10px] text-slate-400 italic text-center pt-4">Livre</p>`;
-        } else {
-            evs.sort((a,b) => a.horario.localeCompare(b.horario));
-            evs.forEach(ev => {
-                const titulo = ev.isLembrete ? '📌 ' + ev.titulo : (db.pacientes.find(p => p.id === ev.pacienteId)?.nome || 'Paciente');
-                html += `<div onclick="event.stopPropagation(); dataAgendaAtual='${iso}'; definirVisaoAgenda('diaria');" class="p-1.5 bg-white border rounded text-[11px] shadow-sm hover:border-blue-400">
-                            <span class="font-bold text-blue-900 block">${ev.horario}</span>
-                            <span class="text-slate-700 truncate block">${titulo}</span>
-                         </div>`;
-            });
-        }
-
-        html += `</div></div>`;
-    }
-
-    html += `</div></div>`;
-    container.innerHTML = html;
-}
-
-function renderizarVisaoMensal(container) {
-    const dataObj = new Date(dataAgendaAtual + 'T12:00:00');
-    const ano = dataObj.getFullYear();
-    const mes = dataObj.getMonth();
-
-    const primeiroDia = new Date(ano, mes, 1);
-    const ultimoDia = new Date(ano, mes + 1, 0);
-    const diasNoMes = ultimoDia.getDate();
-    const diaInicio = primeiroDia.getDay();
-
-    const mesesNomes = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-
-    let html = `<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3 max-h-[68vh] overflow-y-auto">
-                    <div class="flex justify-between items-center border-b pb-2">
-                        <h4 class="font-bold text-slate-800 text-sm">Visão Mensal: ${mesesNomes[mes]} de ${ano}</h4>
-                    </div>
-                    <div class="grid grid-cols-7 gap-1 text-center text-xs font-bold text-slate-400">
-                        <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
-                    </div>
-                    <div class="grid grid-cols-7 gap-1">`;
-
-    for (let i = 0; i < diaInicio; i++) {
-        html += `<div></div>`;
-    }
-
-    for (let dia = 1; dia <= diasNoMes; dia++) {
-        const diaStr = String(dia).padStart(2, '0');
-        const mesStr = String(mes + 1).padStart(2, '0');
-        const iso = `${ano}-${mesStr}-${diaStr}`;
-        const evs = db.agendamentos.filter(a => a.data === iso);
-
-        html += `<div onclick="dataAgendaAtual='${iso}'; definirVisaoAgenda('diaria');" class="border rounded-lg p-2 min-h-[75px] bg-slate-50 cursor-pointer hover:bg-blue-50/50 transition">
-                    <span class="font-bold text-xs text-slate-700">${dia}</span>
-                    <div class="mt-1 space-y-0.5">`;
-
-        evs.slice(0, 2).forEach(ev => {
-            const titulo = ev.isLembrete ? '📌 Lembrete' : (db.pacientes.find(p => p.id === ev.pacienteId)?.nome || 'Paciente');
-            html += `<div class="text-[9px] bg-blue-100 text-blue-800 px-1 py-0.5 rounded truncate font-medium">${ev.horario} ${titulo}</div>`;
-        });
-        if (evs.length > 2) {
-            html += `<div class="text-[9px] text-slate-500 font-bold">+${evs.length - 2} mais</div>`;
-        }
-
-        html += `</div></div>`;
-    }
-
-    html += `</div></div>`;
-    container.innerHTML = html;
+    popularSelectPacientesCaixa();
+    mudarAba('pacientes');
 }
 
 // ==========================================
@@ -582,7 +260,6 @@ function renderizarVisaoMensal(container) {
 // ==========================================
 function obterUltimaConsultaPaciente(pacienteId) {
     const datas = [];
-    db.agendamentos.filter(a => a.pacienteId === pacienteId && a.data).forEach(a => datas.push(a.data));
     db.prontuarios.filter(pr => pr.pacienteId === pacienteId && pr.data).forEach(pr => datas.push(pr.data));
 
     if (datas.length === 0) return null;
@@ -724,7 +401,6 @@ async function excluirPaciente(pacienteId) {
     window._confirmaExcluirPac = (conf) => {
         if (conf) {
             db.pacientes = db.pacientes.filter(p => p.id !== pacienteId);
-            db.agendamentos = db.agendamentos.filter(a => a.pacienteId !== pacienteId);
             db.prontuarios = db.prontuarios.filter(pr => pr.pacienteId !== pacienteId);
 
             db.pagamentos.forEach(pg => {
@@ -735,7 +411,6 @@ async function excluirPaciente(pacienteId) {
             });
 
             persistirDB();
-            atualizarCalendario();
             renderizarPacientes();
             alertCustomizado('Paciente excluído com sucesso!');
             voltarParaOrigem();
@@ -754,6 +429,71 @@ async function excluirProntuario(prontuarioId, pacienteId) {
 // ==========================================
 // FINANCEIRO & CAIXA
 // ==========================================
+function popularSelectPacientesCaixa() {
+    const select = document.getElementById('caixa-financeiro-paciente');
+    if (!select) return;
+    select.innerHTML = '<option value="">-- Selecione o Paciente --</option>';
+    db.pacientes.forEach(p => {
+        select.innerHTML += `<option value="${p.id}">${p.nome} (${p.categoria})</option>`;
+    });
+}
+
+function filtrarPacientesCaixaSelect() {
+    const inputFiltro = document.getElementById('filtro-caixa-paciente-busca');
+    const select = document.getElementById('caixa-financeiro-paciente');
+    if (!inputFiltro || !select) return;
+
+    const termo = inputFiltro.value.toLowerCase();
+    select.innerHTML = '<option value="">-- Selecione o Paciente --</option>';
+    
+    const filtrados = db.pacientes.filter(p => p.nome.toLowerCase().includes(termo));
+    filtrados.forEach(p => {
+        select.innerHTML += `<option value="${p.id}">${p.nome} (${p.categoria})</option>`;
+    });
+}
+
+function salvarLancamentoCaixaAbaFinanceiro(event) {
+    event.preventDefault();
+    const pacienteId = document.getElementById('caixa-financeiro-paciente').value;
+    const desc = document.getElementById('caixa-fin-desc').value.trim();
+    const valor = parseFloat(document.getElementById('caixa-fin-valor').value) || 0;
+    const forma = document.getElementById('caixa-fin-forma').value;
+    const obs = document.getElementById('caixa-fin-obs').value.trim();
+    const temPendencia = document.getElementById('caixa-fin-marca-pendencia').checked;
+
+    if (!pacienteId) { alertCustomizado('Selecione um paciente.'); return; }
+    if (!desc) { alertCustomizado('Informe a descrição ou procedimento.'); return; }
+
+    const paciente = db.pacientes.find(p => p.id === pacienteId);
+    if (paciente) {
+        paciente.possuiPendenciaManual = temPendencia;
+        if (obs) paciente.obsFinanceiraManual = obs;
+    }
+
+    if (valor > 0) {
+        let descFinal = desc;
+        if (obs) descFinal += ' (Obs: ' + obs + ')';
+        
+        db.pagamentos.push({
+            id: gerarIdUnico(),
+            pacienteId: pacienteId,
+            data: obterDataLocalISO(),
+            valor: valor,
+            forma: forma,
+            descricao: descFinal
+        });
+    }
+
+    persistirDB();
+    renderizarFinanceiro();
+    alertCustomizado('Lançamento de Caixa registrado com sucesso!');
+    
+    document.getElementById('caixa-fin-desc').value = '';
+    document.getElementById('caixa-fin-valor').value = '';
+    document.getElementById('caixa-fin-obs').value = '';
+    document.getElementById('caixa-fin-marca-pendencia').checked = false;
+}
+
 function estornarPagamento(pagamentoId, pacienteId) {
     const pagamentoOriginal = db.pagamentos.find(pg => pg.id === pagamentoId);
     if (!pagamentoOriginal) return;
@@ -993,6 +733,8 @@ function alternarFiltroPersonalizadoFinanceiro() {
 }
 
 function renderizarFinanceiro() {
+    popularSelectPacientesCaixa();
+
     const listaPendencias = document.getElementById('lista-pendencias-financeiras');
     const listaFluxo = document.getElementById('lista-pagamentos-realizados');
     const filtroPeriodo = document.getElementById('filtro-periodo-financeiro')?.value || 'mes';
@@ -1253,7 +995,6 @@ function importarBackup(event) {
                 if (confirm('⚠️ Deseja realmente restaurar este backup?')) {
                     db = conteudo;
                     persistirDB();
-                    atualizarCalendario();
                     renderizarPacientes();
                     alertCustomizado('Backup restaurado com sucesso!');
                 }
@@ -1319,71 +1060,6 @@ function toggleVencimentoOrto() {
     else grupoOrto.classList.add('hidden');
 }
 
-function popularSelectPacientes() {
-    const select = document.getElementById('agendamento-paciente');
-    if (!select) return;
-    select.innerHTML = '';
-    db.pacientes.forEach(p => {
-        select.innerHTML += '<option value="' + p.id + '">' + p.nome + ' (' + p.categoria + ')</option>';
-    });
-}
-
-function toggleFormCadastroRapido() {
-    const bloco = document.getElementById('container-cadastro-rapido');
-    const busca = document.getElementById('container-busca-paciente');
-    const btn = document.getElementById('btn-toggle-cadastro-rapido');
-    if (!bloco || !busca || !btn) return;
-
-    if (bloco.classList.contains('hidden')) {
-        bloco.classList.remove('hidden');
-        busca.classList.add('hidden');
-        btn.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i> Buscar';
-        document.getElementById('rapido-nome').value = '';
-        document.getElementById('rapido-telefone').value = '';
-    } else {
-        bloco.classList.add('hidden');
-        busca.classList.remove('hidden');
-        btn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Novo Rápido';
-    }
-}
-
-function cadastrarPacienteRapido() {
-    const nome = document.getElementById('rapido-nome').value.trim().toUpperCase();
-    const telefone = document.getElementById('rapido-telefone').value.trim();
-    const categoria = document.getElementById('rapido-categoria').value;
-
-    if (!nome) { alertCustomizado('Informe o nome.'); return; }
-
-    const novoId = gerarIdUnico();
-    db.pacientes.push({ id: novoId, nome: nome, telefone: telefone, nascimento: '', cpf: '', categoria: categoria, vencimento: '', planejamentoEtapas: [] });
-    persistirDB();
-
-    popularSelectPacientes();
-    renderizarPacientes();
-    const selectAg = document.getElementById('agendamento-paciente');
-    if (selectAg) selectAg.value = novoId;
-    toggleFormCadastroRapido();
-    alertCustomizado('Paciente cadastrado!');
-}
-
-function filtrarPacientesSelect() {
-    const inputFiltro = document.getElementById('filtro-paciente-busca');
-    const select = document.getElementById('agendamento-paciente');
-    if (!inputFiltro || !select) return;
-
-    const termo = inputFiltro.value.toLowerCase();
-    select.innerHTML = '';
-    
-    const filtrados = db.pacientes.filter(p => p.nome.toLowerCase().includes(termo));
-    if (filtrados.length === 0) {
-        select.innerHTML = '<option value="">Nenhum paciente encontrado</option>';
-        return;
-    }
-    filtrados.forEach(p => {
-        select.innerHTML += '<option value="' + p.id + '">' + p.nome + ' (' + p.categoria + ')</option>';
-    });
-}
-
 function salvarPaciente(event) {
     event.preventDefault();
     const categoria = document.getElementById('paciente-categoria').value;
@@ -1414,7 +1090,6 @@ function salvarPaciente(event) {
     persistirDB();
     fecharModal('modal-paciente');
     renderizarPacientes();
-    atualizarCalendario();
 
     if (editId && !document.getElementById('tab-detalhes-paciente').classList.contains('hidden')) {
         abrirDetalhesPaciente(editId, abaOrigem);
@@ -1428,7 +1103,6 @@ function abrirDetalhesPaciente(pacienteId, origem) {
     const paciente = db.pacientes.find(p => p.id === pacienteId);
     if (!paciente) return;
 
-    const agendamentosPaciente = db.agendamentos.filter(ag => !ag.isLembrete && ag.pacienteId === pacienteId);
     const prontuariosPaciente = db.prontuarios.filter(pr => pr.pacienteId === pacienteId);
     const pagamentosPaciente = db.pagamentos.filter(pg => pg.pacienteId === pacienteId);
     
@@ -1517,17 +1191,6 @@ function abrirDetalhesPaciente(pacienteId, origem) {
             '</div>' +
             '<button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg text-xs shadow transition">Salvar Lançamento</button></form></div>';
 
-    let htmlAgendamentos = agendamentosPaciente.length === 0 ? '<p class="text-sm text-slate-400 p-2">Nenhum agendamento registrado.</p>' : '';
-    agendamentosPaciente.forEach(ag => {
-        const obsHtml = ag.obs ? '<p class="text-xs text-slate-500 mt-0.5">Obs: ' + ag.obs + '</p>' : '';
-        htmlAgendamentos += '<div class="p-3 bg-white rounded-lg border border-slate-200 text-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 shadow-sm">' +
-            '<div><p class="font-semibold text-slate-800">' + ag.tipo + ' • ' + (ag.data ? ag.data.split('-').reverse().join('/') : '') + ' • ' + ag.horario + ' às ' + (ag.horaFim || '?') + '</p>' + obsHtml + '</div>' +
-            '<div class="flex gap-2 self-end sm:self-auto">' +
-                '<button onclick="abrirModalEditarAgendamento(\'' + ag.id + '\')" class="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded text-xs font-semibold transition flex items-center gap-1"><i class="fa-solid fa-pen-to-square"></i> Editar</button>' +
-                '<button onclick="excluirAgendamento(\'' + ag.id + '\', \'' + paciente.id + '\')" class="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded text-xs font-semibold transition flex items-center gap-1"><i class="fa-solid fa-trash"></i> Excluir</button>' +
-            '</div></div>';
-    });
-
     let htmlPagamentosTimeline = '';
     if (pagamentosPaciente.length === 0) {
         htmlPagamentosTimeline = '<p class="text-sm text-slate-400 p-2">Nenhum pagamento registrado.</p>';
@@ -1587,7 +1250,6 @@ function abrirDetalhesPaciente(pacienteId, origem) {
                     '<button onclick="abrirSubAbaPaciente(\'prontuario\')" id="btn-subtab-prontuario" class="subtab-btn pb-2 border-b-2 border-blue-600 text-blue-600 flex items-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-notes-medical"></i> Prontuário</button>' +
                     '<button onclick="abrirSubAbaPaciente(\'plano\')" id="btn-subtab-plano" class="subtab-btn pb-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 flex items-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-clipboard-list"></i> Plano de Tratamento</button>' +
                     '<button onclick="abrirSubAbaPaciente(\'caixa\')" id="btn-subtab-caixa" class="subtab-btn pb-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 flex items-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-cash-register"></i> Caixa & Pagamentos</button>' +
-                    '<button onclick="abrirSubAbaPaciente(\'agendamentos\')" id="btn-subtab-agendamentos" class="subtab-btn pb-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 flex items-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-calendar-check"></i> Agendamentos</button>' +
                 '</div>' +
                 '<div id="subtab-content-prontuario" class="subtab-content space-y-4">' +
                     htmlFormProntuario +
@@ -1596,7 +1258,6 @@ function abrirDetalhesPaciente(pacienteId, origem) {
                 '</div>' +
                 '<div id="subtab-content-plano" class="subtab-content hidden space-y-3">' + htmlPlanoTratamento + '</div>' +
                 '<div id="subtab-content-caixa" class="subtab-content hidden space-y-3 max-h-[60vh] overflow-y-auto pr-1">' + htmlFormCaixa + '<div class="space-y-2">' + htmlPagamentosTimeline + '</div></div>' +
-                '<div id="subtab-content-agendamentos" class="subtab-content hidden space-y-3 max-h-[60vh] overflow-y-auto pr-1">' + htmlAgendamentos + '</div>' +
             '</div></div></div>';
 
     mudarAba('detalhes-paciente');
@@ -1604,453 +1265,11 @@ function abrirDetalhesPaciente(pacienteId, origem) {
     abrirSubAbaPaciente(subAbaAtualPaciente);
 }
 
-// Funções de apoio para Agendamento e Modais
-function atualizarHoraFimPadrao() {
-    const inputInicio = document.getElementById('agendamento-horario');
-    const inputFim = document.getElementById('agendamento-hora-fim');
-    if (!inputInicio || !inputFim) return;
-
-    const horaInicio = inputInicio.value;
-    if (horaInicio) {
-        const partes = horaInicio.split(':');
-        let h = parseInt(partes[0], 10);
-        let m = parseInt(partes[1], 10) + 30;
-        h += Math.floor(m / 60);
-        m = m % 60;
-        inputFim.value = String(h % 24).padStart(2, '0') + ':' + String(m).padStart(2, '0');
-    }
-}
-
-function atualizarHoraFimLembretePadrao() {
-    const inputInicio = document.getElementById('lembrete-horario');
-    const inputFim = document.getElementById('lembrete-hora-fim');
-    if (!inputInicio || !inputFim) return;
-
-    const horaInicio = inputInicio.value;
-    if (horaInicio) {
-        const partes = horaInicio.split(':');
-        let h = parseInt(partes[0], 10);
-        let m = parseInt(partes[1], 10) + 30;
-        h += Math.floor(m / 60);
-        m = m % 60;
-        inputFim.value = String(h % 24).padStart(2, '0') + ':' + String(m).padStart(2, '0');
-    }
-}
-
-function selecionarCorAgenda(corHex, elementoBtn) {
-    const inputCor = document.getElementById('agendamento-cor');
-    if (inputCor) inputCor.value = corHex;
-
-    document.querySelectorAll('.cor-agenda-btn').forEach(btn => {
-        btn.innerHTML = '';
-        btn.classList.remove('ring-2', 'ring-offset-2', 'ring-slate-400');
-    });
-    if (elementoBtn) {
-        elementoBtn.innerHTML = '<i class="fa-solid fa-check text-white text-[10px]"></i>';
-        elementoBtn.classList.add('ring-2', 'ring-offset-2', 'ring-slate-400');
-    }
-}
-
-function selecionarCorLembrete(corHex, elementoBtn) {
-    const inputCor = document.getElementById('lembrete-cor');
-    if (inputCor) inputCor.value = corHex;
-
-    document.querySelectorAll('.cor-lembrete-btn').forEach(btn => {
-        btn.innerHTML = '';
-        btn.classList.remove('ring-2', 'ring-offset-2', 'ring-slate-400');
-    });
-    if (elementoBtn) {
-        elementoBtn.innerHTML = '<i class="fa-solid fa-check text-white text-[10px]"></i>';
-        elementoBtn.classList.add('ring-2', 'ring-offset-2', 'ring-slate-400');
-    }
-}
-
-async function excluirAgendamento(id, pacienteId) {
-    if (!(await verificarSenhaExclusao())) return;
-    const corpo = `<p class="text-slate-600">Deseja realmente excluir este item da agenda?</p>`;
-    const botoes = `<button onclick="fecharModalPersonalizado(); window._confirmaExcluirAg(false)" class="px-3 py-2 border rounded-lg text-xs">Cancelar</button>
-                    <button onclick="fecharModalPersonalizado(); window._confirmaExcluirAg(true)" class="px-3 py-2 bg-rose-600 text-white rounded-lg text-xs font-semibold">Excluir</button>`;
-    window._confirmaExcluirAg = (conf) => {
-        if (conf) {
-            db.agendamentos = db.agendamentos.filter(ag => ag.id !== id);
-            persistirDB();
-            atualizarCalendario();
-            if (pacienteId && !document.getElementById('tab-detalhes-paciente').classList.contains('hidden')) {
-                abrirDetalhesPaciente(pacienteId, abaOrigem);
-            }
-            alertCustomizado('Item excluído com sucesso!');
-        }
-    };
-    mostrarModalPersonalizado("Confirmar Exclusão", corpo, botoes);
-}
-
-function abrirModalDetalhesAgendamento(agendamentoId) {
-    const ag = db.agendamentos.find(item => item.id === agendamentoId);
-    if (!ag) return;
-
-    // Tratamento específico para BLOQUEIO DE AGENDA REAL
-    if (ag.isBloqueio) {
-        document.getElementById('detalhe-ag-paciente').innerText = '🔒 ' + ag.titulo;
-        document.getElementById('detalhe-ag-categoria').innerText = 'Bloqueio de Horário';
-        document.getElementById('detalhe-ag-datahora').innerText = (ag.data ? ag.data.split('-').reverse().join('/') : '') + ' • ' + ag.horario + ' às ' + (ag.horaFim || '?');
-        document.getElementById('detalhe-ag-tipo').innerText = 'Bloqueio de Agenda';
-        document.getElementById('detalhe-ag-obs').innerText = ag.obs || 'Nenhuma observação registrada.';
-
-        let divStatus = document.getElementById('container-status-agendamento');
-        if (divStatus) divStatus.innerHTML = ''; 
-
-        document.getElementById('btn-excluir-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); excluirAgendamento(ag.id, null); };
-        document.getElementById('btn-editar-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); abrirModalEditarBloqueio(ag.id); };
-        document.getElementById('btn-ver-ficha-ag-modal').parentElement.style.display = 'none'; 
-
-        document.getElementById('modal-detalhes-agendamento').classList.remove('hidden');
-        document.getElementById('modal-detalhes-agendamento').classList.add('flex');
-        return;
-    }
-
-    // Tratamento específico para LEMBRETE COMUM
-    if (ag.isLembrete) {
-        document.getElementById('detalhe-ag-paciente').innerText = '📌 ' + ag.titulo;
-        document.getElementById('detalhe-ag-categoria').innerText = 'Lembrete / Aviso';
-        document.getElementById('detalhe-ag-datahora').innerText = (ag.data ? ag.data.split('-').reverse().join('/') : '') + ' • ' + ag.horario;
-        document.getElementById('detalhe-ag-tipo').innerText = 'Lembrete';
-        document.getElementById('detalhe-ag-obs').innerText = ag.obs || 'Nenhuma observação registrada.';
-
-        let divStatus = document.getElementById('container-status-agendamento');
-        if (divStatus) divStatus.innerHTML = ''; 
-
-        document.getElementById('btn-excluir-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); excluirAgendamento(ag.id, null); };
-        document.getElementById('btn-editar-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); abrirModalEditarLembrete(ag.id); };
-        document.getElementById('btn-ver-ficha-ag-modal').parentElement.style.display = 'none'; 
-
-        document.getElementById('modal-detalhes-agendamento').classList.remove('hidden');
-        document.getElementById('modal-detalhes-agendamento').classList.add('flex');
-        return;
-    }
-
-    document.getElementById('btn-ver-ficha-ag-modal').parentElement.style.display = 'flex';
-    const paciente = db.pacientes.find(p => p.id === ag.pacienteId) || { nome: 'PACIENTE NÃO ENCONTRADO', categoria: 'Geral' };
-    
-    document.getElementById('detalhe-ag-paciente').innerText = paciente.nome;
-    document.getElementById('detalhe-ag-categoria').innerText = paciente.categoria;
-    document.getElementById('detalhe-ag-datahora').innerText = (ag.data ? ag.data.split('-').reverse().join('/') : '') + ' • ' + ag.horario + ' às ' + (ag.horaFim || '?');
-    document.getElementById('detalhe-ag-tipo').innerText = ag.tipo;
-    document.getElementById('detalhe-ag-obs').innerText = ag.obs || 'Nenhuma observação registrada.';
-
-    let divStatus = document.getElementById('container-status-agendamento');
-    if (!divStatus) {
-        divStatus = document.createElement('div');
-        divStatus.id = 'container-status-agendamento';
-        divStatus.className = 'grid grid-cols-3 gap-2 pt-4 mt-2 border-t border-slate-100';
-        const gridAcoes = document.getElementById('btn-excluir-ag-modal').parentElement;
-        gridAcoes.parentNode.insertBefore(divStatus, gridAcoes);
-    }
-    const statusAtual = ag.status || 'agendado';
-    divStatus.innerHTML = `
-        <button onclick="alterarStatusAgendamento('${ag.id}', 'atendido')" class="py-2 ${statusAtual === 'atendido' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'} font-semibold rounded-lg text-xs transition"><i class="fa-solid fa-check"></i> Atendido</button>
-        <button onclick="alterarStatusAgendamento('${ag.id}', 'faltou')" class="py-2 ${statusAtual === 'faltou' ? 'bg-rose-600 text-white' : 'bg-rose-50 hover:bg-rose-100 text-rose-700'} font-semibold rounded-lg text-xs transition"><i class="fa-solid fa-user-xmark"></i> Faltou</button>
-        <button onclick="alterarStatusAgendamento('${ag.id}', 'remarcou')" class="py-2 ${statusAtual === 'remarcou' ? 'bg-slate-600 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'} font-semibold rounded-lg text-xs transition"><i class="fa-solid fa-rotate"></i> Remarcou</button>
-    `;
-
-    document.getElementById('btn-excluir-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); excluirAgendamento(ag.id, ag.pacienteId); };
-    document.getElementById('btn-editar-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); abrirModalEditarAgendamento(ag.id); };
-    document.getElementById('btn-ver-ficha-ag-modal').onclick = function() { fecharModal('modal-detalhes-agendamento'); abrirDetalhesPaciente(ag.pacienteId, 'agenda'); };
-
-    document.getElementById('modal-detalhes-agendamento').classList.remove('hidden');
-    document.getElementById('modal-detalhes-agendamento').classList.add('flex');
-}
-
-function alterarStatusAgendamento(id, status) {
-    const ag = db.agendamentos.find(a => a.id === id);
-    if (ag && !ag.isLembrete) {
-        if (ag.status === status) ag.status = 'agendado';
-        else ag.status = status;
-        
-        persistirDB();
-        atualizarCalendario();
-        abrirModalDetalhesAgendamento(id);
-    }
-}
-
-function abrirModalAgendamento(dataPreenchida, horaPreenchida) {
-    popularSelectPacientes();
-    document.getElementById('titulo-modal-agendamento').innerText = 'Novo Agendamento';
-    document.getElementById('agendamento-edit-id').value = '';
-    const filtroBusca = document.getElementById('filtro-paciente-busca');
-    if (filtroBusca) filtroBusca.value = '';
-    document.getElementById('agendamento-obs').value = '';
-
-    const btnPadrao = document.querySelector('.cor-agenda-btn[style*="#039be5"]');
-    selecionarCorAgenda('#039be5', btnPadrao);
-
-    const containerCadRapido = document.getElementById('container-cadastro-rapido');
-    const containerBuscaPac = document.getElementById('container-busca-paciente');
-    const btnToggleCad = document.getElementById('btn-toggle-cadastro-rapido');
-
-    if (containerCadRapido) containerCadRapido.classList.add('hidden');
-    if (containerBuscaPac) containerBuscaPac.classList.remove('hidden');
-    if (btnToggleCad) btnToggleCad.innerHTML = '<i class="fa-solid fa-user-plus"></i> Novo Rápido';
-    
-    document.getElementById('agendamento-data').value = dataPreenchida || dataAgendaAtual || obterDataLocalISO();
-    document.getElementById('agendamento-horario').value = horaPreenchida || '09:00';
-    
-    atualizarHoraFimPadrao();
-
-    const modalAg = document.getElementById('modal-agendamento');
-    modalAg.classList.remove('hidden');
-    modalAg.classList.add('flex');
-}
-
-function abrirModalEditarAgendamento(agendamentoId) {
-    const ag = db.agendamentos.find(a => a.id === agendamentoId);
-    if (!ag || ag.isLembrete) return;
-
-    popularSelectPacientes();
-    document.getElementById('titulo-modal-agendamento').innerText = 'Editar Agendamento';
-    document.getElementById('agendamento-edit-id').value = ag.id;
-    document.getElementById('agendamento-paciente').value = ag.pacienteId;
-    document.getElementById('agendamento-data').value = ag.data;
-    document.getElementById('agendamento-horario').value = ag.horario;
-    
-    if (ag.horaFim) {
-        document.getElementById('agendamento-hora-fim').value = ag.horaFim;
-    } else {
-        document.getElementById('agendamento-horario').value = ag.horario;
-        atualizarHoraFimPadrao();
-    }
-
-    document.getElementById('agendamento-tipo').value = ag.tipo;
-    document.getElementById('agendamento-obs').value = ag.obs || '';
-
-    const corSalva = ag.cor || '#039be5';
-    const btnCorSalva = document.querySelector(`.cor-agenda-btn[style*="${corSalva}"]`) || document.querySelector('.cor-agenda-btn[style*="#039be5"]');
-    selecionarCorAgenda(corSalva, btnCorSalva);
-
-    const containerCadRapido = document.getElementById('container-cadastro-rapido');
-    const containerBuscaPac = document.getElementById('container-busca-paciente');
-    if (containerCadRapido) containerCadRapido.classList.add('hidden');
-    if (containerBuscaPac) containerBuscaPac.classList.remove('hidden');
-
-    const modalAg = document.getElementById('modal-agendamento');
-    modalAg.classList.remove('hidden');
-    modalAg.classList.add('flex');
-}
-
-function salvarAgendamento(event) {
-    event.preventDefault();
-    const pacienteId = document.getElementById('agendamento-paciente').value;
-    const editId = document.getElementById('agendamento-edit-id').value;
-
-    if (!pacienteId) { alertCustomizado('Selecione um paciente.'); return; }
-
-    const dataAg = document.getElementById('agendamento-data').value;
-    const horaAg = document.getElementById('agendamento-horario').value;
-    const horaFimAg = document.getElementById('agendamento-hora-fim').value;
-
-    if (horaFimAg <= horaAg) {
-        alertCustomizado('A Hora Final deve ser posterior à Hora Inicial.');
-        return;
-    }
-
-    const conflito = db.agendamentos.find(a => a.data === dataAg && a.horario === horaAg && a.id !== editId);
-    if (conflito) {
-        const nomeConflito = conflito.isLembrete ? conflito.titulo : (db.pacientes.find(p => p.id === conflito.pacienteId)?.nome || 'Outro evento');
-        if (!confirm(`⚠️ Já existe agendamento/bloqueio para "${nomeConflito}" nesse horário. Agendar mesmo assim?`)) return;
-    }
-
-    const inputCor = document.getElementById('agendamento-cor');
-    const dadosAgendamento = {
-        isLembrete: false,
-        pacienteId: pacienteId,
-        data: dataAg,
-        horario: horaAg,
-        horaFim: horaFimAg,
-        tipo: document.getElementById('agendamento-tipo').value,
-        obs: document.getElementById('agendamento-obs').value.trim(),
-        cor: inputCor ? inputCor.value : '#039be5' 
-    };
-
-    if (editId) {
-        const index = db.agendamentos.findIndex(a => a.id === editId);
-        if (index !== -1) {
-            const statusAntigo = db.agendamentos[index].status;
-            db.agendamentos[index] = { ...db.agendamentos[index], ...dadosAgendamento, status: statusAntigo };
-        }
-    } else {
-        db.agendamentos.push({ id: gerarIdUnico(), status: 'agendado', ...dadosAgendamento });
-    }
-
-    persistirDB();
-    fecharModal('modal-agendamento');
-    atualizarCalendario();
-    if (!document.getElementById('tab-detalhes-paciente').classList.contains('hidden')) { 
-        abrirDetalhesPaciente(pacienteId, abaOrigem); 
-    }
-}
-
-// ==========================================
-// FUNÇÕES DE BLOQUEIO DE AGENDA
-// ==========================================
-function atualizarHoraFimBloqueioPadrao() {
-    const inputInicio = document.getElementById('bloqueio-horario');
-    const inputFim = document.getElementById('bloqueio-hora-fim');
-    if (!inputInicio || !inputFim) return;
-
-    const horaInicio = inputInicio.value;
-    if (horaInicio) {
-        const partes = horaInicio.split(':');
-        let h = parseInt(partes[0], 10);
-        let m = parseInt(partes[1], 10) + 30;
-        h += Math.floor(m / 60);
-        m = m % 60;
-        inputFim.value = String(h % 24).padStart(2, '0') + ':' + String(m).padStart(2, '0');
-    }
-}
-
-function abrirModalBloqueio(dataPreenchida, horaPreenchida) {
-    document.getElementById('titulo-modal-bloqueio').innerText = 'Novo Bloqueio de Horário';
-    document.getElementById('bloqueio-edit-id').value = '';
-    document.getElementById('bloqueio-titulo').value = '';
-    document.getElementById('bloqueio-obs').value = '';
-
-    document.getElementById('bloqueio-data').value = dataPreenchida || dataAgendaAtual || obterDataLocalISO();
-    document.getElementById('bloqueio-horario').value = horaPreenchida || '12:00';
-    atualizarHoraFimBloqueioPadrao();
-
-    const modal = document.getElementById('modal-bloqueio');
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
-}
-
-function abrirModalEditarBloqueio(bloqueioId) {
-    const ag = db.agendamentos.find(a => a.id === bloqueioId);
-    if (!ag || !ag.isBloqueio) return;
-
-    document.getElementById('titulo-modal-bloqueio').innerText = 'Editar Bloqueio de Horário';
-    document.getElementById('bloqueio-edit-id').value = ag.id;
-    document.getElementById('bloqueio-titulo').value = ag.titulo;
-    document.getElementById('bloqueio-data').value = ag.data;
-    document.getElementById('bloqueio-horario').value = ag.horario;
-    document.getElementById('bloqueio-hora-fim').value = ag.horaFim || '';
-    document.getElementById('bloqueio-obs').value = ag.obs || '';
-
-    const modal = document.getElementById('modal-bloqueio');
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
-}
-
-function salvarBloqueio(event) {
-    event.preventDefault();
-    const editId = document.getElementById('bloqueio-edit-id').value;
-    const titulo = document.getElementById('bloqueio-titulo').value.trim();
-    const dataBloqueio = document.getElementById('bloqueio-data').value;
-    const horaInicio = document.getElementById('bloqueio-horario').value;
-    const horaFim = document.getElementById('bloqueio-hora-fim').value;
-
-    if (!titulo) { alertCustomizado('Informe o motivo do bloqueio.'); return; }
-    if (horaFim <= horaInicio) { alertCustomizado('A Hora Final deve ser posterior à Hora Inicial.'); return; }
-
-    const dadosBloqueio = {
-        isBloqueio: true,
-        isLembrete: false,
-        titulo: titulo,
-        data: dataBloqueio,
-        horario: horaInicio,
-        horaFim: horaFim,
-        obs: document.getElementById('bloqueio-obs').value.trim(),
-        cor: '#d50000' // Vermelho forte indicando bloqueio real
-    };
-
-    if (editId) {
-        const index = db.agendamentos.findIndex(a => a.id === editId);
-        if (index !== -1) {
-            db.agendamentos[index] = { ...db.agendamentos[index], ...dadosBloqueio };
-        }
-    } else {
-        db.agendamentos.push({ id: gerarIdUnico(), ...dadosBloqueio });
-    }
-
-    persistirDB();
-    fecharModal('modal-bloqueio');
-    atualizarCalendario();
-    alertCustomizado('Bloqueio de agenda salvo com sucesso!');
-}
-
-
-// ==========================================
-// FUNÇÕES DE LEMBRETE SIMPLES
-// ==========================================
-function abrirModalLembrete(dataPreenchida, horaPreenchida) {
-    document.getElementById('titulo-modal-lembrete').innerText = 'Novo Lembrete / Aviso';
-    document.getElementById('lembrete-edit-id').value = '';
-    document.getElementById('lembrete-titulo').value = '';
-    document.getElementById('lembrete-obs').value = '';
-
-    document.getElementById('lembrete-data').value = dataPreenchida || dataAgendaAtual || obterDataLocalISO();
-    document.getElementById('lembrete-horario').value = horaPreenchida || '09:00';
-
-    const modal = document.getElementById('modal-lembrete');
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
-}
-
-function abrirModalEditarLembrete(lembreteId) {
-    const ag = db.agendamentos.find(a => a.id === lembreteId);
-    if (!ag || !ag.isLembrete) return;
-
-    document.getElementById('titulo-modal-lembrete').innerText = 'Editar Lembrete / Aviso';
-    document.getElementById('lembrete-edit-id').value = ag.id;
-    document.getElementById('lembrete-titulo').value = ag.titulo;
-    document.getElementById('lembrete-data').value = ag.data;
-    document.getElementById('lembrete-horario').value = ag.horario;
-    document.getElementById('lembrete-obs').value = ag.obs || '';
-
-    const modal = document.getElementById('modal-lembrete');
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
-}
-
-function salvarLembrete(event) {
-    event.preventDefault();
-    const editId = document.getElementById('lembrete-edit-id').value;
-    const titulo = document.getElementById('lembrete-titulo').value.trim();
-    const dataLembrete = document.getElementById('lembrete-data').value;
-    const horario = document.getElementById('lembrete-horario').value;
-
-    if (!titulo) { alertCustomizado('Informe o título do lembrete.'); return; }
-
-    const dadosLembrete = {
-        isBloqueio: false,
-        isLembrete: true,
-        titulo: titulo,
-        data: dataLembrete,
-        horario: horario,
-        horaFim: '',
-        obs: document.getElementById('lembrete-obs').value.trim(),
-        cor: '#616161' // Cinza/Grafite para lembrete simples
-    };
-
-    if (editId) {
-        const index = db.agendamentos.findIndex(a => a.id === editId);
-        if (index !== -1) {
-            db.agendamentos[index] = { ...db.agendamentos[index], ...dadosLembrete };
-        }
-    } else {
-        db.agendamentos.push({ id: gerarIdUnico(), ...dadosLembrete });
-    }
-
-    persistirDB();
-    fecharModal('modal-lembrete');
-    atualizarCalendario();
-    alertCustomizado('Lembrete salvo com sucesso!');
-}
-
 // ==========================================
 // SINCRONIZAÇÃO EM TEMPO REAL CORRIGIDA
 // ==========================================
 function ativarSincronizacaoEmTempoReal() {
     if (window.usaFirebase && window.firebaseDb) {
-        // Obtém o método onSnapshot dinamicamente do Firebase (compat) ou do escopo global
         const onSnapshotFunc = window.onSnapshot || (window.firebase && window.firebase.firestore && window.firebase.firestore.onSnapshot);
         const docFunc = window.doc || (window.firebase && window.firebase.firestore && window.firebase.firestore.doc);
 
@@ -2060,21 +1279,14 @@ function ativarSincronizacaoEmTempoReal() {
             onSnapshotFunc(docRef, (docSnap) => {
                 if (docSnap.exists()) {
                     const dadosNuvem = docSnap.data();
-                    
-                    // Atualiza o objeto local com os dados mais recentes da nuvem
                     db = Object.assign(db, dadosNuvem);
                     
-                    // Salva no localStorage para manter consistência offline
                     localStorage.setItem('odonto_pacientes', JSON.stringify(db.pacientes));
-                    localStorage.setItem('odonto_agendamentos', JSON.stringify(db.agendamentos));
                     localStorage.setItem('odonto_prontuarios', JSON.stringify(db.prontuarios));
                     localStorage.setItem('odonto_pagamentos', JSON.stringify(db.pagamentos));
                     localStorage.setItem('odonto_despesas', JSON.stringify(db.despesas));
 
-                    // Atualiza a tela ativa no momento (Agenda, Pacientes ou Financeiro)
-                    if (!document.getElementById('tab-agenda').classList.contains('hidden')) {
-                        renderizarAgendaCards();
-                    } else if (!document.getElementById('tab-pacientes').classList.contains('hidden')) {
+                    if (!document.getElementById('tab-pacientes').classList.contains('hidden')) {
                         renderizarPacientes();
                     } else if (!document.getElementById('tab-financeiro').classList.contains('hidden')) {
                         renderizarFinanceiro();
