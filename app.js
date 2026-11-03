@@ -1371,7 +1371,9 @@ function gerarPdfPlanoTratamento(pacienteId) {
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #4f46e5; padding-bottom: 15px; margin-bottom: 20px;">
             <div>
                 <h1 style="margin: 0; font-size: 22px; color: #1e293b;">Plano de Tratamento Odontológico</h1>
-                <p style="margin: 5px 0 0 0; font-size: 13px; color: #64748b;">Orçamento e Planejamento Clínico</p>
+                <p style="margin: 5px 0 0 0; font-size: 13px; color: #64748b;">Dr. Mikeias Santos - Cirurgião Dentista & Ortodontista</p>
+                <p style="margin: 5px 0 0 0; font-size: 13px; color: #64748b;">R. Assis Dória, 61 - Centro - Marituba</p>
+                <p style="margin: 5px 0 0 0; font-size: 13px; color: #64748b;">Tel. (91) 98219-9272/984903292</p>
             </div>
             <div style="text-align: right; font-size: 12px; color: #64748b;">
                 <p style="margin: 0;">Data de emissão: ${new Date().toLocaleDateString('pt-BR')}</p>
