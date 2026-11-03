@@ -135,7 +135,7 @@ function formatarMesAno(dataStr) {
 }
 
 // ==========================================
-// AUTENTICAÇÃO E PERSISTÊNCIA DE SESSÃO (CORRIGIDO)
+// AUTENTICAÇÃO E PERSISTÊNCIA DE SESSÃO
 // ==========================================
 async function fazerLoginFirebase(event) {
     event.preventDefault();
@@ -148,27 +148,8 @@ async function fazerLoginFirebase(event) {
     }
 
     try {
-        // Tratamento seguro da persistência
-        try {
-            if (window.firebase && window.firebase.auth && window.firebase.auth.Auth && window.firebase.auth.Auth.Persistence) {
-                await window.firebaseAuth.setPersistence(window.firebase.auth.Auth.Persistence.LOCAL);
-            } else if (window.setPersistence && window.browserLocalPersistence) {
-                await window.setPersistence(window.firebaseAuth, window.browserLocalPersistence);
-            }
-        } catch (e) {
-            console.warn("Aviso na persistência:", e);
-        }
-
-        // Execução do login compatível com SDK Modular ou Compat
-        let userCredential;
-        if (typeof window.signInWithEmailAndPassword === 'function') {
-            userCredential = await window.signInWithEmailAndPassword(window.firebaseAuth, email, senha);
-        } else if (window.firebaseAuth && typeof window.firebaseAuth.signInWithEmailAndPassword === 'function') {
-            userCredential = await window.firebaseAuth.signInWithEmailAndPassword(email, senha);
-        } else {
-            throw new Error("Método de autenticação não encontrado.");
-        }
-
+        await window.firebaseAuth.setPersistence(window.firebase.auth.Auth.Persistence.LOCAL);
+        const userCredential = await window.signInWithEmailAndPassword(window.firebaseAuth, email, senha);
         processarUsuarioLogado(userCredential.user);
     } catch (error) {
         let mensagemErro = error.message;
@@ -182,36 +163,20 @@ async function fazerLoginFirebase(event) {
 window.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
         if (window.usaFirebase && window.firebaseAuth) {
-            if (typeof window.onAuthStateChanged === 'function') {
-                window.onAuthStateChanged(window.firebaseAuth, async (user) => {
-                    if (user) processarUsuarioLogado(user);
-                });
-            } else if (typeof window.firebaseAuth.onAuthStateChanged === 'function') {
-                window.firebaseAuth.onAuthStateChanged(async (user) => {
-                    if (user) processarUsuarioLogado(user);
-                });
-            }
+            window.firebaseAuth.onAuthStateChanged(async (user) => {
+                if (user) {
+                    processarUsuarioLogado(user);
+                }
+            });
         }
     }, 1000);
 });
 
 async function processarUsuarioLogado(user) {
     try {
-        let perfilEncontrado = 'secretaria';
-
-        if (window.getDoc && window.doc && window.firebaseDb) {
-            const docRef = window.doc(window.firebaseDb, "usuarios", user.email);
-            const userDoc = await window.getDoc(docRef);
-            if (userDoc.exists()) {
-                perfilEncontrado = userDoc.data().perfil || 'secretaria';
-            }
-        } else if (window.firebaseDb && typeof window.firebaseDb.collection === 'function') {
-            const userDoc = await window.firebaseDb.collection("usuarios").doc(user.email).get();
-            if (userDoc.exists) {
-                perfilEncontrado = userDoc.data().perfil || 'secretaria';
-            }
-        }
-
+        const docRef = window.doc(window.firebaseDb, "usuarios", user.email);
+        const userDoc = await window.getDoc(docRef);
+        let perfilEncontrado = userDoc.exists() ? userDoc.data().perfil : 'secretaria';
         usuarioAtual = { perfil: perfilEncontrado, email: user.email };
         iniciarSessaoSistema();
     } catch (e) {
@@ -219,29 +184,74 @@ async function processarUsuarioLogado(user) {
         iniciarSessaoSistema();
     }
 }
+
 async function iniciarSessaoSistema() {
     const telaLogin = document.getElementById('login-screen');
-    if (telaLogin) {
-        telaLogin.classList.remove('flex');
-        telaLogin.classList.add('hidden');
-    }
+    if (telaLogin) telaLogin.classList.replace('flex', 'hidden');
 
     await sincronizarDadosNuvem();
     ativarSincronizacaoEmTempoReal();
-
-    const mainHeader = document.getElementById('main-header');
-    const mainNav = document.getElementById('main-nav');
-    const mainContent = document.getElementById('main-content');
-
-    if (mainHeader) mainHeader.classList.remove('hidden');
-    if (mainNav) mainNav.classList.remove('hidden');
-    if (mainContent) {
-        mainContent.classList.remove('hidden');
-        mainContent.classList.add('flex-grow');
-    }
+    document.getElementById('main-header').classList.remove('hidden');
+    document.getElementById('main-nav').classList.remove('hidden');
+    document.getElementById('main-content').classList.remove('hidden');
+    document.getElementById('main-content').classList.add('flex-grow');
     
     configurarNavbar();
     inicializarSistema();
+}
+
+function logout() {
+    if (window.usaFirebase && window.signOut) {
+        window.signOut(window.firebaseAuth);
+    }
+    usuarioAtual = null;
+    document.getElementById('login-screen').classList.replace('hidden', 'flex');
+    document.getElementById('main-header').classList.add('hidden');
+    document.getElementById('main-nav').classList.add('hidden');
+    document.getElementById('main-content').classList.add('hidden');
+}
+
+function configurarNavbar() {
+    const navTabs = document.getElementById('nav-tabs');
+    const badge = document.getElementById('header-user-badge');
+    if (!navTabs || !badge) return;
+
+    if (usuarioAtual && usuarioAtual.perfil === 'secretaria') {
+        badge.innerText = 'Perfil: Secretaria / Recepção';
+        badge.className = 'inline-block px-2 py-0.5 text-[10px] sm:text-xs font-medium bg-emerald-100 text-emerald-800 rounded-full mt-0.5';
+    } else {
+        badge.innerText = 'Perfil: Dentista (Clínico)';
+        badge.className = 'inline-block px-2 py-0.5 text-[10px] sm:text-xs font-medium bg-blue-100 text-blue-800 rounded-full mt-0.5';
+    }
+
+    navTabs.innerHTML = 
+        '<button onclick="mudarAba(\'pacientes\')" id="btn-tab-pacientes" class="px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold border-b-2 border-blue-500 text-white flex items-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-users"></i> Pacientes</button>' +
+        '<button onclick="mudarAba(\'financeiro\')" id="btn-tab-financeiro" class="px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-white flex items-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-file-invoice-dollar"></i> Financeiro / Caixa</button>';
+}
+
+function mudarAba(nomeAba) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+    document.querySelectorAll('#nav-tabs button').forEach(btn => {
+        btn.classList.remove('border-blue-500', 'text-white');
+        btn.classList.add('border-transparent', 'text-slate-400');
+    });
+
+    const abaAlvo = document.getElementById('tab-' + nomeAba);
+    if (abaAlvo) abaAlvo.classList.remove('hidden');
+
+    const ativoBtn = document.getElementById('btn-tab-' + nomeAba);
+    if (ativoBtn) {
+        ativoBtn.classList.remove('border-transparent', 'text-slate-400');
+        ativoBtn.classList.add('border-blue-500', 'text-white');
+    }
+
+    if (nomeAba === 'pacientes') renderizarPacientes();
+    if (nomeAba === 'financeiro') renderizarFinanceiro();
+}
+
+function inicializarSistema() {
+    popularSelectPacientesCaixa();
+    mudarAba('pacientes');
 }
 
 // ==========================================
@@ -268,12 +278,6 @@ function renderizarPacientes() {
     const container = document.getElementById('lista-pacientes-container');
     if (!container) return;
     
-    // Garante que o array de pacientes exista antes de manipular
-    if (!db || !Array.isArray(db.pacientes)) {
-        if (!db) db = {};
-        db.pacientes = [];
-    }
-
     const termoBusca = (document.getElementById('busca-pacientes-tabela')?.value || '').toLowerCase().trim();
     const opcaoCategoria = window._categoriaSelecionada || 'todos';
 
@@ -292,7 +296,6 @@ function renderizarPacientes() {
     if (kpiClinico) kpiClinico.innerText = clinicos;
     if (kpiOrto) kpiOrto.innerText = orto;
 
-    // Filtra os pacientes conforme busca e categoria
     const listaExibicao = db.pacientes.filter(p => {
         const bateuBusca = (p.nome || '').toLowerCase().includes(termoBusca) || 
                            (p.cpf || '').includes(termoBusca) ||
@@ -302,9 +305,6 @@ function renderizarPacientes() {
         if (opcaoCategoria === 'orto' && p.categoria !== 'Ortodontia') return false;
         return true;
     });
-
-    // Ordenação alfabética (A-Z)
-    listaExibicao.sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { sensitivity: 'base' }));
 
     if (listaExibicao.length === 0) {
         container.innerHTML = '<div class="col-span-full p-8 text-center text-slate-400 bg-white rounded-xl border border-slate-200 shadow-sm"><i class="fa-solid fa-users-slash text-4xl mb-3 text-slate-300"></i><p class="font-medium text-sm">Nenhum paciente encontrado.</p></div>';
