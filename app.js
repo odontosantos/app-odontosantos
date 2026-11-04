@@ -1346,22 +1346,6 @@ async function gerarPdfPlanoTratamento(pacienteId) {
 
     const totalPlano = etapas.reduce((acc, curr) => acc + (parseFloat(curr.valor) || 0), 0);
 
-    // 1. Obtém a rolagem vertical atual da página para alinhar o elemento com o ecrã visível
-    const topoAtual = window.scrollY || window.pageYOffset || 0;
-
-    // 2. Elemento temporário posicionado exatamente na área visível da janela
-    const elTemp = document.createElement('div');
-    elTemp.style.position = 'absolute';
-    elTemp.style.top = topoAtual + 'px';
-    elTemp.style.left = '0px';
-    elTemp.style.width = '750px';
-    elTemp.style.backgroundColor = '#ffffff';
-    elTemp.style.padding = '30px';
-    elTemp.style.fontFamily = 'Arial, sans-serif';
-    elTemp.style.color = '#334155';
-    elTemp.style.boxSizing = 'border-box';
-    elTemp.style.zIndex = '99999';
-
     const linhasTabela = etapas.map((et, index) => `
         <tr style="border-bottom: 1px solid #e2e8f0;">
             <td style="padding: 10px 6px; font-weight: bold; text-align: center; color: #4f46e5; vertical-align: middle;">#${index + 1}</td>
@@ -1376,52 +1360,72 @@ async function gerarPdfPlanoTratamento(pacienteId) {
         </tr>
     `).join('');
 
-    elTemp.innerHTML = `
-        <div style="display: block; border-bottom: 2px solid #4f46e5; padding-bottom: 12px; margin-bottom: 16px;">
-            <table style="width: 100%; table-layout: fixed; border-collapse: collapse;">
-                <tr>
-                    <td style="width: 70%; text-align: left; vertical-align: top;">
-                        <h1 style="margin: 0; font-size: 20px; color: #1e293b; font-weight: bold;">Plano de Tratamento Odontológico</h1>
-                        <p style="margin: 3px 0 0 0; font-size: 11px; color: #64748b;">Dr. Mikeias Santos - Cirurgião Dentista & Ortodontista</p>
-                        <p style="margin: 2px 0 0 0; font-size: 10px; color: #64748b;">R. Assis Dória, 61 Centro - Marituba | Tel: (91) 98219-9272 / 98490-3292</p>
-                    </td>
-                    <td style="width: 30%; text-align: right; vertical-align: top; font-size: 10px; color: #64748b;">
-                        <p style="margin: 0;"><strong>Emissão:</strong> ${new Date().toLocaleDateString('pt-BR')}</p>
-                    </td>
-                </tr>
+    const conteudoHtml = `
+        <div style="width: 750px; background-color: #ffffff; padding: 30px; font-family: Arial, sans-serif; color: #334155; box-sizing: border-box; margin: 0;">
+            <div style="display: block; border-bottom: 2px solid #4f46e5; padding-bottom: 12px; margin-bottom: 16px;">
+                <table style="width: 100%; table-layout: fixed; border-collapse: collapse;">
+                    <tr>
+                        <td style="width: 70%; text-align: left; vertical-align: top;">
+                            <h1 style="margin: 0; font-size: 20px; color: #1e293b; font-weight: bold;">Plano de Tratamento Odontológico</h1>
+                            <p style="margin: 3px 0 0 0; font-size: 11px; color: #64748b;">Dr. Mikeias Santos - Cirurgião Dentista & Ortodontista</p>
+                            <p style="margin: 2px 0 0 0; font-size: 10px; color: #64748b;">R. Assis Dória, 61 Centro - Marituba | Tel: (91) 98219-9272 / 98490-3292</p>
+                        </td>
+                        <td style="width: 30%; text-align: right; vertical-align: top; font-size: 10px; color: #64748b;">
+                            <p style="margin: 0;"><strong>Emissão:</strong> ${new Date().toLocaleDateString('pt-BR')}</p>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-bottom: 16px; font-size: 12px; line-height: 1.5;">
+                <p style="margin: 0 0 4px 0;"><strong>Paciente:</strong> ${paciente.nome}</p>
+                <p style="margin: 0 0 4px 0;"><strong>Telefone:</strong> ${paciente.telefone || '-'}</p>
+                <p style="margin: 0;"><strong>Categoria:</strong> ${paciente.categoria}</p>
+            </div>
+
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; margin-bottom: 16px;">
+                <thead>
+                    <tr style="background-color: #4f46e5; color: white;">
+                        <th style="width: 10%; padding: 8px 4px; text-align: center;">Etapa</th>
+                        <th style="width: 18%; padding: 8px 4px; text-align: center;">Dente/Região</th>
+                        <th style="width: 42%; padding: 8px 4px; text-align: left;">Procedimento</th>
+                        <th style="width: 15%; padding: 8px 4px; text-align: right;">Valor</th>
+                        <th style="width: 15%; padding: 8px 4px; text-align: center;">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${linhasTabela}
+                </tbody>
             </table>
-        </div>
 
-        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-bottom: 16px; font-size: 12px; line-height: 1.5;">
-            <p style="margin: 0 0 4px 0;"><strong>Paciente:</strong> ${paciente.nome}</p>
-            <p style="margin: 0 0 4px 0;"><strong>Telefone:</strong> ${paciente.telefone || '-'}</p>
-            <p style="margin: 0;"><strong>Categoria:</strong> ${paciente.categoria}</p>
-        </div>
-
-        <table style="width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; margin-bottom: 16px;">
-            <thead>
-                <tr style="background-color: #4f46e5; color: white;">
-                    <th style="width: 10%; padding: 8px 4px; text-align: center;">Etapa</th>
-                    <th style="width: 18%; padding: 8px 4px; text-align: center;">Dente/Região</th>
-                    <th style="width: 42%; padding: 8px 4px; text-align: left;">Procedimento</th>
-                    <th style="width: 15%; padding: 8px 4px; text-align: right;">Valor</th>
-                    <th style="width: 15%; padding: 8px 4px; text-align: center;">Status</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${linhasTabela}
-            </tbody>
-        </table>
-
-        <div style="text-align: right; font-size: 14px; font-weight: bold; color: #1e293b; margin-top: 16px; padding-top: 8px; border-top: 2px solid #e2e8f0;">
-            Valor Total Previsto: R$ ${totalPlano.toFixed(2)}
+            <div style="text-align: right; font-size: 14px; font-weight: bold; color: #1e293b; margin-top: 16px; padding-top: 8px; border-top: 2px solid #e2e8f0;">
+                Valor Total Previsto: R$ ${totalPlano.toFixed(2)}
+            </div>
         </div>
     `;
 
-    document.body.appendChild(elTemp);
+    // 1. Criação do iframe isolado para evitar conflitos de CSS com a aplicação
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '100vw'; // Fora da tela para não piscar
+    iframe.style.bottom = '100vh'; // Totalmente escondido
+    iframe.style.width = '800px'; 
+    iframe.style.height = '1000px'; 
+    iframe.style.border = 'none';
+    iframe.style.zIndex = '-9999';
 
-    // Pausa técnica para garantir a renderização das tabelas no DOM
-    await new Promise(resolve => setTimeout(resolve, 300));
+    document.body.appendChild(iframe);
+
+    // 2. Escrita do HTML diretamente dentro do documento isolado do iframe
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>PDF</title></head><body style="margin:0; padding:0; background:#fff;">' + conteudoHtml + '</body></html>');
+    doc.close();
+
+    // 3. Pausa para o iframe renderizar as tabelas
+    await new Promise(resolve => setTimeout(resolve, 400));
+
+    const elementToPrint = doc.body.firstElementChild;
 
     const opcoes = {
         margin: [10, 10, 10, 10],
@@ -1430,21 +1434,21 @@ async function gerarPdfPlanoTratamento(pacienteId) {
         html2canvas: { 
             scale: 2,
             useCORS: true,
-            scrollY: topoAtual,
-            scrollX: 0,
-            windowWidth: 800
+            logging: false, // Desliga logs desnecessários no console
+            width: 750, // Força a captura da largura que desenhamos
+            windowWidth: 800 // O viewport virtual
         },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
 
     try {
-        await html2pdf().set(opcoes).from(elTemp).save();
+        await html2pdf().set(opcoes).from(elementToPrint).save();
     } catch (err) {
         console.error("Erro ao gerar PDF:", err);
         alertCustomizado("❌ Erro ao gerar o PDF. Tente novamente.");
     } finally {
-        if (document.body.contains(elTemp)) {
-            document.body.removeChild(elTemp);
+        if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe);
         }
     }
 }
