@@ -1346,27 +1346,26 @@ async function gerarPdfPlanoTratamento(pacienteId) {
 
     const totalPlano = etapas.reduce((acc, curr) => acc + (parseFloat(curr.valor) || 0), 0);
 
-    // 1. Cria o elemento temporário
+    // 1. Elemento temporário com estrutura rígida para mobile
     const elTemp = document.createElement('div');
-    
-    // Configurações essenciais para renderização perfeita no MOBILE
-    elTemp.style.position = 'absolute';
+    elTemp.style.position = 'fixed';
     elTemp.style.left = '-9999px';
     elTemp.style.top = '0';
-    elTemp.style.width = '790px'; // Força largura de folha A4
+    elTemp.style.width = '700px';
     elTemp.style.backgroundColor = '#ffffff';
-    elTemp.style.padding = '30px';
+    elTemp.style.padding = '25px';
     elTemp.style.fontFamily = 'Arial, sans-serif';
     elTemp.style.color = '#334155';
+    elTemp.style.boxSizing = 'border-box';
 
     const linhasTabela = etapas.map((et, index) => `
         <tr style="border-bottom: 1px solid #e2e8f0;">
-            <td style="padding: 10px; font-weight: bold; text-align: center; color: #4f46e5;">#${index + 1}</td>
-            <td style="padding: 10px; text-align: center; font-weight: bold;">${et.dente || 'Geral'}</td>
-            <td style="padding: 10px;">${et.procedimento}</td>
-            <td style="padding: 10px; text-align: right; font-weight: bold; white-space: nowrap;">R$ ${Number(et.valor || 0).toFixed(2)}</td>
-            <td style="padding: 10px; text-align: center;">
-                <span style="padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; ${et.concluido ? 'background-color: #d1fae5; color: #065f46;' : 'background-color: #fef3c7; color: #92400e;'}">
+            <td style="padding: 8px 4px; font-weight: bold; text-align: center; color: #4f46e5; vertical-align: middle;">#${index + 1}</td>
+            <td style="padding: 8px 4px; text-align: center; font-weight: bold; vertical-align: middle; word-break: break-word;">${et.dente || 'Geral'}</td>
+            <td style="padding: 8px 4px; text-align: left; vertical-align: middle; word-break: break-word;">${et.procedimento}</td>
+            <td style="padding: 8px 4px; text-align: right; font-weight: bold; vertical-align: middle; white-space: nowrap;">R$ ${Number(et.valor || 0).toFixed(2)}</td>
+            <td style="padding: 8px 4px; text-align: center; vertical-align: middle;">
+                <span style="display: inline-block; padding: 4px 6px; border-radius: 12px; font-size: 10px; font-weight: bold; ${et.concluido ? 'background-color: #d1fae5; color: #065f46;' : 'background-color: #fef3c7; color: #92400e;'}">
                     ${et.concluido ? 'Concluído' : 'Pendente'}
                 </span>
             </td>
@@ -1374,31 +1373,35 @@ async function gerarPdfPlanoTratamento(pacienteId) {
     `).join('');
 
     elTemp.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #4f46e5; padding-bottom: 15px; margin-bottom: 20px;">
-            <div>
-                <h1 style="margin: 0; font-size: 20px; color: #1e293b;">Plano de Tratamento Odontológico</h1>
-                <p style="margin: 4px 0 0 0; font-size: 12px; color: #64748b;">Dr. Mikeias Santos - Cirurgião Dentista & Ortodontista</p>
-                <p style="margin: 2px 0 0 0; font-size: 11px; color: #64748b;">R. Assis Dória, 61 Centro - Marituba | Tel: (91) 98219-9272 / 98490-3292</p>
-            </div>
-            <div style="text-align: right; font-size: 11px; color: #64748b;">
-                <p style="margin: 0;"><strong>Data de emissão:</strong> ${new Date().toLocaleDateString('pt-BR')}</p>
-            </div>
+        <div style="display: block; border-bottom: 2px solid #4f46e5; padding-bottom: 12px; margin-bottom: 16px;">
+            <table style="width: 100%; table-layout: fixed; border-collapse: collapse;">
+                <tr>
+                    <td style="width: 70%; text-align: left; vertical-align: top;">
+                        <h1 style="margin: 0; font-size: 18px; color: #1e293b; font-weight: bold;">Plano de Tratamento Odontológico</h1>
+                        <p style="margin: 3px 0 0 0; font-size: 11px; color: #64748b;">Dr. Mikeias Santos - Cirurgião Dentista & Ortodontista</p>
+                        <p style="margin: 2px 0 0 0; font-size: 10px; color: #64748b;">R. Assis Dória, 61 Centro - Marituba | Tel: (91) 98219-9272 / 98490-3292</p>
+                    </td>
+                    <td style="width: 30%; text-align: right; vertical-align: top; font-size: 10px; color: #64748b;">
+                        <p style="margin: 0;"><strong>Emissão:</strong> ${new Date().toLocaleDateString('pt-BR')}</p>
+                    </td>
+                </tr>
+            </table>
         </div>
 
-        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 20px; font-size: 12px;">
-            <p style="margin: 0 0 4px 0;"><strong>Paciente:</strong> ${paciente.nome}</p>
-            <p style="margin: 0 0 4px 0;"><strong>Telefone:</strong> ${paciente.telefone || '-'}</p>
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; margin-bottom: 16px; font-size: 11px; line-height: 1.4;">
+            <p style="margin: 0 0 3px 0;"><strong>Paciente:</strong> ${paciente.nome}</p>
+            <p style="margin: 0 0 3px 0;"><strong>Telefone:</strong> ${paciente.telefone || '-'}</p>
             <p style="margin: 0;"><strong>Categoria:</strong> ${paciente.categoria}</p>
         </div>
 
-        <table style="width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 20px;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed; margin-bottom: 16px;">
             <thead>
                 <tr style="background-color: #4f46e5; color: white;">
-                    <th style="padding: 8px; text-align: center; width: 40px;">Etapa</th>
-                    <th style="padding: 8px; text-align: center; width: 90px;">Dente/Região</th>
-                    <th style="padding: 8px; text-align: left;">Procedimento</th>
-                    <th style="padding: 8px; text-align: right; width: 100px;">Valor</th>
-                    <th style="padding: 8px; text-align: center; width: 90px;">Status</th>
+                    <th style="width: 10%; padding: 8px 4px; text-align: center;">Etapa</th>
+                    <th style="width: 18%; padding: 8px 4px; text-align: center;">Dente/Região</th>
+                    <th style="width: 42%; padding: 8px 4px; text-align: left;">Procedimento</th>
+                    <th style="width: 15%; padding: 8px 4px; text-align: right;">Valor</th>
+                    <th style="width: 15%; padding: 8px 4px; text-align: center;">Status</th>
                 </tr>
             </thead>
             <tbody>
@@ -1406,13 +1409,15 @@ async function gerarPdfPlanoTratamento(pacienteId) {
             </tbody>
         </table>
 
-        <div style="text-align: right; font-size: 15px; font-weight: bold; color: #1e293b; margin-top: 20px; padding-top: 10px; border-top: 2px solid #e2e8f0;">
+        <div style="text-align: right; font-size: 14px; font-weight: bold; color: #1e293b; margin-top: 16px; padding-top: 8px; border-top: 2px solid #e2e8f0;">
             Valor Total Previsto: R$ ${totalPlano.toFixed(2)}
         </div>
     `;
 
-    // 2. Anexa temporariamente no DOM da página
     document.body.appendChild(elTemp);
+
+    // Pausa necessária para estabilizar a renderização no telemóvel
+    await new Promise(resolve => setTimeout(resolve, 300));
 
     const opcoes = {
         margin: [10, 10, 10, 10],
@@ -1422,7 +1427,7 @@ async function gerarPdfPlanoTratamento(pacienteId) {
             scale: 2,
             useCORS: true,
             scrollY: 0,
-            windowWidth: 800 // Força viewport desktop para o celular renderizar a tabela inteira
+            windowWidth: 750
         },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
@@ -1433,7 +1438,6 @@ async function gerarPdfPlanoTratamento(pacienteId) {
         console.error("Erro ao gerar PDF no mobile:", err);
         alertCustomizado("❌ Erro ao gerar o PDF. Tente novamente.");
     } finally {
-        // 3. Remove o elemento temporário do DOM
         if (document.body.contains(elTemp)) {
             document.body.removeChild(elTemp);
         }
