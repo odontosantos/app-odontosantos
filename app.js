@@ -1346,27 +1346,38 @@ async function gerarPdfPlanoTratamento(pacienteId) {
 
     const totalPlano = etapas.reduce((acc, curr) => acc + (parseFloat(curr.valor) || 0), 0);
 
-    // 1. Elemento temporário posicionado na origem (0,0) mas oculto no z-index
+    // 1. Overlay temporário em cima de toda a interface (z-index 99999)
+    const elContainer = document.createElement('div');
+    elContainer.style.position = 'fixed';
+    elContainer.style.top = '0';
+    elContainer.style.left = '0';
+    elContainer.style.width = '100vw';
+    elContainer.style.height = '100vh';
+    elContainer.style.backgroundColor = '#ffffff';
+    elContainer.style.zIndex = '99999';
+    elContainer.style.overflowY = 'auto';
+    elContainer.style.display = 'flex';
+    elContainer.style.justifyContent = 'center';
+    elContainer.style.alignItems = 'flex-start';
+    elContainer.style.padding = '20px 0';
+
+    // 2. Elemento interno com largura A4 padronizada (750px)
     const elTemp = document.createElement('div');
-    elTemp.style.position = 'absolute';
-    elTemp.style.left = '0';
-    elTemp.style.top = '0';
-    elTemp.style.zIndex = '-9999';
-    elTemp.style.width = '700px';
+    elTemp.style.width = '750px';
     elTemp.style.backgroundColor = '#ffffff';
-    elTemp.style.padding = '25px';
+    elTemp.style.padding = '30px';
     elTemp.style.fontFamily = 'Arial, sans-serif';
     elTemp.style.color = '#334155';
     elTemp.style.boxSizing = 'border-box';
 
     const linhasTabela = etapas.map((et, index) => `
         <tr style="border-bottom: 1px solid #e2e8f0;">
-            <td style="padding: 8px 4px; font-weight: bold; text-align: center; color: #4f46e5; vertical-align: middle;">#${index + 1}</td>
-            <td style="padding: 8px 4px; text-align: center; font-weight: bold; vertical-align: middle; word-break: break-word;">${et.dente || 'Geral'}</td>
-            <td style="padding: 8px 4px; text-align: left; vertical-align: middle; word-break: break-word;">${et.procedimento}</td>
-            <td style="padding: 8px 4px; text-align: right; font-weight: bold; vertical-align: middle; white-space: nowrap;">R$ ${Number(et.valor || 0).toFixed(2)}</td>
-            <td style="padding: 8px 4px; text-align: center; vertical-align: middle;">
-                <span style="display: inline-block; padding: 4px 6px; border-radius: 12px; font-size: 10px; font-weight: bold; ${et.concluido ? 'background-color: #d1fae5; color: #065f46;' : 'background-color: #fef3c7; color: #92400e;'}">
+            <td style="padding: 10px 6px; font-weight: bold; text-align: center; color: #4f46e5; vertical-align: middle;">#${index + 1}</td>
+            <td style="padding: 10px 6px; text-align: center; font-weight: bold; vertical-align: middle; word-break: break-word;">${et.dente || 'Geral'}</td>
+            <td style="padding: 10px 6px; text-align: left; vertical-align: middle; word-break: break-word;">${et.procedimento}</td>
+            <td style="padding: 10px 6px; text-align: right; font-weight: bold; vertical-align: middle; white-space: nowrap;">R$ ${Number(et.valor || 0).toFixed(2)}</td>
+            <td style="padding: 10px 6px; text-align: center; vertical-align: middle;">
+                <span style="display: inline-block; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; ${et.concluido ? 'background-color: #d1fae5; color: #065f46;' : 'background-color: #fef3c7; color: #92400e;'}">
                     ${et.concluido ? 'Concluído' : 'Pendente'}
                 </span>
             </td>
@@ -1378,7 +1389,7 @@ async function gerarPdfPlanoTratamento(pacienteId) {
             <table style="width: 100%; table-layout: fixed; border-collapse: collapse;">
                 <tr>
                     <td style="width: 70%; text-align: left; vertical-align: top;">
-                        <h1 style="margin: 0; font-size: 18px; color: #1e293b; font-weight: bold;">Plano de Tratamento Odontológico</h1>
+                        <h1 style="margin: 0; font-size: 20px; color: #1e293b; font-weight: bold;">Plano de Tratamento Odontológico</h1>
                         <p style="margin: 3px 0 0 0; font-size: 11px; color: #64748b;">Dr. Mikeias Santos - Cirurgião Dentista & Ortodontista</p>
                         <p style="margin: 2px 0 0 0; font-size: 10px; color: #64748b;">R. Assis Dória, 61 Centro - Marituba | Tel: (91) 98219-9272 / 98490-3292</p>
                     </td>
@@ -1389,13 +1400,13 @@ async function gerarPdfPlanoTratamento(pacienteId) {
             </table>
         </div>
 
-        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; margin-bottom: 16px; font-size: 11px; line-height: 1.4;">
-            <p style="margin: 0 0 3px 0;"><strong>Paciente:</strong> ${paciente.nome}</p>
-            <p style="margin: 0 0 3px 0;"><strong>Telefone:</strong> ${paciente.telefone || '-'}</p>
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-bottom: 16px; font-size: 12px; line-height: 1.5;">
+            <p style="margin: 0 0 4px 0;"><strong>Paciente:</strong> ${paciente.nome}</p>
+            <p style="margin: 0 0 4px 0;"><strong>Telefone:</strong> ${paciente.telefone || '-'}</p>
             <p style="margin: 0;"><strong>Categoria:</strong> ${paciente.categoria}</p>
         </div>
 
-        <table style="width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed; margin-bottom: 16px;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; margin-bottom: 16px;">
             <thead>
                 <tr style="background-color: #4f46e5; color: white;">
                     <th style="width: 10%; padding: 8px 4px; text-align: center;">Etapa</th>
@@ -1415,9 +1426,10 @@ async function gerarPdfPlanoTratamento(pacienteId) {
         </div>
     `;
 
-    document.body.appendChild(elTemp);
+    elContainer.appendChild(elTemp);
+    document.body.appendChild(elContainer);
 
-    // Pausa técnica para estabilização do DOM
+    // Pausa técnica para o navegador renderizar a camada antes da captura
     await new Promise(resolve => setTimeout(resolve, 300));
 
     const opcoes = {
@@ -1427,9 +1439,9 @@ async function gerarPdfPlanoTratamento(pacienteId) {
         html2canvas: { 
             scale: 2,
             useCORS: true,
-            scrollY: 0,
             scrollX: 0,
-            windowWidth: 750
+            scrollY: 0,
+            windowWidth: 800
         },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
@@ -1437,11 +1449,11 @@ async function gerarPdfPlanoTratamento(pacienteId) {
     try {
         await html2pdf().set(opcoes).from(elTemp).save();
     } catch (err) {
-        console.error("Erro ao gerar PDF no mobile:", err);
+        console.error("Erro ao gerar PDF:", err);
         alertCustomizado("❌ Erro ao gerar o PDF. Tente novamente.");
     } finally {
-        if (document.body.contains(elTemp)) {
-            document.body.removeChild(elTemp);
+        if (document.body.contains(elContainer)) {
+            document.body.removeChild(elContainer);
         }
     }
 }
