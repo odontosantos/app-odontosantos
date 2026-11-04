@@ -1346,11 +1346,12 @@ async function gerarPdfPlanoTratamento(pacienteId) {
 
     const totalPlano = etapas.reduce((acc, curr) => acc + (parseFloat(curr.valor) || 0), 0);
 
-    // 1. Elemento temporário com estrutura rígida para mobile
+    // 1. Elemento temporário posicionado na origem (0,0) mas oculto no z-index
     const elTemp = document.createElement('div');
-    elTemp.style.position = 'fixed';
-    elTemp.style.left = '-9999px';
+    elTemp.style.position = 'absolute';
+    elTemp.style.left = '0';
     elTemp.style.top = '0';
+    elTemp.style.zIndex = '-9999';
     elTemp.style.width = '700px';
     elTemp.style.backgroundColor = '#ffffff';
     elTemp.style.padding = '25px';
@@ -1416,7 +1417,7 @@ async function gerarPdfPlanoTratamento(pacienteId) {
 
     document.body.appendChild(elTemp);
 
-    // Pausa necessária para estabilizar a renderização no telemóvel
+    // Pausa técnica para estabilização do DOM
     await new Promise(resolve => setTimeout(resolve, 300));
 
     const opcoes = {
@@ -1427,6 +1428,7 @@ async function gerarPdfPlanoTratamento(pacienteId) {
             scale: 2,
             useCORS: true,
             scrollY: 0,
+            scrollX: 0,
             windowWidth: 750
         },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
