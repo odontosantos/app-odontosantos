@@ -1195,7 +1195,7 @@ function abrirDetalhesPaciente(pacienteId, origem) {
         '<span>Itens do Plano</span>' +
         '<div class="flex items-center gap-3">' +
             '<span>Total: R$ ' + valorTotalPlano.toFixed(2) + '</span>' +
-            '<button type="button" onclick="gerarImagemPlanoTratamento(\'' + paciente.id + '\')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow transition flex items-center gap-1.5"><i class="fa-solid fa-image"></i> Gerar Imagem</button>'+
+            '<button type="button" onclick="gerarImagemPlanoTratamento(\'' + paciente.id + '\')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow transition flex items-center gap-1.5"><i class="fa-solid fa-image"></i> Baixar</button>'+
         '</div>' +
     '</div>' +
     '<div class="space-y-2 max-h-[50vh] overflow-y-auto pr-1">' + htmlItensEtapas + '</div>' + htmlFormAdicionarEtapa + '</div>';
