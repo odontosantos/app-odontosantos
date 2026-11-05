@@ -102,22 +102,27 @@
 
         <!-- ABA 1: PACIENTES (TELA PRINCIPAL) -->
         <section id="tab-pacientes" class="tab-content hidden space-y-4">
-            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap items-center justify-between gap-3">
-                <div class="flex flex-wrap items-center gap-2">
-                    <button onclick="definirFiltroCategoria('todos')" id="tag-filtro-todos" class="px-4 py-2 rounded-xl text-xs font-bold transition bg-blue-600 text-white shadow-sm flex items-center gap-1.5">
-                        <i class="fa-solid fa-users"></i> Todos os Pacientes (<span id="kpi-total-pacientes">0</span>)
-                    </button>
-                    <button onclick="definirFiltroCategoria('clinico')" id="tag-filtro-clinico" class="px-4 py-2 rounded-xl text-xs font-bold transition bg-slate-100 text-slate-700 hover:bg-slate-200 flex items-center gap-1.5">
-                        <i class="fa-solid fa-user-doctor"></i> Clínico Geral (<span id="kpi-clinico-pacientes">0</span>)
-                    </button>
-                    <button onclick="definirFiltroCategoria('orto')" id="tag-filtro-orto" class="px-4 py-2 rounded-xl text-xs font-bold transition bg-slate-100 text-slate-700 hover:bg-slate-200 flex items-center gap-1.5">
-                        <i class="fa-solid fa-teeth-open"></i> Ortodontia (<span id="kpi-orto-pacientes">0</span>)
-                    </button>
-                </div>
-                <button onclick="abrirModalPaciente()" class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold rounded-xl shadow-sm transition flex items-center justify-center gap-2 whitespace-nowrap">
-                    <i class="fa-solid fa-user-plus"></i> Novo Paciente
-                </button>
-            </div>
+            <div class="bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+        
+        <!-- Botão Adicionar (Aparece no topo no celular, na direita no PC) -->
+        <button onclick="abrirModalPaciente()" class="order-1 sm:order-2 w-full sm:w-auto shrink-0 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl shadow-sm transition flex items-center justify-center gap-2">
+            <i class="fa-solid fa-user-plus"></i> Novo Paciente
+        </button>
+
+        <!-- Filtros (Carrossel Horizontal no celular, alinhado à esquerda no PC) -->
+        <div class="order-2 sm:order-1 flex items-center gap-2 overflow-x-auto scrollbar-none pb-1 sm:pb-0 w-full sm:w-auto">
+            <button onclick="definirFiltroCategoria('todos')" id="tag-filtro-todos" class="shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition bg-blue-600 text-white shadow-sm flex items-center gap-1.5">
+                <i class="fa-solid fa-users"></i> Todos (<span id="kpi-total-pacientes">0</span>)
+            </button>
+            <button onclick="definirFiltroCategoria('clinico')" id="tag-filtro-clinico" class="shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition bg-slate-100 text-slate-700 hover:bg-slate-200 flex items-center gap-1.5">
+                <i class="fa-solid fa-user-doctor"></i> Clínico (<span id="kpi-clinico-pacientes">0</span>)
+            </button>
+            <button onclick="definirFiltroCategoria('orto')" id="tag-filtro-orto" class="shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition bg-slate-100 text-slate-700 hover:bg-slate-200 flex items-center gap-1.5">
+                <i class="fa-solid fa-teeth-open"></i> Ortodontia (<span id="kpi-orto-pacientes">0</span>)
+            </button>
+        </div>
+        
+    </div>
 
             <!-- Barra de Pesquisa -->
             <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-200">
