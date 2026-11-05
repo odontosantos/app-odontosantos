@@ -1181,24 +1181,27 @@ function abrirDetalhesPaciente(pacienteId, origem) {
                 '</div></div>';
         }).join('');
 
-    let htmlFormAdicionarEtapa = '';
+   let htmlFormAdicionarEtapa = '';
     if (usuarioAtual && usuarioAtual.perfil === 'dentista') {
-        htmlFormAdicionarEtapa = '<form onsubmit="adicionarEtapaPlanejamento(event, \'' + paciente.id + '\')" class="grid grid-cols-1 sm:grid-cols-12 gap-2 pt-2 border-t border-indigo-100">' +
+        // AJUSTE: Trocamos o 'pt-2 border-t' por 'pb-3 mb-2 border-b' para a linha separadora ficar abaixo do formulário
+        htmlFormAdicionarEtapa = '<form onsubmit="adicionarEtapaPlanejamento(event, \'' + paciente.id + '\')" class="grid grid-cols-1 sm:grid-cols-12 gap-2 pb-3 mb-2 border-b border-indigo-100">' +
             '<div class="sm:col-span-2"><input type="text" id="plan-dente" placeholder="Dente (16)" class="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white outline-none"></div>' +
             '<div class="sm:col-span-5"><input type="text" id="plan-desc" required placeholder="Procedimento (ex: Restauração)" class="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white outline-none"></div>' +
             '<div class="sm:col-span-3"><input type="number" step="0.01" id="plan-valor" placeholder="Valor (R$)" class="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white outline-none"></div>' +
             '<div class="sm:col-span-2"><button type="submit" class="w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg text-xs shadow flex items-center justify-center gap-1"><i class="fa-solid fa-plus"></i> Add</button></div></form>';
     }
 
+    // AJUSTE: O formulário (htmlFormAdicionarEtapa) agora entra ANTES da lista (htmlItensEtapas)
     let htmlPlanoTratamento = '<div class="space-y-3 bg-indigo-50/20 p-3 rounded-xl border border-indigo-100">' +
-    '<div class="flex justify-between items-center text-xs font-bold text-indigo-900">' +
+    '<div class="flex justify-between items-center text-xs font-bold text-indigo-900 mb-2">' +
         '<span>Itens do Plano</span>' +
         '<div class="flex items-center gap-3">' +
             '<span>Total: R$ ' + valorTotalPlano.toFixed(2) + '</span>' +
-            '<button type="button" onclick="gerarImagemPlanoTratamento(\'' + paciente.id + '\')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow transition flex items-center gap-1.5"><i class="fa-solid fa-image"></i> Baixar</button>'+
+            '<button type="button" onclick="gerarImagemPlanoTratamento(\'' + paciente.id + '\')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow transition flex items-center gap-1.5"><i class="fa-solid fa-image"></i> Gerar Imagem</button>' +
         '</div>' +
     '</div>' +
-    '<div class="space-y-2 max-h-[50vh] overflow-y-auto pr-1">' + htmlItensEtapas + '</div>' + htmlFormAdicionarEtapa + '</div>';
+    htmlFormAdicionarEtapa + 
+    '<div class="space-y-2 max-h-[50vh] overflow-y-auto pr-1">' + htmlItensEtapas + '</div></div>';
 
     let htmlFormProntuario = '';
     if (usuarioAtual && usuarioAtual.perfil === 'dentista') {
