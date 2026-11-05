@@ -100,28 +100,33 @@
     <!-- CONTEÚDO PRINCIPAL -->
     <main id="main-content" class="flex-grow max-w-7xl w-full mx-auto p-3 sm:p-6 space-y-4 sm:space-y-6 hidden relative">
 
-        <!-- ABA 1: PACIENTES (TELA PRINCIPAL) -->
-        <section id="tab-pacientes" class="tab-content hidden space-y-4">
-            <div class="bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-        
-        <!-- Botão Adicionar (Aparece no topo no celular, na direita no PC) -->
-        <button onclick="abrirModalPaciente()" class="order-1 sm:order-2 w-full sm:w-auto shrink-0 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl shadow-sm transition flex items-center justify-center gap-2">
-            <i class="fa-solid fa-user-plus"></i> Novo Paciente
+       <!-- ABA 1: PACIENTES (TELA PRINCIPAL) -->
+<section id="tab-pacientes" class="tab-content hidden space-y-3">
+    
+    <!-- BARRA DE PESQUISA E BOTÃO NOVO LADO A LADO -->
+    <div class="flex items-center gap-2">
+        <div class="relative flex-grow">
+            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+            <input type="text" id="busca-pacientes-tabela" oninput="renderizarPacientes()" placeholder="Pesquisar por nome, CPF ou telefone..." class="w-full pl-10 pr-4 py-2.5 border rounded-xl text-sm bg-white shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition">
+        </div>
+        <button onclick="abrirModalPaciente()" class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold rounded-xl shadow-sm transition flex items-center gap-1.5 shrink-0 whitespace-nowrap">
+            <i class="fa-solid fa-user-plus"></i> <span class="hidden sm:inline">Novo Paciente</span><span class="sm:hidden">Novo</span>
         </button>
+    </div>
 
-        <!-- Filtros (Carrossel Horizontal no celular, alinhado à esquerda no PC) -->
-        <div class="order-2 sm:order-1 flex items-center gap-2 overflow-x-auto scrollbar-none pb-1 sm:pb-0 w-full sm:w-auto">
-            <button onclick="definirFiltroCategoria('todos')" id="tag-filtro-todos" class="shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition bg-blue-600 text-white shadow-sm flex items-center gap-1.5">
+    <!-- FILTROS DE CATEGORIA EM CARROSSEL LOGO ABAIXO -->
+    <div class="bg-white p-2.5 rounded-xl shadow-sm border border-slate-200">
+        <div class="flex items-center gap-2 overflow-x-auto scrollbar-none">
+            <button onclick="definirFiltroCategoria('todos')" id="tag-filtro-todos" class="shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold transition bg-blue-600 text-white shadow-sm flex items-center gap-1.5 whitespace-nowrap">
                 <i class="fa-solid fa-users"></i> Todos (<span id="kpi-total-pacientes">0</span>)
             </button>
-            <button onclick="definirFiltroCategoria('clinico')" id="tag-filtro-clinico" class="shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition bg-slate-100 text-slate-700 hover:bg-slate-200 flex items-center gap-1.5">
+            <button onclick="definirFiltroCategoria('clinico')" id="tag-filtro-clinico" class="shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold transition bg-slate-100 text-slate-700 hover:bg-slate-200 flex items-center gap-1.5 whitespace-nowrap">
                 <i class="fa-solid fa-user-doctor"></i> Clínico (<span id="kpi-clinico-pacientes">0</span>)
             </button>
-            <button onclick="definirFiltroCategoria('orto')" id="tag-filtro-orto" class="shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition bg-slate-100 text-slate-700 hover:bg-slate-200 flex items-center gap-1.5">
+            <button onclick="definirFiltroCategoria('orto')" id="tag-filtro-orto" class="shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold transition bg-slate-100 text-slate-700 hover:bg-slate-200 flex items-center gap-1.5 whitespace-nowrap">
                 <i class="fa-solid fa-teeth-open"></i> Ortodontia (<span id="kpi-orto-pacientes">0</span>)
             </button>
         </div>
-        
     </div>
 
             <!-- Barra de Pesquisa -->
