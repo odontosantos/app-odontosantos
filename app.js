@@ -920,7 +920,7 @@ function renderizarLinhaTempoProntuario(container, prontuarios, pacienteId) {
             const proxHtml = pr.proximaConsulta ? '<p class="text-xs font-semibold text-blue-700 bg-blue-50 p-1.5 rounded mt-1"><i class="fa-solid fa-clock-rotate-left mr-1"></i> Próxima consulta: ' + pr.proximaConsulta + '</p>' : '';
             
             // Verifica se tem o profissional salvo. Se tiver, cria a etiqueta.
-            const badgeProfissional = pr.profissional ? `<span class="ml-2 px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-bold border border-slate-200"><i class="fa-solid fa-user-doctor mr-1"></i>${pr.profissional}</span>` : '';
+            const badgeProfissional = pr.profissional ? '<span class="ml-2 text-slate-400 text-[10px] font-medium" title="Registrado por ' + pr.profissional + '"><i class="fa-solid fa-user-pen"></i> ' + pr.profissional + '</span>' : '';
             
             htmlItens += '<div class="p-3 bg-white rounded-lg border border-slate-100 space-y-1 shadow-sm flex justify-between items-start gap-2">' +
                 '<div class="space-y-1 flex-grow">' +
