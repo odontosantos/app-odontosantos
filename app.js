@@ -274,9 +274,11 @@ function definirFiltroCategoria(categoria) {
         const btn = document.getElementById('tag-filtro-' + cat);
         if (btn) {
             if (cat === categoria) {
-                btn.className = 'px-4 py-2 rounded-xl text-xs font-bold transition bg-blue-600 text-white shadow-sm flex items-center gap-1.5';
+                // Adicionado 'shrink-0' para o botão não encolher no carrossel mobile
+                btn.className = 'shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition bg-blue-600 text-white shadow-sm flex items-center gap-1.5';
             } else {
-                btn.className = 'px-4 py-2 rounded-xl text-xs font-bold transition bg-slate-100 text-slate-700 hover:bg-slate-200 flex items-center gap-1.5';
+                // Adicionado 'shrink-0' para o botão não encolher no carrossel mobile
+                btn.className = 'shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition bg-slate-100 text-slate-700 hover:bg-slate-200 flex items-center gap-1.5';
             }
         }
     });
