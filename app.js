@@ -216,14 +216,24 @@ function configurarNavbar() {
     const badge = document.getElementById('header-user-badge');
     if (!navTabs || !badge) return;
 
-    if (usuarioAtual && usuarioAtual.perfil === 'secretaria') {
-        badge.innerText = 'Perfil: Secretaria / Recepção';
-        badge.className = 'inline-block px-2 py-0.5 text-[10px] sm:text-xs font-medium bg-emerald-100 text-emerald-800 rounded-full mt-0.5';
-    } else {
-        badge.innerText = 'Perfil: Dentista (Clínico)';
-        badge.className = 'inline-block px-2 py-0.5 text-[10px] sm:text-xs font-medium bg-blue-100 text-blue-800 rounded-full mt-0.5';
+    // 1. Captura o nome do usuário logado (antes do @)
+    let nomeUsuario = 'Usuário';
+    if (usuarioAtual && usuarioAtual.email) {
+        nomeUsuario = usuarioAtual.email.split('@')[0];
+        // Coloca a primeira letra em maiúscula para ficar mais elegante
+        nomeUsuario = nomeUsuario.charAt(0).toUpperCase() + nomeUsuario.slice(1);
     }
 
+    // 2. Define o texto e a cor da etiqueta baseada no perfil
+    if (usuarioAtual && usuarioAtual.perfil === 'secretaria') {
+        badge.innerHTML = `<i class="fa-solid fa-user-tie"></i> ${nomeUsuario} (Secretaria)`;
+        badge.className = 'inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[10px] sm:text-xs font-bold bg-emerald-100 text-emerald-800 rounded-full mt-0.5 w-max';
+    } else {
+        badge.innerHTML = `<i class="fa-solid fa-user-doctor"></i> ${nomeUsuario} (Dentista)`;
+        badge.className = 'inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[10px] sm:text-xs font-bold bg-blue-100 text-blue-800 rounded-full mt-0.5 w-max';
+    }
+
+    // 3. Monta as abas de navegação
     navTabs.innerHTML = 
         '<button onclick="mudarAba(\'pacientes\')" id="btn-tab-pacientes" class="px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold border-b-2 border-blue-500 text-white flex items-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-users"></i> Pacientes</button>' +
         '<button onclick="mudarAba(\'financeiro\')" id="btn-tab-financeiro" class="px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-white flex items-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-file-invoice-dollar"></i> Financeiro / Caixa</button>';
@@ -870,7 +880,7 @@ function renderizarFinanceiro() {
                 const prefixoValor = isEstorno ? '' : '+ ';
 
                 // ATUALIZAÇÃO: Gerando a etiqueta caso exista o profissional
-                const badgeProfissional = t.profissional ? '<span class="ml-2 inline-flex items-center px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px] font-bold border border-slate-200"><i class="fa-regular fa-user mr-1"></i>' + t.profissional + '</span>' : '';
+               const badgeProfissional = t.profissional ? '<span class="ml-2 text-slate-400 text-[10px] font-medium" title="Registrado por ' + t.profissional + '"><i class="fa-solid fa-user-pen"></i> ' + t.profissional + '</span>' : '';
 
                 listaFluxo.innerHTML += '<div class="p-3 bg-white border border-slate-100 rounded-lg text-sm flex justify-between items-center shadow-sm">' +
                     '<div><p class="font-semibold text-slate-900"><i class="fa-solid fa-circle-dot text-xs mr-1 ' + corValor + '"></i> ' + paciente.nome + '</p><div class="flex items-center text-xs text-slate-500 mt-0.5"><span>' + t.descricao + ' • ' + (t.data ? t.data.split('-').reverse().join('/') : '-') + ' (' + t.forma + ')</span>' + badgeProfissional + '</div></div>' +
@@ -1296,7 +1306,7 @@ function abrirDetalhesPaciente(pacienteId, origem) {
                 const btnEstornar = !isEstorno ? '<button onclick="estornarPagamento(\'' + pg.id + '\', \'' + pacienteId + '\')" class="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded text-xs font-semibold transition flex items-center gap-1" title="Estornar Lançamento"><i class="fa-solid fa-rotate-left"></i> Estornar</button>' : '';
 
                 // ATUALIZAÇÃO: Gerando a etiqueta do lado da data
-                const badgeProfissional = pg.profissional ? '<span class="ml-2 inline-flex items-center px-1.5 py-0.5 bg-white/60 text-slate-600 rounded text-[9px] font-bold border border-slate-200"><i class="fa-regular fa-user mr-1"></i>' + pg.profissional + '</span>' : '';
+                const badgeProfissional = pg.profissional ? '<span class="ml-2 text-slate-400 text-[10px] font-medium" title="Registrado por ' + pg.profissional + '"><i class="fa-solid fa-user-pen"></i> ' + pg.profissional + '</span>' : '';
 
                 htmlItensPg += '<div class="p-3 ' + corBg + ' border rounded-lg text-sm flex justify-between items-center">' +
                     '<div><p class="font-semibold ' + corTexto + '">' + pg.descricao + '</p><div class="flex items-center text-xs text-slate-500 mt-0.5"><span>' + (pg.data ? pg.data.split('-').reverse().join('/') : '-') + ' • ' + pg.forma + '</span>' + badgeProfissional + '</div></div>' +
