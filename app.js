@@ -487,6 +487,11 @@ function salvarLancamentoCaixaAbaFinanceiro(event) {
         if (obs) paciente.obsFinanceiraManual = obs;
     }
 
+    let nomeProfissional = 'Usuário';
+    if (usuarioAtual && usuarioAtual.email) {
+        nomeProfissional = usuarioAtual.email.split('@')[0];
+    }
+
     if (valor > 0) {
         let descFinal = desc;
         if (obs) descFinal += ' (Obs: ' + obs + ')';
@@ -497,7 +502,8 @@ function salvarLancamentoCaixaAbaFinanceiro(event) {
             data: obterDataLocalISO(),
             valor: valor,
             forma: forma,
-            descricao: descFinal
+            descricao: descFinal,
+            profissional: nomeProfissional // <--- Nome de quem lançou
         });
     }
 
@@ -510,6 +516,8 @@ function salvarLancamentoCaixaAbaFinanceiro(event) {
     document.getElementById('caixa-fin-obs').value = '';
     document.getElementById('caixa-fin-marca-pendencia').checked = false;
 }
+
+
 
 function estornarPagamento(pagamentoId, pacienteId) {
     const pagamentoOriginal = db.pagamentos.find(pg => pg.id === pagamentoId);
@@ -538,13 +546,19 @@ async function executarEstorno(pagamentoId, pacienteId, motivo) {
     if (!pagamentoOriginal) return;
     if (!(await verificarSenhaExclusao())) return;
 
+    let nomeProfissional = 'Usuário';
+    if (usuarioAtual && usuarioAtual.email) {
+        nomeProfissional = usuarioAtual.email.split('@')[0];
+    }
+
     db.pagamentos.push({
         id: gerarIdUnico(),
         pacienteId: pacienteId,
         data: obterDataLocalISO(),
         valor: -Math.abs(parseFloat(pagamentoOriginal.valor)),
         forma: 'Estorno',
-        descricao: `ESTORNO: ${pagamentoOriginal.descricao} - Motivo: ${motivo}`
+        descricao: `ESTORNO: ${pagamentoOriginal.descricao} - Motivo: ${motivo}`,
+        profissional: nomeProfissional // <--- Nome de quem estornou
     });
 
     persistirDB();
@@ -555,7 +569,6 @@ async function executarEstorno(pagamentoId, pacienteId, motivo) {
         renderizarFinanceiro();
     }
 }
-
 function salvarLancamentoCaixaManual(event, pacienteId) {
     event.preventDefault();
     const descricaoProc = document.getElementById('caixa-proc-desc').value.trim();
@@ -570,6 +583,11 @@ function salvarLancamentoCaixaManual(event, pacienteId) {
     paciente.possuiPendenciaManual = temPendencia;
     paciente.obsFinanceiraManual = observacao;
 
+    let nomeProfissional = 'Usuário';
+    if (usuarioAtual && usuarioAtual.email) {
+        nomeProfissional = usuarioAtual.email.split('@')[0];
+    }
+
     if (valorPago > 0) {
         let descFinal = descricaoProc;
         if (observacao) descFinal += ' (Obs: ' + observacao + ')';
@@ -580,7 +598,8 @@ function salvarLancamentoCaixaManual(event, pacienteId) {
             data: obterDataLocalISO(), 
             valor: valorPago, 
             forma: forma, 
-            descricao: descFinal
+            descricao: descFinal,
+            profissional: nomeProfissional // <--- Nome de quem lançou
         });
     }
 
@@ -732,13 +751,19 @@ function salvarPagamentoAvulsoCustom() {
         return;
     }
 
+    let nomeProfissional = 'Usuário';
+    if (usuarioAtual && usuarioAtual.email) {
+        nomeProfissional = usuarioAtual.email.split('@')[0];
+    }
+
     db.pagamentos.push({ 
         id: gerarIdUnico(), 
         pacienteId: null, 
         data: obterDataLocalISO(), 
         valor: valor, 
         forma: forma, 
-        descricao: desc 
+        descricao: desc,
+        profissional: nomeProfissional // <--- Nome de quem lançou
     });
     
     persistirDB();
@@ -782,7 +807,8 @@ function renderizarFinanceiro() {
     const hojeIso = obterDataLocalISO();
 
     let transacoes = [];
-    db.pagamentos.forEach(pg => transacoes.push({ id: pg.id, tipo: 'entrada', data: pg.data, valor: pg.valor, forma: pg.forma, descricao: pg.descricao, pacienteId: pg.pacienteId }));
+    // ATUALIZAÇÃO: Puxando o profissional para o fluxo da tela
+    db.pagamentos.forEach(pg => transacoes.push({ id: pg.id, tipo: 'entrada', data: pg.data, valor: pg.valor, forma: pg.forma, descricao: pg.descricao, pacienteId: pg.pacienteId, profissional: pg.profissional }));
     db.despesas.forEach(d => transacoes.push({ id: d.id, tipo: 'saida', data: d.data, valor: d.valor, forma: 'Despesa', descricao: d.descricao + ' (' + d.categoria + ')', pacienteId: null }));
 
     transacoes = transacoes.filter(t => {
@@ -843,8 +869,11 @@ function renderizarFinanceiro() {
                 const corValor = isEstorno ? 'text-rose-600' : 'text-emerald-600';
                 const prefixoValor = isEstorno ? '' : '+ ';
 
+                // ATUALIZAÇÃO: Gerando a etiqueta caso exista o profissional
+                const badgeProfissional = t.profissional ? '<span class="ml-2 inline-flex items-center px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px] font-bold border border-slate-200"><i class="fa-regular fa-user mr-1"></i>' + t.profissional + '</span>' : '';
+
                 listaFluxo.innerHTML += '<div class="p-3 bg-white border border-slate-100 rounded-lg text-sm flex justify-between items-center shadow-sm">' +
-                    '<div><p class="font-semibold text-slate-900"><i class="fa-solid fa-circle-dot text-xs mr-1 ' + corValor + '"></i> ' + paciente.nome + '</p><span class="text-xs text-slate-500">' + t.descricao + ' • ' + (t.data ? t.data.split('-').reverse().join('/') : '-') + ' (' + t.forma + ')</span></div>' +
+                    '<div><p class="font-semibold text-slate-900"><i class="fa-solid fa-circle-dot text-xs mr-1 ' + corValor + '"></i> ' + paciente.nome + '</p><div class="flex items-center text-xs text-slate-500 mt-0.5"><span>' + t.descricao + ' • ' + (t.data ? t.data.split('-').reverse().join('/') : '-') + ' (' + t.forma + ')</span>' + badgeProfissional + '</div></div>' +
                     '<span class="font-bold ' + corValor + '">' + prefixoValor + 'R$ ' + Number(t.valor).toFixed(2) + '</span>' +
                 '</div>';
             } else {
@@ -1196,7 +1225,6 @@ function abrirDetalhesPaciente(pacienteId, origem) {
 
    let htmlFormAdicionarEtapa = '';
     if (usuarioAtual && usuarioAtual.perfil === 'dentista') {
-        // AJUSTE: Trocamos o 'pt-2 border-t' por 'pb-3 mb-2 border-b' para a linha separadora ficar abaixo do formulário
         htmlFormAdicionarEtapa = '<form onsubmit="adicionarEtapaPlanejamento(event, \'' + paciente.id + '\')" class="grid grid-cols-1 sm:grid-cols-12 gap-2 pb-3 mb-2 border-b border-indigo-100">' +
             '<div class="sm:col-span-2"><input type="text" id="plan-dente" placeholder="Dente (16)" class="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white outline-none"></div>' +
             '<div class="sm:col-span-5"><input type="text" id="plan-desc" required placeholder="Procedimento (ex: Restauração)" class="w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white outline-none"></div>' +
@@ -1204,7 +1232,6 @@ function abrirDetalhesPaciente(pacienteId, origem) {
             '<div class="sm:col-span-2"><button type="submit" class="w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg text-xs shadow flex items-center justify-center gap-1"><i class="fa-solid fa-plus"></i> Add</button></div></form>';
     }
 
-    // AJUSTE: O formulário (htmlFormAdicionarEtapa) agora entra ANTES da lista (htmlItensEtapas)
     let htmlPlanoTratamento = '<div class="space-y-3 bg-indigo-50/20 p-3 rounded-xl border border-indigo-100">' +
     '<div class="flex justify-between items-center text-xs font-bold text-indigo-900 mb-2">' +
         '<span>Itens do Plano</span>' +
@@ -1268,8 +1295,11 @@ function abrirDetalhesPaciente(pacienteId, origem) {
 
                 const btnEstornar = !isEstorno ? '<button onclick="estornarPagamento(\'' + pg.id + '\', \'' + pacienteId + '\')" class="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded text-xs font-semibold transition flex items-center gap-1" title="Estornar Lançamento"><i class="fa-solid fa-rotate-left"></i> Estornar</button>' : '';
 
+                // ATUALIZAÇÃO: Gerando a etiqueta do lado da data
+                const badgeProfissional = pg.profissional ? '<span class="ml-2 inline-flex items-center px-1.5 py-0.5 bg-white/60 text-slate-600 rounded text-[9px] font-bold border border-slate-200"><i class="fa-regular fa-user mr-1"></i>' + pg.profissional + '</span>' : '';
+
                 htmlItensPg += '<div class="p-3 ' + corBg + ' border rounded-lg text-sm flex justify-between items-center">' +
-                    '<div><p class="font-semibold ' + corTexto + '">' + pg.descricao + '</p><span class="text-xs text-slate-500">' + (pg.data ? pg.data.split('-').reverse().join('/') : '-') + ' • ' + pg.forma + '</span></div>' +
+                    '<div><p class="font-semibold ' + corTexto + '">' + pg.descricao + '</p><div class="flex items-center text-xs text-slate-500 mt-0.5"><span>' + (pg.data ? pg.data.split('-').reverse().join('/') : '-') + ' • ' + pg.forma + '</span>' + badgeProfissional + '</div></div>' +
                     '<div class="flex items-center gap-2"><span class="' + corValor + '">R$ ' + Number(pg.valor).toFixed(2) + '</span>' + btnEstornar + '</div>' +
                 '</div>';
             });
