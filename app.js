@@ -919,9 +919,14 @@ function renderizarLinhaTempoProntuario(container, prontuarios, pacienteId) {
         grupos[mesAno].forEach(pr => {
             const proxHtml = pr.proximaConsulta ? '<p class="text-xs font-semibold text-blue-700 bg-blue-50 p-1.5 rounded mt-1"><i class="fa-solid fa-clock-rotate-left mr-1"></i> Próxima consulta: ' + pr.proximaConsulta + '</p>' : '';
             
+            // Verifica se tem o profissional salvo. Se tiver, cria a etiqueta.
+            const badgeProfissional = pr.profissional ? `<span class="ml-2 px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-bold border border-slate-200"><i class="fa-solid fa-user-doctor mr-1"></i>${pr.profissional}</span>` : '';
+            
             htmlItens += '<div class="p-3 bg-white rounded-lg border border-slate-100 space-y-1 shadow-sm flex justify-between items-start gap-2">' +
                 '<div class="space-y-1 flex-grow">' +
-                    '<div class="flex justify-between text-xs text-slate-500"><span>Data: <strong>' + (pr.data ? pr.data.split('-').reverse().join('/') : '-') + '</strong></span></div>' +
+                    '<div class="flex justify-between text-xs text-slate-500 flex-wrap gap-1">' +
+                        '<span>Data: <strong>' + (pr.data ? pr.data.split('-').reverse().join('/') : '-') + '</strong>' + badgeProfissional + '</span>' +
+                    '</div>' +
                     '<p class="text-slate-800 font-medium">Descrição: ' + pr.procedimento + '</p>' +
                     proxHtml +
                 '</div>' +
@@ -946,14 +951,22 @@ function salvarProcedimentoDentista(event, pacienteId) {
     const proximaConsulta = document.getElementById('proc-proxima').value;
     const hoje = obterDataLocalISO();
 
+    // Captura o nome do usuário logado (pegando a parte do email antes do @)
+    let nomeProfissional = 'Dentista';
+    if (usuarioAtual && usuarioAtual.email) {
+        nomeProfissional = usuarioAtual.email.split('@')[0];
+    }
+
     db.prontuarios.push({
         id: gerarIdUnico(),
         pacienteId: pacienteId,
         data: hoje,
         procedimento: procedimento,
         valorCobrado: 0,
-        proximaConsulta: proximaConsulta
+        proximaConsulta: proximaConsulta,
+        profissional: nomeProfissional // <--- Novo campo salvo no banco
     });
+    
     persistirDB();
     alertCustomizado('Evolução do Prontuário salva!');
     abrirDetalhesPaciente(pacienteId, abaOrigem);
