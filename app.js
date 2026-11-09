@@ -224,14 +224,9 @@ function configurarNavbar() {
         nomeUsuario = nomeUsuario.charAt(0).toUpperCase() + nomeUsuario.slice(1);
     }
 
-    // 2. Define o texto e a cor da etiqueta baseada no perfil
-    if (usuarioAtual && usuarioAtual.perfil === 'secretaria') {
-        badge.innerHTML = `<i class="fa-solid fa-user-tie"></i> ${nomeUsuario} (Secretaria)`;
-        badge.className = 'inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[10px] sm:text-xs font-bold bg-emerald-100 text-emerald-800 rounded-full mt-0.5 w-max';
-    } else {
-        badge.innerHTML = `<i class="fa-solid fa-user-doctor"></i> ${nomeUsuario} (Dentista)`;
-        badge.className = 'inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[10px] sm:text-xs font-bold bg-blue-100 text-blue-800 rounded-full mt-0.5 w-max';
-    }
+    // 2. Exibe apenas o nome e um ícone discreto
+    badge.innerHTML = `<i class="fa-solid fa-user text-xs"></i> ${nomeUsuario}`;
+    badge.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-slate-100 text-slate-700 rounded-full mt-0.5 w-max';
 
     // 3. Monta as abas de navegação
     navTabs.innerHTML = 
